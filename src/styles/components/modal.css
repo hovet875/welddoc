@@ -1,0 +1,177 @@
+/* =========================================================
+   MODAL (GLOBAL)
+   Robust for mobil + desktop
+   ========================================================= */
+
+.modalbackdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(8px);
+
+  display: flex;
+  align-items: center;        /* alltid midt */
+  justify-content: center;
+
+  padding: 18px;
+  z-index: 100;
+
+  /* Viktig for mobil */
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.modal{
+  width: min(780px, 100%);
+  max-width: 100%;
+
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(10,14,24,0.86);
+  box-shadow: 0 28px 90px rgba(0,0,0,0.55);
+
+  /* Holder modalen innenfor viewport */
+  max-height: calc(100dvh - 36px);
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden;
+}
+
+/* ---------- Header ---------- */
+
+.modalhead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+
+  flex: 0 0 auto;
+}
+
+.modaltitle{
+  font-weight: 800;
+  letter-spacing: -0.2px;
+}
+
+.xbtn{
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.92);
+  cursor: pointer;
+}
+.xbtn:hover{
+  background: rgba(255,255,255,0.08);
+}
+
+/* ---------- Body ---------- */
+
+.modalbody{
+  padding: 16px;
+  flex: 1 1 auto;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+
+  /* Luft mot footer */
+  padding-bottom: 18px;
+}
+
+/* ---------- Footer ---------- */
+
+.modalftr{
+  display:flex;
+  justify-content:flex-end;
+  gap: 10px;
+
+  padding: 14px 16px;
+  border-top: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.02);
+
+  flex: 0 0 auto;
+}
+
+/* ---------- Grid / fields ---------- */
+
+.modalgrid{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+
+  min-width: 0; /* viktig for mobil */
+}
+
+.field{
+  min-width: 0;
+}
+
+.field label{
+  display:block;
+  margin-bottom: 6px;
+  color: rgba(255,255,255,0.70);
+  font-size: 13px;
+}
+
+/* Inputs/select må aldri tvinge bredde */
+.modalgrid input,
+.modalgrid select,
+.modalgrid .input,
+.modalgrid .select{
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Flex-grupper (f.eks tykkelse + mm) */
+.inputgroup,
+.inputgroup > *{
+  min-width: 0;
+}
+
+.pdfmeta { margin-top: 10px; }
+
+.checkrow{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  justify-content:flex-start;
+}
+
+.checkrow input{
+  width:18px;
+  height:18px;
+}
+
+/* ---------- Mobil ---------- */
+
+@media (max-width: 720px){
+  .modalbackdrop{
+    padding: 12px;
+  }
+
+  .modal{
+    max-height: calc(100dvh - 24px);
+    border-radius: 16px;
+  }
+
+  .modalgrid{
+    grid-template-columns: 1fr;
+  }
+
+  .modalhead,
+  .modalbody,
+  .modalftr{
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}

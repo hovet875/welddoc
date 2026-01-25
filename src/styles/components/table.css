@@ -1,0 +1,35 @@
+/* Link */
+.linkbtn{
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.92);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+
+  display:inline-flex;
+  align-items:center;
+  gap: 6px;
+
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255,255,255,0.35);
+}
+.linkbtn:hover{
+  color: #fff;
+  border-bottom-color: rgba(255,255,255,0.65);
+}
+
+/* WPQR pill */
+.wpqrpill{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.86);
+  font-size: 12.5px;
+  white-space: nowrap;
+}

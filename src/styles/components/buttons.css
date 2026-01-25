@@ -1,0 +1,62 @@
+.btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.90);
+  cursor:pointer;
+}
+.btn:hover{ background: rgba(255,255,255,0.10); }
+
+.btn.small{
+  padding: 9px 12px;
+  border-radius: 999px;
+  color: rgba(255,255,255,0.92);
+}
+
+.btn.primary,
+.btn.accent{
+  border: 1px solid rgba(110,231,255,0.40);
+  background: linear-gradient(135deg, rgba(110,231,255,0.20), rgba(139,92,246,0.18));
+}
+.btn.primary:hover,
+.btn.accent:hover{
+  background: linear-gradient(135deg, rgba(110,231,255,0.28), rgba(139,92,246,0.22));
+}
+
+/* danger variant for modal etc */
+.btn.danger{
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(220,38,38,0.92);
+  color: #fff;
+}
+.btn.danger:hover{ filter: brightness(1.06); }
+.btn.danger:active{ filter: brightness(0.95); }
+
+/* Icon button */
+.iconbtn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width: 36px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.05);
+  cursor: pointer;
+  user-select: none;
+  padding: 0;
+  transition: transform 80ms ease, filter 120ms ease, background 120ms ease;
+}
+.iconbtn:hover{ background: rgba(255,255,255,0.08); }
+.iconbtn:active{ transform: translateY(1px); }
+.iconbtn .icon{ font-size: 16px; line-height: 1; }
+
+.iconbtn.danger{
+  background: rgba(220,38,38,0.92);
+  color: #fff;
+  border-color: rgba(255,255,255,0.10);
+}
+.iconbtn.danger:hover{ filter: brightness(1.06); }
+.iconbtn.danger:active{ filter: brightness(0.95); }
