@@ -101,6 +101,29 @@
   flex: 0 0 auto;
 }
 
+/* ---------- PDF preview ---------- */
+
+.pdfpreview-backdrop{
+  background: rgba(0,0,0,0.7);
+}
+
+.pdfpreview-modal{
+  width: min(1200px, 96vw);
+  height: min(88vh, 940px);
+  max-height: 88vh;
+}
+
+.pdfpreview-body{
+  padding: 0;
+}
+
+.pdfpreview-frame{
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #0b0e12;
+}
+
 /* ---------- Grid / fields ---------- */
 
 .modalgrid{
@@ -152,26 +175,56 @@
   height:18px;
 }
 
-/* ---------- Mobil ---------- */
+/* ---------- Form controls (iOS/Safari + generell) ---------- */
 
-@media (max-width: 720px){
-  .modalbackdrop{
-    padding: 12px;
-  }
+/* Checkbox/radio skal ikke bli gigantiske */
+.modal .checkrow input[type="checkbox"],
+.modal .checkrow input[type="radio"]{
+  width: 18px;
+  height: 18px;
+  padding: 0;
+}
 
-  .modal{
-    max-height: calc(100dvh - 24px);
-    border-radius: 16px;
-  }
+/* Vanlige felter i modalen (hindrer iOS-zoom + overflow) */
+.modal .modalgrid input:not([type="checkbox"]):not([type="radio"]),
+.modal .modalgrid select,
+.modal .modalgrid textarea,
+.modal .modalgrid .input,
+.modal .modalgrid .select{
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 10px 12px;
+  font-size: 16px;       /* hindrer iOS-zoom */
+  line-height: 1.4;
+  border-radius: 12px;
+}
 
-  .modalgrid{
-    grid-template-columns: 1fr;
-  }
+/* Textarea skal ikke låses i høyde */
+.modal .modalgrid textarea{
+  height: auto;
+  min-height: 96px;
+}
 
-  .modalhead,
-  .modalbody,
-  .modalftr{
-    padding-left: 14px;
-    padding-right: 14px;
-  }
+/* iOS/Safari date: behold native, men få teksten til å sitte riktig */
+.modal .modalgrid input[type="date"]{
+  -webkit-appearance: none;
+  appearance: none;
+}
+.modal .modalgrid input[type="date"]::-webkit-date-and-time-value{
+  line-height: 1.4;
+  padding: 0;
+  text-align: left;
+}
+
+.modal .modalgrid input[type="date"]::-webkit-datetime-edit{
+  padding: 0;
+}
+
+.modal .modalgrid input[type="date"]::-webkit-calendar-picker-indicator{
+  opacity: 0.75;
+  margin: 0;
+  padding: 0;
 }

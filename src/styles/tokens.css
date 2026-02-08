@@ -8,4 +8,19 @@
   --accent: #6ee7ff;
   --accent2: #8b5cf6;
   --shadow: 0 18px 60px rgba(0,0,0,0.35);
+
+  /* radius tokens */
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 18px;
+  --radius-pill: 999px;
+
+  /* gradients & effects */
+  --panel-gradient: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+  --panel-gradient-soft: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.025));
+  --accent-gradient: linear-gradient(135deg, rgba(110,231,255,0.20), rgba(139,92,246,0.18));
+  --accent-gradient-hover: linear-gradient(135deg, rgba(110,231,255,0.28), rgba(139,92,246,0.22));
+  --focus-ring: 0 0 0 3px rgba(110,231,255,0.14);
+  --btn-shadow: 0 10px 26px rgba(0,0,0,0.18);
 }

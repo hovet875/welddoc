@@ -1,4 +1,5 @@
 import type { WpsPageState } from "./state";
+import type { StandardRow } from "../../repo/standardRepo";
 import type { WPQRRow, WPSRow } from "../../repo/wpsRepo";
 
 import {
@@ -12,13 +13,14 @@ import {
 } from "../../repo/wpsRepo";
 
 import { esc, qs } from "../../utils/dom";
-import { normalizeDocNo, stripMm, validatePdfFile } from "../../utils/format";
+import { normalizeDocNo, validatePdfFile } from "../../utils/format";
 import { openModal, modalSaveButton, renderModal } from "../../ui/modal";
-import { currentPdfMeta, wpqrFormBody, wpsFormBody, toThicknessInput } from "./templates";
+import { openPdfPreview } from "../../ui/pdfPreview";
+import { currentPdfMeta, wpqrFormBody, wpsFormBody, toThicknessInput, formatMaterialLabel } from "./templates";
 
 export async function openPdf(path: string) {
   const url = await createPdfSignedUrl(path, 120);
-  window.open(url, "_blank", "noopener,noreferrer");
+  openPdfPreview({ url, title: "PDF" });
 }
 
 function getField<T extends Element>(modalRoot: HTMLElement, key: string) {
@@ -34,24 +36,54 @@ function enableSave(btn: HTMLButtonElement, text: string) {
   btn.textContent = text;
 }
 
-function readCommonForm(modalRoot: HTMLElement) {
+function readCommonForm(modalRoot: HTMLElement, materials: WpsPageState["materials"]) {
   const doc_no_raw = (getField<HTMLInputElement>(modalRoot, "doc_no").value || "").trim();
+  const standard_id = (getField<HTMLSelectElement>(modalRoot, "standard_id").value || "").trim();
   const process = (getField<HTMLSelectElement>(modalRoot, "process").value || "").trim();
-  const materiale = (getField<HTMLSelectElement>(modalRoot, "materiale").value || "").trim();
-  const sammenfoyning = (getField<HTMLSelectElement>(modalRoot, "sammenfoyning").value || "").trim();
-  const tykkelse_raw = getField<HTMLInputElement>(modalRoot, "tykkelse").value || "";
+  const materialId = (getField<HTMLSelectElement>(modalRoot, "material_id").value || "").trim();
+  const material = materials.find((m) => m.id === materialId);
+  if (materialId && !material) {
+    throw new Error("Velg materiale fra listen.");
+  }
+  const material_id = material?.id ?? "";
+  const material_label = material ? formatMaterialLabel(material) : "";
+  const fuge = (getField<HTMLSelectElement>(modalRoot, "fuge").value || "").trim();
+  const thicknessSingle = modalRoot.querySelector<HTMLSelectElement>("[data-f=tykkelse]");
+  const thicknessFrom = modalRoot.querySelector<HTMLSelectElement>("[data-f=tykkelse_from]");
+  const thicknessTo = modalRoot.querySelector<HTMLSelectElement>("[data-f=tykkelse_to]");
+  const wpqrSelect = modalRoot.querySelector<HTMLSelectElement>("[data-f=wpqr_id]");
+
+  let tykkelse = "";
+  if (thicknessSingle) {
+    tykkelse = (thicknessSingle.value || "").trim();
+  } else if (thicknessFrom && thicknessTo) {
+    const from = (thicknessFrom.value || "").trim();
+    const to = (thicknessTo.value || "").trim();
+    if (from && to) {
+      const isWpqr = !wpqrSelect;
+      if (from === to) {
+        tykkelse = from;
+      } else {
+        tykkelse = isWpqr ? `${from} mot ${to}` : `${from}-${to}`;
+      }
+    } else {
+      tykkelse = "";
+    }
+  }
 
   return {
     doc_no: normalizeDocNo(doc_no_raw),
+    standard_id,
     process,
-    materiale,
-    sammenfoyning,
-    tykkelse: stripMm(tykkelse_raw),
+    material_id,
+    materiale: material_label,
+    fuge,
+    tykkelse: tykkelse,
   };
 }
 
 function requireFields(base: ReturnType<typeof readCommonForm>, extraMsg = "") {
-  if (!base.doc_no || !base.process || !base.materiale || !base.sammenfoyning || !base.tykkelse) {
+  if (!base.doc_no || !base.standard_id || !base.process || !base.material_id || !base.fuge || !base.tykkelse) {
     throw new Error(`Fyll ut alle felter.${extraMsg ? " " + extraMsg : ""}`);
   }
 }
@@ -81,7 +113,10 @@ export function fillWpqrDropdownByProcess(
   sel.innerHTML =
     `<option value="">Ikke koblet</option>` +
     list
-      .map((w) => `<option value="${esc(w.id)}">${esc(w.doc_no)} • ${esc(w.materiale)} • ${esc(w.tykkelse)} mm</option>`)
+      .map((w) => {
+        const materialLabel = formatMaterialLabel(w.material, w.materiale);
+        return `<option value="${esc(w.id)}">${esc(w.doc_no)} • ${esc(materialLabel)} • ${esc(w.tykkelse)} mm</option>`;
+      })
       .join("");
 
   sel.value = selectedId ?? "";
@@ -129,29 +164,57 @@ export async function openConfirmDelete(
 export function openWpqrModal(
   mount: HTMLElement,
   signal: AbortSignal,
-  state: WpsPageState,
   mode: "new" | "edit",
   row: WPQRRow | null,
+  materials: WpsPageState["materials"],
+  standards: StandardRow[],
+  processes: WpsPageState["processes"],
   onDone: () => Promise<void>
 ) {
+  const selectableStandards = standards.filter((s) => s.type === "Sveiseprosedyreprøving");
   const title = mode === "new" ? "Ny WPQR" : "Endre WPQR";
   const saveLabel = mode === "new" ? "Lagre" : "Oppdater";
 
-  const modalHtml = renderModal(title, wpqrFormBody(), saveLabel);
+  const modalHtml = renderModal(title, wpqrFormBody(selectableStandards, processes, materials), saveLabel);
   const h = openModal(mount, modalHtml, signal);
 
   // prefill
   if (row) {
     getField<HTMLInputElement>(h.root, "doc_no").value = row.doc_no;
+    getField<HTMLSelectElement>(h.root, "standard_id").value = row.standard_id || "";
     getField<HTMLSelectElement>(h.root, "process").value = row.process || "";
-    getField<HTMLSelectElement>(h.root, "materiale").value = row.materiale || "";
-    getField<HTMLSelectElement>(h.root, "sammenfoyning").value = row.sammenfoyning || "";
-    getField<HTMLInputElement>(h.root, "tykkelse").value = toThicknessInput(row.tykkelse);
+    const materialSelect = getField<HTMLSelectElement>(h.root, "material_id");
+    if (row.material_id) {
+      const hasOption = Array.from(materialSelect.options).some((opt) => opt.value === row.material_id);
+      if (!hasOption) {
+        const opt = document.createElement("option");
+        opt.value = row.material_id;
+        opt.textContent = row.materiale || row.material_id;
+        materialSelect.appendChild(opt);
+      }
+      materialSelect.value = row.material_id;
+    } else if (row.materiale) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = row.materiale;
+      materialSelect.appendChild(opt);
+      materialSelect.value = "";
+    }
+    getField<HTMLSelectElement>(h.root, "fuge").value = row.fuge || "";
+    const thicknessFrom = h.root.querySelector<HTMLSelectElement>("[data-f=tykkelse_from]");
+    const thicknessTo = h.root.querySelector<HTMLSelectElement>("[data-f=tykkelse_to]");
+    if (thicknessFrom && thicknessTo) {
+      const raw = toThicknessInput(row.tykkelse);
+      const parts = raw.includes(" mot ") ? raw.split(" mot ") : raw.split("-");
+      const [fromRaw, toRaw] = parts.length === 2 ? parts : [raw, raw];
+      thicknessFrom.value = (fromRaw || "").trim();
+      thicknessTo.value = (toRaw || "").trim();
+    }
 
     const meta = getField<HTMLDivElement>(h.root, "pdfMeta");
-    meta.innerHTML = currentPdfMeta(!!row.pdf_path);
+    meta.innerHTML = currentPdfMeta(row?.file_id ?? null);
   } else {
-    getField<HTMLDivElement>(h.root, "pdfMeta").innerHTML = currentPdfMeta(false);
+    getField<HTMLDivElement>(h.root, "pdfMeta").innerHTML = currentPdfMeta(null);
   }
 
   // optional: live uppercase
@@ -166,7 +229,7 @@ export function openWpqrModal(
       disableSave(save, mode === "new" ? "Lagrer…" : "Oppdaterer…");
 
       try {
-        const base = readCommonForm(h.root);
+        const base = readCommonForm(h.root, materials);
         requireFields(base, "(PDF er valgfri.)");
 
         const pdfInput = getField<HTMLInputElement>(h.root, "pdf");
@@ -208,10 +271,15 @@ export function openWpsModal(
   row: WPSRow | null,
   onDone: () => Promise<void>
 ) {
+  const selectableStandards = state.standards.filter((s) => s.type === "Sveiseprosedyrespesifikasjon");
   const title = mode === "new" ? "Ny WPS" : "Endre WPS";
   const saveLabel = mode === "new" ? "Lagre" : "Oppdater";
 
-  const modalHtml = renderModal(title, wpsFormBody(), saveLabel);
+  const modalHtml = renderModal(
+    title,
+    wpsFormBody(selectableStandards, state.processes, state.materials),
+    saveLabel
+  );
   const h = openModal(mount, modalHtml, signal);
 
   const processSel = getField<HTMLSelectElement>(h.root, "process");
@@ -219,21 +287,37 @@ export function openWpsModal(
   // prefill
   if (row) {
     getField<HTMLInputElement>(h.root, "doc_no").value = row.doc_no;
+    getField<HTMLSelectElement>(h.root, "standard_id").value = row.standard_id || "";
     processSel.value = row.process || "";
-    getField<HTMLSelectElement>(h.root, "materiale").value = row.materiale || "";
-    getField<HTMLSelectElement>(h.root, "sammenfoyning").value = row.sammenfoyning || "";
-    getField<HTMLInputElement>(h.root, "tykkelse").value = toThicknessInput(row.tykkelse);
+    const materialSelect = getField<HTMLSelectElement>(h.root, "material_id");
+    if (row.material_id) {
+      const hasOption = Array.from(materialSelect.options).some((opt) => opt.value === row.material_id);
+      if (!hasOption) {
+        const opt = document.createElement("option");
+        opt.value = row.material_id;
+        opt.textContent = row.materiale || row.material_id;
+        materialSelect.appendChild(opt);
+      }
+      materialSelect.value = row.material_id;
+    } else if (row.materiale) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = row.materiale;
+      materialSelect.appendChild(opt);
+      materialSelect.value = "";
+    }
+    getField<HTMLSelectElement>(h.root, "fuge").value = row.fuge || "";
+    const toValue = toThicknessInput(row.tykkelse);
+    const [fromRaw, toRaw] = toValue.includes("-") ? toValue.split("-") : [toValue, toValue];
+    const thicknessFrom = h.root.querySelector<HTMLSelectElement>("[data-f=tykkelse_from]");
+    const thicknessTo = h.root.querySelector<HTMLSelectElement>("[data-f=tykkelse_to]");
+    if (thicknessFrom) thicknessFrom.value = (fromRaw || "").trim();
+    if (thicknessTo) thicknessTo.value = (toRaw || "").trim();
 
     const meta = getField<HTMLDivElement>(h.root, "pdfMeta");
-
-  if (row?.pdf_path) {
-      meta.innerHTML = currentPdfMeta(true);
-    } else {
-      meta.innerHTML = ""; // 👈 tomt
-  }
-
+    meta.innerHTML = currentPdfMeta(row?.file_id ?? null);
   } else {
-    getField<HTMLDivElement>(h.root, "pdfMeta").innerHTML = "";
+    getField<HTMLDivElement>(h.root, "pdfMeta").innerHTML = currentPdfMeta(null);
   }
 
   // optional: live uppercase
@@ -259,7 +343,7 @@ export function openWpsModal(
       disableSave(save, mode === "new" ? "Lagrer…" : "Oppdaterer…");
 
       try {
-        const base = readCommonForm(h.root);
+        const base = readCommonForm(h.root, state.materials);
         requireFields(base, "(WPQR/PDF er valgfritt.)");
 
         const wpqr_id = (getField<HTMLSelectElement>(h.root, "wpqr_id").value || "").trim() || null;

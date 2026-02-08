@@ -6,9 +6,6 @@
   align-items: stretch;
   margin-top: 16px;
 }
-@media (max-width: 980px){
-  .hero{ grid-template-columns: 1fr; }
-}
 
 .herotext{
   border: 1px solid var(--border);
@@ -75,9 +72,6 @@
   display:grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
-}
-@media (max-width: 980px){
-  .tiles{ grid-template-columns: 1fr; }
 }
 .tile{
   border: 1px solid var(--border);

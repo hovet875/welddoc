@@ -1,27 +1,49 @@
 import { supabase } from "../services/supabaseClient";
+import {
+  createFileRecord,
+  createFileLink,
+  createSignedUrlForFileRef,
+  deleteFileRecord,
+  uploadFileToIdPath,
+} from "./fileRepo";
+
+export type MaterialRef = {
+  id: string;
+  name: string;
+  material_code: string;
+  material_group: string;
+};
 
 export type WPQRRow = {
   id: string;
   doc_no: string;
-  materiale: string;
-  sammenfoyning: string;
+  standard_id: string | null;
+  material_id: string | null;
+  materiale: string | null;
+  material: MaterialRef | null;
+  fuge: string;
   tykkelse: string;
   process: string;
-  pdf_path: string | null;
+  file_id: string | null;
   created_at: string;
+  standard?: { id: string; label: string; revision: number | null; type: string | null } | null;
 };
 
 export type WPSRow = {
   id: string;
   doc_no: string;
-  materiale: string;
-  sammenfoyning: string;
+  standard_id: string | null;
+  material_id: string | null;
+  materiale: string | null;
+  material: MaterialRef | null;
+  fuge: string;
   tykkelse: string;
   process: string;
-  pdf_path: string | null;
+  file_id: string | null;
   created_at: string;
   wpqr_id: string | null;
-  wpqr?: { id: string; doc_no: string } | null;
+  wpqr: { id: string; doc_no: string; file_id: string | null; material_id: string | null; materiale: string | null; material: MaterialRef | null; tykkelse: string } | null;
+  standard?: { id: string; label: string; revision: number | null; type: string | null } | null;
 };
 
 export type WpsFetchResult = {
@@ -31,24 +53,49 @@ export type WpsFetchResult = {
 
 export type UpsertWPQRInput = {
   doc_no: string;
+  standard_id: string;
   process: string;
+  material_id: string;
   materiale: string;
-  sammenfoyning: string;
+  fuge: string;
   tykkelse: string;
+  file_id?: string | null;
 };
 
 export type UpsertWPSInput = UpsertWPQRInput & {
   wpqr_id: string | null;
 };
 
-const BUCKET = "docs";
 
 /** ---- Fetch ---- */
 export async function fetchWpsData(): Promise<WpsFetchResult> {
   const [wpqrRes, wpsRes] = await Promise.all([
     supabase
       .from("wpqr")
-      .select("id, doc_no, materiale, sammenfoyning, tykkelse, process, pdf_path, created_at")
+      .select(`
+        id,
+        doc_no,
+        standard_id,
+        material_id,
+        materiale,
+        fuge,
+        tykkelse,
+        process,
+        file_id,
+        created_at,
+        standard:standard_id (
+          id,
+          label,
+          revision,
+          type
+        ),
+        material:material_id (
+          id,
+          name,
+          material_code,
+          material_group
+        )
+      `)
       .order("process", { ascending: true })
       .order("created_at", { ascending: false }),
 
@@ -57,16 +104,40 @@ export async function fetchWpsData(): Promise<WpsFetchResult> {
       .select(`
         id,
         doc_no,
+        standard_id,
+        material_id,
         materiale,
-        sammenfoyning,
+        fuge,
         tykkelse,
         process,
-        pdf_path,
+        file_id,
         created_at,
+        standard:standard_id (
+          id,
+          label,
+          revision,
+          type
+        ),
+        material:material_id (
+          id,
+          name,
+          material_code,
+          material_group
+        ),
         wpqr_id,
         wpqr:wpqr_id (
           id,
-          doc_no
+          doc_no,
+          file_id,
+          material_id,
+          materiale,
+          tykkelse,
+          material:material_id (
+            id,
+            name,
+            material_code,
+            material_group
+          )
         )
       `)
       .order("process", { ascending: true })
@@ -76,45 +147,38 @@ export async function fetchWpsData(): Promise<WpsFetchResult> {
   if (wpqrRes.error) throw wpqrRes.error;
   if (wpsRes.error) throw wpsRes.error;
 
+  const normalizeMaterial = (row: any) => ({
+    ...row,
+    material: Array.isArray(row?.material) ? row.material[0] ?? null : row?.material ?? null,
+    standard: Array.isArray(row?.standard) ? row.standard[0] ?? null : row?.standard ?? null,
+  });
+
+  const normalizeWpqr = (row: any) => normalizeMaterial(row);
+  const normalizeWps = (row: any) => ({
+    ...normalizeMaterial(row),
+    wpqr: row?.wpqr
+      ? {
+          ...normalizeMaterial(row.wpqr),
+        }
+      : null,
+  });
+
   return {
-    wpqr: (wpqrRes.data ?? []) as WPQRRow[],
-    wps: (wpsRes.data ?? []) as WPSRow[],
+    wpqr: (wpqrRes.data ?? []).map(normalizeWpqr) as WPQRRow[],
+    wps: (wpsRes.data ?? []).map(normalizeWps) as WPSRow[],
   };
 }
 
 /** ---- Storage ---- */
-export async function createPdfSignedUrl(path: string, expiresSeconds = 120) {
-  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, expiresSeconds);
-  if (error) throw error;
-  return data.signedUrl;
-}
-
-function pdfPath(kind: "wpqr" | "wps", id: string) {
-  // Stabilt: endring av doc_no påvirker ikke filnavn
-  return `${kind}/${id}.pdf`;
-}
-
-export async function uploadPdfToIdPath(kind: "wpqr" | "wps", id: string, file: File) {
-  const path = pdfPath(kind, id);
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-    upsert: true,
-    contentType: "application/pdf",
-  });
-  if (error) throw error;
-  return path;
-}
-
-export async function deletePdfIfExists(pdf_path: string | null) {
-  if (!pdf_path) return;
-  const { error } = await supabase.storage.from(BUCKET).remove([pdf_path]);
-  if (error) console.warn("Klarte ikke å slette PDF:", error);
+export async function createPdfSignedUrl(fileId: string, expiresSeconds = 120) {
+  return createSignedUrlForFileRef(fileId, { expiresSeconds });
 }
 
 /** ---- CRUD WPQR ---- */
 export async function insertWpqr(base: UpsertWPQRInput) {
   const { data, error } = await supabase
     .from("wpqr")
-    .insert({ ...base, pdf_path: null })
+    .insert({ ...base })
     .select("id")
     .single();
 
@@ -122,15 +186,21 @@ export async function insertWpqr(base: UpsertWPQRInput) {
   return data.id as string;
 }
 
-export async function updateWpqr(id: string, base: UpsertWPQRInput & { pdf_path?: string | null }) {
+export async function updateWpqr(id: string, base: Partial<UpsertWPQRInput>) {
   const { error } = await supabase.from("wpqr").update(base).eq("id", id);
   if (error) throw error;
 }
 
 export async function getWpqrPdfPath(id: string) {
-  const { data, error } = await supabase.from("wpqr").select("pdf_path").eq("id", id).single();
+  const { data, error } = await supabase
+    .from("wpqr")
+    .select("file_id")
+    .eq("id", id)
+    .single();
   if (error) throw error;
-  return (data?.pdf_path ?? null) as string | null;
+  return {
+    file_id: (data?.file_id ?? null) as string | null,
+  };
 }
 
 /**
@@ -146,13 +216,24 @@ export async function createWpqrWithOptionalPdf(base: UpsertWPQRInput, pdfFile: 
   if (!pdfFile) return id;
 
   try {
-    const path = await uploadPdfToIdPath("wpqr", id, pdfFile);
-    await updateWpqr(id, { pdf_path: path });
+    const fileId = crypto.randomUUID();
+    const { bucket, path, sha256 } = await uploadFileToIdPath("wpqr", fileId, pdfFile);
+    await createFileRecord({
+      id: fileId,
+      bucket,
+      path,
+      type: "wpqr",
+      mime_type: pdfFile.type || "application/pdf",
+      size_bytes: pdfFile.size,
+      sha256,
+    });
+    await createFileLink(fileId, "wpqr", id);
+    await updateWpqr(id, { file_id: fileId });
     return id;
   } catch (e) {
     // cleanup: forsøk å slette fil + rad
     try {
-      await deletePdfIfExists(pdfPath("wpqr", id));
+      // best effort
     } catch {}
     try {
       await supabase.from("wpqr").delete().eq("id", id);
@@ -163,8 +244,8 @@ export async function createWpqrWithOptionalPdf(base: UpsertWPQRInput, pdfFile: 
 
 /**
  * Stabil update:
- * - removePdf: sett pdf_path=null, slett fil best effort
- * - new pdf: upload til id-path (upsert), sett pdf_path=id-path, slett evt gammel “legacy path” best effort
+ * - removePdf: sett file_id=null, slett fil best effort
+ * - new pdf: upload til id-path (upsert), sett file_id
  */
 export async function updateWpqrWithPdf(
   id: string,
@@ -177,18 +258,27 @@ export async function updateWpqrWithPdf(
   await updateWpqr(id, base);
 
   if (opts.removePdf) {
-    // fjern kobling først, så slett fil
-    await updateWpqr(id, { pdf_path: null });
-    await deletePdfIfExists(current);
+    await updateWpqr(id, { file_id: null });
+    if (current.file_id) await deleteFileRecord(current.file_id);
     return;
   }
 
   if (opts.pdfFile) {
-    const newPath = await uploadPdfToIdPath("wpqr", id, opts.pdfFile);
-    await updateWpqr(id, { pdf_path: newPath });
+    const fileId = crypto.randomUUID();
+    const { bucket, path, sha256 } = await uploadFileToIdPath("wpqr", fileId, opts.pdfFile);
+    await createFileRecord({
+      id: fileId,
+      bucket,
+      path,
+      type: "wpqr",
+      mime_type: opts.pdfFile.type || "application/pdf",
+      size_bytes: opts.pdfFile.size,
+      sha256,
+    });
+    await createFileLink(fileId, "wpqr", id);
+    await updateWpqr(id, { file_id: fileId });
 
-    // hvis du hadde gammel doc_no-basert path, slett den best effort
-    if (current && current !== newPath) await deletePdfIfExists(current);
+    if (current.file_id) await deleteFileRecord(current.file_id);
   }
 }
 
@@ -199,14 +289,14 @@ export async function deleteWpqr(id: string) {
   const { error: delErr } = await supabase.from("wpqr").delete().eq("id", id);
   if (delErr) throw delErr;
 
-  await deletePdfIfExists(pdf);
+  if (pdf.file_id) await deleteFileRecord(pdf.file_id);
 }
 
 /** ---- CRUD WPS ---- */
 export async function insertWps(base: UpsertWPSInput) {
   const { data, error } = await supabase
     .from("wps")
-    .insert({ ...base, pdf_path: null })
+    .insert({ ...base })
     .select("id")
     .single();
 
@@ -214,15 +304,21 @@ export async function insertWps(base: UpsertWPSInput) {
   return data.id as string;
 }
 
-export async function updateWps(id: string, base: UpsertWPSInput & { pdf_path?: string | null }) {
+export async function updateWps(id: string, base: Partial<UpsertWPSInput>) {
   const { error } = await supabase.from("wps").update(base).eq("id", id);
   if (error) throw error;
 }
 
 export async function getWpsPdfPath(id: string) {
-  const { data, error } = await supabase.from("wps").select("pdf_path").eq("id", id).single();
+  const { data, error } = await supabase
+    .from("wps")
+    .select("file_id")
+    .eq("id", id)
+    .single();
   if (error) throw error;
-  return (data?.pdf_path ?? null) as string | null;
+  return {
+    file_id: (data?.file_id ?? null) as string | null,
+  };
 }
 
 export async function createWpsWithOptionalPdf(base: UpsertWPSInput, pdfFile: File | null) {
@@ -231,12 +327,23 @@ export async function createWpsWithOptionalPdf(base: UpsertWPSInput, pdfFile: Fi
   if (!pdfFile) return id;
 
   try {
-    const path = await uploadPdfToIdPath("wps", id, pdfFile);
-    await updateWps(id, { pdf_path: path });
+    const fileId = crypto.randomUUID();
+    const { bucket, path, sha256 } = await uploadFileToIdPath("wps", fileId, pdfFile);
+    await createFileRecord({
+      id: fileId,
+      bucket,
+      path,
+      type: "wps",
+      mime_type: pdfFile.type || "application/pdf",
+      size_bytes: pdfFile.size,
+      sha256,
+    });
+    await createFileLink(fileId, "wps", id);
+    await updateWps(id, { file_id: fileId });
     return id;
   } catch (e) {
     try {
-      await deletePdfIfExists(pdfPath("wps", id));
+      // best effort
     } catch {}
     try {
       await supabase.from("wps").delete().eq("id", id);
@@ -255,15 +362,27 @@ export async function updateWpsWithPdf(
   await updateWps(id, base);
 
   if (opts.removePdf) {
-    await updateWps(id, { pdf_path: null });
-    await deletePdfIfExists(current);
+    await updateWps(id, { file_id: null });
+    if (current.file_id) await deleteFileRecord(current.file_id);
     return;
   }
 
   if (opts.pdfFile) {
-    const newPath = await uploadPdfToIdPath("wps", id, opts.pdfFile);
-    await updateWps(id, { pdf_path: newPath });
-    if (current && current !== newPath) await deletePdfIfExists(current);
+    const fileId = crypto.randomUUID();
+    const { bucket, path, sha256 } = await uploadFileToIdPath("wps", fileId, opts.pdfFile);
+    await createFileRecord({
+      id: fileId,
+      bucket,
+      path,
+      type: "wps",
+      mime_type: opts.pdfFile.type || "application/pdf",
+      size_bytes: opts.pdfFile.size,
+      sha256,
+    });
+    await createFileLink(fileId, "wps", id);
+    await updateWps(id, { file_id: fileId });
+
+    if (current.file_id) await deleteFileRecord(current.file_id);
   }
 }
 
@@ -273,5 +392,5 @@ export async function deleteWps(id: string) {
   const { error: delErr } = await supabase.from("wps").delete().eq("id", id);
   if (delErr) throw delErr;
 
-  await deletePdfIfExists(pdf);
+  if (pdf.file_id) await deleteFileRecord(pdf.file_id);
 }

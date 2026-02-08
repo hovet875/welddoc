@@ -1,13 +1,3 @@
-export function stripMm(s: string) {
-  return (s ?? "").replace(/mm/gi, "").trim();
-}
-
-export function displayThickness(s: string) {
-  const v = String(s ?? "").trim();
-  if (!v) return "";
-  return /mm\b/i.test(v) ? v : `${v} mm`;
-}
-
 export function fmtDate(iso: string) {
   try {
     return new Date(iso).toLocaleDateString("nb-NO", {
@@ -30,4 +20,10 @@ export function validatePdfFile(file: File, maxMb = 25) {
 /** Stabil praksis: doc_no lagres konsistent */
 export function normalizeDocNo(s: string) {
   return String(s ?? "").trim().toUpperCase();
+}
+
+export function truncateLabel(text: string, max = 15) {
+  const clean = text.trim();
+  if (clean.length <= max) return clean;
+  return `${clean.slice(0, max)}...`;
 }

@@ -26,7 +26,11 @@
   border-radius: 14px;
 }
 
-#app{ overflow-x: clip; }
+#app{
+  overflow-x: clip;
+  position: relative;
+  z-index: 1;
+}
 @supports not (overflow: clip){
   #app{ overflow-x: hidden; }
 }
@@ -40,4 +44,21 @@
 
 .app-main {
   flex: 1;
+}
+
+/* Header wrapper for sticky on mobile */
+.header-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding: 12px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  padding-left: max(12px, env(safe-area-inset-left));
+  padding-right: max(12px, env(safe-area-inset-right));
+  background: var(--bg);
+}
+
+.header-wrap .topbar {
+  position: relative;
+  top: 0;
 }

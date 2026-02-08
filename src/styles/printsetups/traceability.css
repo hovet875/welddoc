@@ -1,0 +1,194 @@
+:root{
+  --ink:#1a1d22;
+  --muted:#6b7280;
+  --line:#c2c9d4;
+  --line-strong:#9aa3b2;
+  --accent:#173b66;
+  --accent-soft:#f1f5fa;
+  --alt:#e9edf3;
+}
+
+.trace-print-sheet{
+  display:none;
+  background:#fff;
+  background-image:none;
+}
+
+body.print-traceability .trace-print-sheet{
+  display:block;
+}
+
+.trace-print-sheet *{
+  box-sizing:border-box;
+}
+
+.trace-print-sheet .msl-page{
+  width: 210mm;
+  margin: 0 auto;
+  padding: 12mm;
+  background:#fff;
+  background-image:none;
+}
+
+.trace-print-sheet .msl-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content: space-between;
+  gap:16px;
+  margin-bottom: 10mm;
+  border-bottom: 3px solid var(--line-strong);
+  padding-bottom: 6mm;
+}
+
+.trace-print-sheet .msl-brand{
+  display:flex;
+  align-items:center;
+  gap:14px;
+}
+
+.trace-print-sheet .msl-logo{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width: 58px;
+  height: 58px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.trace-print-sheet .msl-logo img{
+  height: 42px;
+  width:auto;
+  display:block;
+}
+
+.trace-print-sheet .msl-kicker{
+  font-size: 12px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.trace-print-sheet .msl-title{
+  margin:0;
+  font-size: 24px;
+  letter-spacing: 0.8px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.trace-print-sheet .msl-project-card{
+  min-width: 150px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: var(--accent-soft);
+  text-align: right;
+}
+
+.trace-print-sheet .msl-project-label{
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.trace-print-sheet .msl-project-value{
+  font-weight: 700;
+  font-size: 14.5px;
+  color: var(--ink);
+}
+
+.trace-print-sheet .msl-project-meta{
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--muted);
+  letter-spacing: 0.3px;
+}
+
+.trace-print-sheet .msl-table-wrap{
+  border: 1.5px solid var(--line-strong);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.trace-print-sheet .msl-table{
+  width:100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.trace-print-sheet .msl-table th,
+.trace-print-sheet .msl-table td{
+  border-bottom: 1.25px solid var(--line);
+  padding: 7px 9px;
+  height: 28px;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 12.5px;
+  color: var(--ink);
+  background:#fff;
+  background-image:none;
+}
+
+.trace-print-sheet .msl-table td + td,
+.trace-print-sheet .msl-table th + th{
+  border-left: 1.25px solid var(--line);
+}
+
+.trace-print-sheet .msl-head th{
+  background: var(--accent);
+  background-image:none;
+  color: #fff;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.9px;
+  font-size: 11.5px;
+}
+
+.trace-print-sheet .msl-table tbody tr:nth-child(even) td{
+  background: var(--alt);
+  background-image:none;
+}
+
+.trace-print-sheet .msl-table td{
+  font-family: Calibri, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: 0.15px;
+}
+
+.trace-print-sheet .msl-table th{
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+@media print{
+  @page { size: A4; margin: 0; }
+
+  body.print-traceability{
+    margin:0;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color:#111;
+    background:#fff;
+    background-image:none;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    text-rendering: geometricPrecision;
+  }
+
+  body.print-traceability::before,
+  body.print-traceability::after{
+    content: none !important;
+    display: none !important;
+    background: none !important;
+  }
+
+  body.print-traceability > *:not(.trace-print-sheet){
+    display:none !important;
+  }
+
+  body.print-traceability .trace-print-sheet{
+    display:block;
+  }
+}

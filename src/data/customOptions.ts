@@ -1,4 +1,4 @@
-// src/data/wpsOptions.ts
+// src/data/customOptions.ts
 
 export const PROSESSER = [
   "111 - Elektrodesveis",
@@ -26,7 +26,7 @@ export const MATERIALER = [
   "Aluminium",
 ] as const;
 
-export const SAMMENFOYNINGER = [
-  "BW (Buttsveis)",
-  "FW (Kilsveis))",
+export const fugeER = [
+  "BW",
+  "FW",
 ] as const;

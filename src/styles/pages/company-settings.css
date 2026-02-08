@@ -1,0 +1,207 @@
+/* =========================================================
+   COMPANY SETTINGS PAGE
+   ========================================================= */
+
+.page-company-settings .section-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 14px;
+  margin-top: 16px;
+
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+
+  background: var(--panel-gradient);
+  padding: 18px;
+
+  box-shadow: var(--shadow);
+}
+
+.page-company-settings .section-header > div:first-child{ min-width: 0; }
+
+.page-company-settings .section-title{
+  margin:0 0 6px;
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.3px;
+}
+
+.page-company-settings .section-subtitle{
+  margin:0;
+  color: rgba(255,255,255,0.70);
+  max-width: 80ch;
+}
+
+.page-company-settings .section-grid{
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.page-company-settings .panel{
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--panel-gradient-soft);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.page-company-settings .panel-head{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  gap: 12px;
+}
+
+.page-company-settings .panel-title{
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.page-company-settings .panel-meta{
+  color: rgba(255,255,255,0.65);
+  font-size: 13px;
+}
+
+.page-company-settings .panel-body{
+  padding: 12px;
+}
+
+.page-company-settings .panel-collapsible.is-collapsed .panel-body{
+  display: none;
+}
+
+.page-company-settings .panel-toggle{
+  margin-left: auto;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+  width: auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.page-company-settings .panel-toggle:hover{
+  border-color: rgba(255,255,255,0.35);
+  background: rgba(255,255,255,0.08);
+}
+
+.page-company-settings .settings-placeholder{
+  padding: 8px 0;
+}
+
+.page-company-settings .settings-form{
+  display: grid;
+  gap: 12px;
+}
+
+.page-company-settings .settings-row.inline{
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.page-company-settings .settings-inputs{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.page-company-settings .settings-list{
+  display: grid;
+  gap: 8px;
+}
+
+.page-company-settings .settings-item{
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.03);
+}
+
+.page-company-settings .settings-item__title{
+  font-weight: 600;
+}
+
+.page-company-settings .settings-item__meta{
+  color: rgba(255,255,255,0.65);
+  font-size: 12.5px;
+}
+
+.page-company-settings .settings-item__actions{
+  display: inline-flex;
+  gap: 8px;
+}
+
+.page-company-settings .chip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:4px 8px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.04);
+  font-size:12px;
+  color: rgba(255,255,255,0.85);
+}
+
+.page-company-settings .tag{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:600;
+  border:1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.06);
+}
+
+.page-company-settings .menu-grid{
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.page-company-settings .menu-card{
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--panel-gradient-soft);
+  box-shadow: var(--shadow);
+  text-decoration: none;
+  color: inherit;
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+
+.page-company-settings .menu-card:hover{
+  transform: translateY(-2px);
+  border-color: rgba(255,255,255,0.2);
+}
+
+.page-company-settings .menu-card__title{
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.page-company-settings .menu-card__meta{
+  color: rgba(255,255,255,0.7);
+  font-size: 13px;
+}

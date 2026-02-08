@@ -1,9 +1,37 @@
 /* ---- LOGIN ---- */
-.loginwrap{ display:flex; justify-content:center; padding: 30px 0 10px; }
+.page-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.page-login .main{
+  width: 100%;
+}
+
+.loginwrap{
+  width: 100%;
+  display:flex;
+  justify-content:center;
+  padding: 30px 0 10px;
+}
+
+.loginbrand{
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.loginlogo-main{
+  height: 100px;
+  width: auto;
+  object-fit: contain;
+}
 
 .logincard{
   width: 100%;
-  max-width: 520px;
+  max-width: 500px;
   border: 1px solid var(--border);
   border-radius: 18px;
   background: rgba(255,255,255,0.06);
@@ -40,7 +68,7 @@
 }
 
 .loginlogo {
-  height: 75px;
+  height: 80px;
   width: auto;
   opacity: 0.9;
 }

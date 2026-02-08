@@ -1,12 +1,20 @@
 // src/pages/certs/state.ts
 import type { ProfileWelderRow, WelderCertRow, NdtCertRow } from "../../repo/certRepo";
+import type { StandardRow, StandardFmGroupRow } from "../../repo/standardRepo";
+import type { MaterialRow } from "../../repo/materialRepo";
+import type { NdtMethodRow } from "../../repo/ndtReportRepo";
 
 export type CertsPageState = {
   welders: ProfileWelderRow[];
   welderCerts: WelderCertRow[];
   ndtCerts: NdtCertRow[];
+  standards: StandardRow[];
+  fmGroups: StandardFmGroupRow[];
+  materials: MaterialRow[];
+  ndtMethods: NdtMethodRow[];
   loadSeq: number;
   loading: boolean;
+  isAdmin: boolean;
 };
 
 export function createState(): CertsPageState {
@@ -14,8 +22,13 @@ export function createState(): CertsPageState {
     welders: [],
     welderCerts: [],
     ndtCerts: [],
+    standards: [],
+    fmGroups: [],
+    materials: [],
+    ndtMethods: [],
     loadSeq: 0,
     loading: false,
+    isAdmin: false,
   };
 }
 
@@ -48,10 +61,10 @@ export function groupByWelder(rows: WelderCertRow[]) {
   return entries;
 }
 
-export function groupByMethod(rows: NdtCertRow[]) {
+export function groupByCompany(rows: NdtCertRow[]) {
   const m = new Map<string, NdtCertRow[]>();
   for (const r of rows) {
-    const key = (r.ndt_method || "Ukjent").trim();
+    const key = (r.company || "Ukjent").trim();
     if (!m.has(key)) m.set(key, []);
     m.get(key)!.push(r);
   }

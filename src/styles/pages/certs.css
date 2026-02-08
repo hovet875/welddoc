@@ -4,38 +4,38 @@
    ========================================================= */
 
 /* ---- Header ---- */
-.page-certs .wpsheader{
+.page-certs .section-header{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap: 14px;
   margin-top: 16px;
 
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
 
-  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+  background: var(--panel-gradient);
   padding: 18px;
 
-  box-shadow: 0 18px 60px rgba(0,0,0,0.30);
+  box-shadow: var(--shadow);
 }
 
-.page-certs .wpsheader > div:first-child{ min-width: 0; }
+.page-certs .section-header > div:first-child{ min-width: 0; }
 
-.page-certs .wpsh1{
+.page-certs .section-title{
   margin:0 0 6px;
   font-size: 24px;
   line-height: 1.2;
   letter-spacing: -0.3px;
 }
 
-.page-certs .wpsp{
+.page-certs .section-subtitle{
   margin:0;
   color: rgba(255,255,255,0.70);
   max-width: 80ch;
 }
 
-.page-certs .wpsactions{
+.page-certs .section-actions{
   display:flex;
   gap: 10px;
   flex-wrap: wrap;
@@ -46,87 +46,27 @@
 }
 
 /* Knappestil (samme) */
-.page-certs .wpsactions .btn{
-  height: 40px;
-  padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.05);
-  color: rgba(255,255,255,0.92);
-  box-shadow: 0 10px 26px rgba(0,0,0,0.18);
-}
-.page-certs .wpsactions .btn:hover{ background: rgba(255,255,255,0.08); }
-.page-certs .wpsactions .btn:focus{
-  outline: none;
-  border-color: rgba(110,231,255,0.45);
-  box-shadow: 0 0 0 3px rgba(110,231,255,0.14), 0 10px 26px rgba(0,0,0,0.18);
-}
-.page-certs .wpsactions .btn.primary,
-.page-certs .wpsactions .btn.accent{
-  border: 1px solid rgba(110,231,255,0.35);
-  background: linear-gradient(135deg, rgba(110,231,255,0.18), rgba(139,92,246,0.16));
-}
-.page-certs .wpsactions .btn.primary:hover,
-.page-certs .wpsactions .btn.accent:hover{
-  background: linear-gradient(135deg, rgba(110,231,255,0.24), rgba(139,92,246,0.20));
-}
-
-/* Mobil header */
-@media (max-width: 820px){
-  .page-certs .wpsheader{
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-
-  .page-certs .wpsactions{
-    width: 100%;
-    justify-content: center;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 6px;
-    margin-top: 0;
-  }
-
-  .page-certs .wpsactions::-webkit-scrollbar{ display:none; }
-
-  .page-certs .wpsactions::before,
-  .page-certs .wpsactions::after{
-    content:"";
-    flex: 1 0 auto;
-  }
-
-  .page-certs .wpsactions .btn{
-    flex: 0 0 auto;
-    white-space: nowrap;
-    height: 38px;
-    padding: 0 12px;
-  }
-}
+/* WPS actions in Certs: layout-only */
+.page-certs .section-actions .btn{ border-radius: var(--radius-pill); box-shadow: var(--btn-shadow); }
 
 /* ---------- Grid ---------- */
-.page-certs .wpsgrid{
+.page-certs .section-grid{
   margin-top: 14px;
   display: grid;
   grid-template-columns: 1fr;
   gap: 14px;
 }
 
-@media (min-width: 1200px){
-  .page-certs .wpsgrid{ gap: 16px; }
-}
-
 /* ---------- Panel ---------- */
-.page-certs .wpspanel{
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.025));
-  box-shadow: 0 18px 60px rgba(0,0,0,0.30);
+.page-certs .panel{
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--panel-gradient-soft);
+  box-shadow: var(--shadow);
   overflow: hidden;
 }
 
-.page-certs .wpspanelhead{
+.page-certs .panel-head{
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -135,29 +75,62 @@
   background: rgba(255,255,255,0.03);
 }
 
-.page-certs .wpspaneltitle{
+.page-certs .panel-title{
   font-weight: 800;
   letter-spacing: 0.2px;
 }
 
-.page-certs .wpspanelmeta{
+.page-certs .panel-meta{
   color: rgba(255,255,255,0.65);
   font-size: 13px;
 }
 
-.page-certs .wpspanelbody{ padding: 12px; }
+.page-certs .panel-body{ padding: 12px; }
 .page-certs .listmount{ margin-top: 12px; }
 
+/* ---------- Filters ---------- */
+.page-certs .panel-filters{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 10px 10px;
+  border: 1px dashed rgba(255,255,255,0.12);
+  border-radius: var(--radius-lg);
+  background: rgba(255,255,255,0.02);
+}
+
+.page-certs .filter-field{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 160px;
+  flex: 1 1 180px;
+}
+
+.page-certs .filter-field.is-wide{
+  flex: 2 1 240px;
+}
+
+.page-certs .filter-field label{
+  font-size: 12px;
+  color: rgba(255,255,255,0.75);
+}
+
+.page-certs .filter-field .input,
+.page-certs .filter-field .select{
+  width: 100%;
+}
+
 /* ---------- Gruppe ---------- */
-.page-certs .wpsgroup{
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 16px;
+.page-certs .group{
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   background: rgba(255,255,255,0.04);
   overflow: hidden;
   margin-bottom: 12px;
 }
 
-.page-certs .wpsgrouphead{
+.page-certs .group-head{
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -166,215 +139,28 @@
   background: rgba(255,255,255,0.025);
 }
 
-.page-certs .wpsgrouptitle{ font-weight: 700; }
-.page-certs .wpsgroupmeta{
+.page-certs .group-title{ font-weight: 700; }
+.page-certs .group-meta{
   color: rgba(255,255,255,0.65);
   font-size: 12.5px;
 }
 
-/* ---------- Tabeller ---------- */
-.page-certs .wpsscroll{ overflow: hidden; }
+/* Welder cert thickness spacing */
+.page-certs .cert-thickness .inputgroup.join{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
 
-.page-certs .wpstable{
+/* Fugetype (welder cert) layout */
+.page-certs .cert-fugegroup{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.page-certs .cert-fugegroup .checkboxpill{
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 13.5px;
-  table-layout: fixed;
-}
-
-.page-certs .wpstable thead th{
-  color: rgba(255,255,255,0.78);
-  font-weight: 650;
-  background: rgba(255,255,255,0.02);
-  padding: 11px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.10);
-  text-align: left;
-}
-
-.page-certs .wpstable td{
-  padding: 11px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.07);
-  vertical-align: top;
-  overflow-wrap: break-word;
-}
-
-.page-certs .wpstable tbody tr:hover{
-  background: rgba(255,255,255,0.04);
-}
-
-/* Action kolonne bredde (2 knapper) */
-.page-certs .wpstable th:last-child,
-.page-certs .wpstable td:last-child{
-  width: 92px;
-}
-
-/* ---------- Action cell + icon buttons ---------- */
-.page-certs .actcell{
-  padding: 9px 10px;
-  text-align: right;
-  vertical-align: middle;
-
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 8px;
-}
-
-.page-certs .iconbtn{
-  width: 38px;
-  height: 38px;
-  display: inline-flex;
-  align-items: center;
   justify-content: center;
-
-  border-radius: 13px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.06);
-  color: rgba(255,255,255,0.90);
-
-  cursor: pointer;
-  box-shadow: 0 10px 22px rgba(0,0,0,0.18);
-}
-
-.page-certs .iconbtn:hover{
-  background: rgba(255,255,255,0.10);
-  border-color: rgba(255,255,255,0.14);
-}
-
-.page-certs .iconbtn:active{ transform: translateY(1px); }
-
-.page-certs .iconbtn.danger{
-  background: rgba(255,0,0,0.16);
-  border-color: rgba(255,0,0,0.26);
-  color: rgba(255,255,255,0.95);
-}
-.page-certs .iconbtn.danger:hover{
-  background: rgba(255,0,0,0.22);
-  border-color: rgba(255,0,0,0.32);
-}
-
-.page-certs .svgicon{
-  width: 20px;
-  height: 20px;
-  display: block;
-}
-
-/* ---------- Status chip (Gyldig / Utløper snart / Utløpt) ---------- */
-.page-certs .certstatus{
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-
-  padding: 6px 10px;
-  border-radius: 999px;
-
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.05);
-
-  color: rgba(255,255,255,0.92);
-  font-weight: 650;
-  font-size: 12.5px;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.page-certs .certstatus .dot{
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.65);
-  box-shadow: 0 0 0 3px rgba(255,255,255,0.08);
-}
-
-/* Gyldig (grønn) */
-.page-certs .certstatus.ok{
-  border-color: rgba(34,197,94,0.28);
-  background: rgba(34,197,94,0.10);
-}
-.page-certs .certstatus.ok .dot{
-  background: rgba(34,197,94,0.95);
-  box-shadow: 0 0 0 3px rgba(34,197,94,0.18);
-}
-
-/* Utløper snart (gul/oransje) */
-.page-certs .certstatus.soon{
-  border-color: rgba(245,158,11,0.35);
-  background: rgba(245,158,11,0.12);
-}
-.page-certs .certstatus.soon .dot{
-  background: rgba(245,158,11,0.95);
-  box-shadow: 0 0 0 3px rgba(245,158,11,0.20);
-}
-
-/* Utløpt (rød) */
-.page-certs .certstatus.expired{
-  border-color: rgba(239,68,68,0.35);
-  background: rgba(239,68,68,0.12);
-}
-.page-certs .certstatus.expired .dot{
-  background: rgba(239,68,68,0.95);
-  box-shadow: 0 0 0 3px rgba(239,68,68,0.20);
-}
-
-/* Litt mindre chip i tabellceller */
-.page-certs .certstatus.compact{
-  padding: 5px 9px;
-  font-size: 12px;
-}
-
-/* ---------- Mobil: tabell → kort ---------- */
-@media (max-width: 720px){
-  .page-certs .wpstable thead{ display: none; }
-
-  .page-certs .wpstable,
-  .page-certs .wpstable tbody,
-  .page-certs .wpstable tr,
-  .page-certs .wpstable td{
-    display: block;
-    width: 100%;
-  }
-
-  .page-certs .wpstable tr{
-    padding: 10px;
-    background: rgba(255,255,255,0.03);
-    border-radius: 14px;
-  }
-
-  .page-certs .wpstable tr + tr{ margin-top: 10px; }
-
-  .page-certs .wpstable td{
-    border: 0;
-    padding: 6px 0;
-    display: flex;
-    justify-content: space-between;
-    gap: 14px;
-  }
-
-  .page-certs .wpstable td::before{
-    content: attr(data-label);
-    color: rgba(255,255,255,0.62);
-    font-weight: 600;
-    white-space: nowrap;
-  }
-
-  .page-certs .actcell{
-    width: auto;
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    padding-top: 6px;
-  }
-
-  .page-certs .iconbtn{
-    width: 40px;
-    height: 40px;
-    border-radius: 14px;
-  }
-
-  .page-certs .svgicon{ width: 21px; height: 21px; }
-
-  /* status-chip litt mindre på mobil */
-  .page-certs .certstatus{ padding: 5px 9px; font-size: 12px; }
-  .page-certs .certstatus .dot{ width: 9px; height: 9px; }
+  height: 48px;
 }

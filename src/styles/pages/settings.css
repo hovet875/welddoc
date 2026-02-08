@@ -1,0 +1,99 @@
+/* =========================================================
+   SETTINGS PAGE
+   ========================================================= */
+
+.page-settings .section-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 14px;
+  margin-top: 16px;
+
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+
+  background: var(--panel-gradient);
+  padding: 18px;
+
+  box-shadow: var(--shadow);
+}
+
+.page-settings .section-header > div:first-child{ min-width: 0; }
+
+.page-settings .section-title{
+  margin:0 0 6px;
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.3px;
+}
+
+.page-settings .section-subtitle{
+  margin:0;
+  color: rgba(255,255,255,0.70);
+  max-width: 80ch;
+}
+
+.page-settings .section-grid{
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.page-settings .panel{
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--panel-gradient-soft);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.page-settings .panel-head{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+
+.page-settings .panel-title{
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.page-settings .panel-meta{
+  color: rgba(255,255,255,0.65);
+  font-size: 13px;
+}
+
+.page-settings .panel-body{
+  padding: 12px;
+}
+
+.page-settings .settings-placeholder{
+  padding: 8px 0;
+}
+
+.page-settings .settings-form{
+  display: grid;
+  gap: 12px;
+}
+
+.page-settings .settings-row{
+  display: grid;
+  gap: 6px;
+}
+
+.page-settings .settings-row label{
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.page-settings .settings-actions{
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}

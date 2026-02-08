@@ -1,0 +1,5 @@
+ALTER TABLE wpqr
+  ADD COLUMN IF NOT EXISTS standard_id UUID REFERENCES standards(id);
+
+ALTER TABLE wps
+  ADD COLUMN IF NOT EXISTS standard_id UUID REFERENCES standards(id);

@@ -1,24 +1,23 @@
 /* =========================================================
    HEADER / TOPBAR
-   iOS-safe, desktop-first
+   iOS-safe, 3-column layout: logo (left), nav (center), user (right)
    ========================================================= */
 
 .topbar{
-  position: sticky;
-  top: max(0px, env(safe-area-inset-top));
+  position: relative;
   z-index: 50;
 
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 20px;
 
-  padding: 14px 16px;
-  padding-left:  max(16px, env(safe-area-inset-left));
-  padding-right: max(16px, env(safe-area-inset-right));
+  padding: 14px 20px;
+  padding-left:  max(20px, env(safe-area-inset-left));
+  padding-right: max(20px, env(safe-area-inset-right));
 
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
 
   background: rgba(8, 12, 22, 0.65);
   backdrop-filter: blur(10px);
@@ -31,140 +30,146 @@
   -webkit-transform: translateZ(0);
 }
 
-/* ---------- Brand ---------- */
+/* ---------- Brand / Logo (Left) ---------- */
 
 .brand{
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 260px; /* desktop */
+  justify-content: flex-start;
 }
 
 .logo{
-  width: 95px;
   height: 75px;
-  object-fit: cover;
-  border-radius: 12px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid var(--border);
+  width: auto;
+  object-fit: contain;
 }
 
-.brandtext{
-  display: flex;
-  flex-direction: column;
-  min-width: 0; /* viktig for ellipsis */
-}
-
-.title{
-  font-weight: 700;
-  letter-spacing: 0.2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.subtitle{
-  color: var(--muted);
-  font-size: 12.5px;
-  margin-top: 2px;
-}
-
-/* ---------- Navigation ---------- */
+/* ---------- Navigation (Center) ---------- */
 
 .nav{
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex-wrap: nowrap;
+  justify-content: center;
 }
 
 .navlink{
-  padding: 9px 12px;
+  padding: 9px 16px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(255,255,255,0.04);
   white-space: nowrap;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 120ms ease, border-color 120ms ease;
 }
 .navlink:hover{
   background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.14);
 }
 
-.naviconlogout {
-  background: none;
-  border: none;
-  padding: 0.5rem;
+/* ---------- User Section (Right) ---------- */
+
+.user-section{
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  position: relative;
+}
+
+.user-avatar{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,0.04);
   cursor: pointer;
-  color: var(--text-muted);
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.user-avatar:hover{
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.14);
+}
+
+.avatar-circle{
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(110,231,255,0.18), rgba(139,92,246,0.16));
+  border: 2px solid rgba(110,231,255,0.30);
   display: flex;
   align-items: center;
+  justify-content: center;
 }
 
-.naviconlogout:hover {
-  color: var(--accent);
+.avatar-icon{
+  width: 24px;
+  height: 24px;
+  color: rgba(255,255,255,0.90);
 }
 
-.logouticon {
-  width: 22px;
-  height: 22px;
-  fill: currentColor;
+.user-name{
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
 }
 
+/* ---------- User dropdown ---------- */
 
-/* =========================================================
-   MOBIL / iOS
-   2-raders header + horisontal nav
-   ========================================================= */
-
-@media (max-width: 980px){
-  .topbar{
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-
-  /* Ikke tving bredde på mobil */
-  .brand{
-    min-width: 0;
-    width: 100%;
-  }
-
-  /* Nav blir “chip row” */
-  .nav{
-    width: 100%;
-    justify-content: flex-start;
-    flex-wrap: nowrap;              /* ikke wrap */
-    overflow-x: auto;               /* horisontal scroll */
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 6px;
-  }
-
-  .nav::-webkit-scrollbar{
-    display: none;
-  }
-
-  .navlink,
-  .navlinklogout{
-    flex: 0 0 auto;
-  }
+.user-menu{
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 180px;
+  background: rgba(8, 12, 22, 0.95);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 6px;
+  display: none;
+  z-index: 100;
 }
 
-/* =========================================================
-   EKSTRA SMÅ SKJERMER
-   ========================================================= */
+.user-section.is-open .user-menu{
+  display: grid;
+  gap: 2px;
+}
 
-@media (max-width: 520px){
-  .topbar{
-    padding: 12px;
-    padding-left:  max(12px, env(safe-area-inset-left));
-    padding-right: max(12px, env(safe-area-inset-right));
-  }
+.user-menu__email{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 4px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.70);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  margin-bottom: 2px;
+  word-break: break-all;
+}
 
-  .logo{
-    width: 80px;
-    height: 64px;
-  }
+.user-menu__email-icon{
+  width: 14px;
+  height: 14px;
+  color: rgba(255,255,255,0.65);
+}
 
-  .title{
-    font-size: 15px;
-  }
+.user-menu__item{
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 8px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.user-menu__item:hover{
+  background: rgba(255,255,255,0.08);
 }

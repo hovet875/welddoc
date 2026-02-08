@@ -1,27 +1,14 @@
 import { signIn } from "../app/auth";
-import { renderHeader, wireHeader } from "../components/header";
 
 export function renderLogin(app: HTMLElement) {
   app.innerHTML = `
     <div class="shell page-login">
-      
-
       <main class="main">
         <div class="loginwrap">
           <section class="logincard">
-            <div class="loginheader">
-  <div class="loginheader-text">
-    <h1>Ti-Tech WeldDoc</h1>
-    <p class="muted">Logg inn med e-post og passord.</p>
-  </div>
-
-  <img 
-    src="/images/titech-hvit.jpg" 
-    alt="Ti-Tech WeldDoc logo"
-    class="loginlogo"
-  />
-</div>
-
+            <div class="loginbrand">
+              <img class="loginlogo-main" src="/welddoc-logo.png" alt="WeldDoc" />
+            </div>
             <div class="loginrow">
               <label>E-post</label>
               <input id="email" class="input" type="email" autocomplete="username" />
@@ -49,7 +36,6 @@ export function renderLogin(app: HTMLElement) {
       </main>
     </div>
   `;
-  wireHeader(app);
 
   const emailEl = app.querySelector<HTMLInputElement>("#email")!;
   const passEl = app.querySelector<HTMLInputElement>("#pass")!;

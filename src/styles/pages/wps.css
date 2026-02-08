@@ -3,40 +3,40 @@
    ========================================================= */
 
 /* ---- WPQR/WPS HEADER ---- */
-.wpsheader{
+.section-header{
   display:flex;
   align-items:center;                 /* viktig: ikke flex-start */
   justify-content:space-between;
   gap: 14px;
   margin-top: 16px;
 
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
 
-  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+  background: var(--panel-gradient);
   padding: 18px;
 
-  box-shadow: 0 18px 60px rgba(0,0,0,0.30);
+  box-shadow: var(--shadow);
 }
 
-.wpsheader > div:first-child{
+.section-header > div:first-child{
   min-width: 0;
 }
 
-.wpsh1{
+.section-title{
   margin:0 0 6px;
   font-size: 24px;
   line-height: 1.2;
   letter-spacing: -0.3px;
 }
 
-.wpsp{
+.section-subtitle{
   margin:0;
   color: rgba(255,255,255,0.70);
   max-width: 80ch;
 }
 
-.wpsactions{
+.section-actions{
   display:flex;
   gap: 10px;
   flex-wrap: wrap;
@@ -46,97 +46,33 @@
   margin-top: 2px;
 }
 
-/* Knappestil som før */
-.wpsactions .btn{
-  height: 40px;
-  padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.05);
-  color: rgba(255,255,255,0.92);
-  box-shadow: 0 10px 26px rgba(0,0,0,0.18);
-}
-.wpsactions .btn:hover{ background: rgba(255,255,255,0.08); }
-.wpsactions .btn:focus{
-  outline: none;
-  border-color: rgba(110,231,255,0.45);
-  box-shadow: 0 0 0 3px rgba(110,231,255,0.14), 0 10px 26px rgba(0,0,0,0.18);
-}
-.wpsactions .btn.primary,
-.wpsactions .btn.accent{
-  border: 1px solid rgba(110,231,255,0.35);
-  background: linear-gradient(135deg, rgba(110,231,255,0.18), rgba(139,92,246,0.16));
-}
-.wpsactions .btn.primary:hover,
-.wpsactions .btn.accent:hover{
-  background: linear-gradient(135deg, rgba(110,231,255,0.24), rgba(139,92,246,0.20));
+/* WPS actions: layout-only + pill shape and shadow */
+.section-actions .btn{
+  border-radius: var(--radius-pill);
+  box-shadow: var(--btn-shadow);
 }
 
-/* ---- Mobil / iOS: stack + pen knapperad ---- */
-@media (max-width: 820px){
-  .wpsheader{
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-
-  .wpsactions{
-    width: 100%;
-    justify-content: center;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 6px;
-    margin-top: 0;
-  }
-
-  .wpsactions::-webkit-scrollbar{ display:none; }
-
-  .wpsactions::before,
-  .wpsactions::after{
-    content:"";
-    flex: 1 0 auto;
-  }
-
-  .wpsactions .btn{
-    flex: 0 0 auto;
-    white-space: nowrap;
-    height: 38px;
-    padding: 0 12px;
-  }
-}
 
 /* ---------- Grid ---------- */
 /* Desktop: stack (WPS øverst, WPQR under) */
-.wpsgrid{
+.section-grid{
   margin-top: 14px;
   display: grid;
   grid-template-columns: 1fr;  /* <-- alltid 1 kolonne */
   gap: 14px;
 }
 
-/* (valgfritt) om du vil ha litt smalere innhold på store skjermer */
-@media (min-width: 1200px){
-  .wpsgrid{
-    gap: 16px;
-  }
-}
-
 /* ---------- Panel ---------- */
 
-.wpspanel{
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 18px;
-  background: linear-gradient(
-    180deg,
-    rgba(255,255,255,0.05),
-    rgba(255,255,255,0.025)
-  );
-  box-shadow: 0 18px 60px rgba(0,0,0,0.30);
+.panel{
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--panel-gradient-soft);
+  box-shadow: var(--shadow);
   overflow: hidden;
 }
 
-.wpspanelhead{
+.panel-head{
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -145,17 +81,17 @@
   background: rgba(255,255,255,0.03);
 }
 
-.wpspaneltitle{
+.panel-title{
   font-weight: 800;
   letter-spacing: 0.2px;
 }
 
-.wpspanelmeta{
+.panel-meta{
   color: rgba(255,255,255,0.65);
   font-size: 13px;
 }
 
-.wpspanelbody{
+.panel-body{
   padding: 12px;
 }
 
@@ -163,207 +99,39 @@
   margin-top: 12px;
 }
 
-/* ---------- Gruppe ---------- */
-
-.wpsgroup{
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 16px;
-  background: rgba(255,255,255,0.04);
-  overflow: hidden;
-  margin-bottom: 12px;
+.page-wps .table-scroll{
+  overflow: visible;
 }
 
-.wpsgrouphead{
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.025);
+.panel-head-center{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap: wrap;
 }
 
-.wpsgrouptitle{
-  font-weight: 700;
-}
-
-.wpsgroupmeta{
-  color: rgba(255,255,255,0.65);
-  font-size: 12.5px;
-}
-
-/* ---------- Tabeller ---------- */
-
-.wpsscroll{
-  overflow: hidden;
-}
-
-.wpstable{
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 13.5px;
-  table-layout: fixed;
-}
-
-.wpstable thead th{
-  color: rgba(255,255,255,0.78);
-  font-weight: 650;
-  background: rgba(255,255,255,0.02);
-  padding: 11px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.10);
-  text-align: left;
-}
-
-.wpstable td{
-  padding: 11px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.07);
-  vertical-align: top;
-  overflow-wrap: break-word;
-}
-
-.wpstable tbody tr:hover{
-  background: rgba(255,255,255,0.04);
-}
-
-/* ---------------------------------------------------------
-   Action cell + ikonknapper (desktop)
-   - Mindre knapper
-   - Mindre fast bredde så andre kolonner får plass
-   --------------------------------------------------------- */
-
-/* Gi siste kolonne fast bredde, ikke hele td-blokka med 108px */
-.wpstable th:last-child,
-.wpstable td:last-child{
-  width: 92px;               /* plass til 2 knapper (38+38 + gap) */
-}
-
-/* For WPS-tabellen: WPQR-kolonnen er nest siste -> gi den litt plass */
-.wpstable th:nth-last-child(2),
-.wpstable td:nth-last-child(2){
-  width: 140px;
-}
-
-/* Unngå at “Ikke koblet” brekker i to linjer (desktop) */
-.wpstable td[data-label="WPQR"]{
-  white-space: nowrap;
-}
-
-/* Selve action-cellen */
-.actcell{
-  padding: 9px 10px;         /* litt strammere enn 11px */
-  text-align: right;
-  vertical-align: middle;
-
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Ikonknapper: mindre og mer “in line” med designet */
-.iconbtn{
-  width: 38px;
-  height: 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 13px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.06);
-  color: rgba(255,255,255,0.90);
-
+.method-pill-btn{
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
   cursor: pointer;
-  box-shadow: 0 10px 22px rgba(0,0,0,0.18);
 }
 
-.iconbtn:hover{
-  background: rgba(255,255,255,0.10);
-  border-color: rgba(255,255,255,0.14);
+/* unngå overbrede tabeller */
+.page-wps .data-table{
+ width:100%;
 }
 
-.iconbtn:active{
-  transform: translateY(1px);
+/* WPS thickness full-width + spacing */
+.page-wps .wps-thickness{
+  grid-column: 1 / -1;
 }
 
-.iconbtn.danger{
-  background: rgba(255,0,0,0.16);
-  border-color: rgba(255,0,0,0.26);
-  color: rgba(255,255,255,0.95);
-}
-
-.iconbtn.danger:hover{
-  background: rgba(255,0,0,0.22);
-  border-color: rgba(255,0,0,0.32);
-}
-
-/* SVG ikonstørrelse (hvis du bruker SVG) */
-.svgicon{
-  width: 20px;
-  height: 20px;
-  display: block;
-}
-
-/* Hvis du fortsatt bruker emoji et sted */
-.iconbtn .icon{
-  line-height: 1;
-  font-size: 16px;
+.page-wps .wps-thickness .inputgroup.join{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 
-/* ---------- Mobil: tabell → kort ---------- */
-
-@media (max-width: 720px){
-  .wpstable thead{ display: none; }
-
-  .wpstable,
-  .wpstable tbody,
-  .wpstable tr,
-  .wpstable td{
-    display: block;
-    width: 100%;
-  }
-
-  .wpstable tr{
-    padding: 10px;
-    background: rgba(255,255,255,0.03);
-    border-radius: 14px;
-  }
-
-  .wpstable tr + tr{
-    margin-top: 10px;
-  }
-
-  .wpstable td{
-    border: 0;
-    padding: 6px 0;
-    display: flex;
-    justify-content: space-between;
-    gap: 14px;
-  }
-
-  .wpstable td::before{
-    content: attr(data-label);
-    color: rgba(255,255,255,0.62);
-    font-weight: 600;
-    white-space: nowrap;
-  }
-
-  /* Action cell i “kort”-modus */
-  .actcell{
-    width: auto;
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    padding-top: 6px;
-  }
-
-  /* Litt mindre på mobil */
-.iconbtn{
-  width: 40px;
-  height: 40px;
-  border-radius: 14px;
-}
-
-  .svgicon{ width: 21px; height: 21px; }
-}

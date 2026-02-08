@@ -3,7 +3,7 @@ import { supabase } from "../services/supabaseClient";
 export type ProfileWelderRow = {
   id: string;
   display_name: string | null;
-  welder_no: number | null;
+  welder_no: string | null;
 };
 
 export type WelderCertRow = {
@@ -11,23 +11,29 @@ export type WelderCertRow = {
   profile_id: string;
   certificate_no: string;
   standard: string;
+  base_material_id: string | null;
   coverage_joint_type: string | null;
   coverage_thickness: string | null;
   expires_at: string | null; // date -> string
+  fm_group: string | null;
   pdf_path: string;
+  file_id: string | null;
   created_at: string;
 
   // join
-  profile?: { id: string; display_name: string | null; welder_no: number | null } | null;
+  profile: { id: string; display_name: string | null; welder_no: string | null } | null;
+  base_material?: { id: string; name: string; material_code: string; material_group: string } | null;
 };
 
 export type NdtCertRow = {
   id: string;
   personnel_name: string;
+  company: string;
   certificate_no: string;
   ndt_method: string;
   expires_at: string | null;
   pdf_path: string;
+  file_id: string | null;
   created_at: string;
 };
 
@@ -37,24 +43,42 @@ export type CertFetchResult = {
   ndtCerts: NdtCertRow[];
 };
 
+export async function fetchWelders(): Promise<ProfileWelderRow[]> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, display_name, welder_no")
+    .not("welder_no", "is", null)
+    .neq("welder_no", "")
+    .order("welder_no", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as ProfileWelderRow[];
+}
+
 export type UpsertWelderCertInput = {
   profile_id: string;
   certificate_no: string;
   standard: string;
+  base_material_id: string | null;
   coverage_joint_type: string | null;
   coverage_thickness: string | null;
   expires_at: string | null; // "YYYY-MM-DD" eller null
+  fm_group: string | null;
+  file_id?: string | null;
 };
 
 export type UpsertNdtCertInput = {
   personnel_name: string;
+  company: string;
   certificate_no: string;
   ndt_method: string;
   expires_at: string | null;
+  file_id?: string | null;
 };
 
 const BUCKET_WELDER = "welder-certs";
 const BUCKET_NDT = "ndt-certs";
+const BUCKET_FILES = "files";
 
 /** ---- Fetch ---- */
 export async function fetchCertData(): Promise<CertFetchResult> {
@@ -63,6 +87,7 @@ export async function fetchCertData(): Promise<CertFetchResult> {
       .from("profiles")
       .select("id, display_name, welder_no")
       .not("welder_no", "is", null)
+      .neq("welder_no", "")
       .order("welder_no", { ascending: true }),
 
     supabase
@@ -72,22 +97,31 @@ export async function fetchCertData(): Promise<CertFetchResult> {
         profile_id,
         certificate_no,
         standard,
+        base_material_id,
         coverage_joint_type,
         coverage_thickness,
         expires_at,
+        fm_group,
         pdf_path,
+        file_id,
         created_at,
         profile:profile_id (
           id,
           display_name,
           welder_no
+        ),
+        base_material:base_material_id (
+          id,
+          name,
+          material_code,
+          material_group
         )
       `)
       .order("created_at", { ascending: false }),
 
     supabase
       .from("ndt_certificates")
-      .select("id, personnel_name, certificate_no, ndt_method, expires_at, pdf_path, created_at")
+      .select("id, personnel_name, company, certificate_no, ndt_method, expires_at, pdf_path, file_id, created_at")
       .order("ndt_method", { ascending: true })
       .order("expires_at", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false }),
@@ -99,33 +133,115 @@ export async function fetchCertData(): Promise<CertFetchResult> {
 
   return {
     welders: (weldersRes.data ?? []) as ProfileWelderRow[],
-    welderCerts: (welderCertsRes.data ?? []) as WelderCertRow[],
+    welderCerts: ((welderCertsRes.data ?? []) as unknown as WelderCertRow[]),
     ndtCerts: (ndtRes.data ?? []) as NdtCertRow[],
   };
 }
 
 /** ---- Storage ---- */
-export async function createCertPdfSignedUrl(kind: "welder" | "ndt", path: string, expiresSeconds = 120) {
-  const bucket = kind === "welder" ? BUCKET_WELDER : BUCKET_NDT;
-  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, expiresSeconds);
+export async function createCertPdfSignedUrl(kind: "welder" | "ndt", ref: string, expiresSeconds = 120) {
+  // ref can be legacy path (contains "/") or file_id (UUID)
+  if (ref.includes("/")) {
+    const bucket = kind === "welder" ? BUCKET_WELDER : BUCKET_NDT;
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(ref, expiresSeconds);
+    if (error) throw error;
+    return data.signedUrl;
+  }
+
+  const { data: fileRow, error } = await supabase
+    .from("files")
+    .select("bucket, path")
+    .eq("id", ref)
+    .single();
+
   if (error) throw error;
+  const { data, error: urlErr } = await supabase.storage
+    .from(fileRow.bucket)
+    .createSignedUrl(fileRow.path, expiresSeconds);
+  if (urlErr) throw urlErr;
   return data.signedUrl;
 }
 
-function pdfPath(kind: "welder" | "ndt", id: string) {
-  return `${kind}/${id}.pdf`;
+function filePath(type: string, id: string) {
+  return `${type}/${id}.pdf`;
 }
 
-async function uploadPdfToIdPath(kind: "welder" | "ndt", id: string, file: File) {
-  const bucket = kind === "welder" ? BUCKET_WELDER : BUCKET_NDT;
-  const path = pdfPath(kind, id);
+function arrayBufferToHex(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
-  const { error } = await supabase.storage.from(bucket).upload(path, file, {
+async function computeFileSha256(file: File) {
+  const buffer = await file.arrayBuffer();
+  const hash = await crypto.subtle.digest("SHA-256", buffer);
+  return arrayBufferToHex(hash);
+}
+
+async function findFileBySha256(sha256: string) {
+  const { data, error } = await supabase
+    .from("files")
+    .select("id, label")
+    .eq("sha256", sha256)
+    .maybeSingle();
+  if (error) throw error;
+  return data as { id: string; label: string | null } | null;
+}
+
+async function uploadFileToIdPath(type: string, id: string, file: File) {
+  const sha256 = await computeFileSha256(file);
+  const existing = await findFileBySha256(sha256);
+  if (existing) {
+    throw new Error("Denne filen finnes allerede i systemet.");
+  }
+  const path = filePath(type, id);
+  const { error } = await supabase.storage.from(BUCKET_FILES).upload(path, file, {
     upsert: true,
-    contentType: "application/pdf",
+    contentType: file.type || "application/pdf",
   });
   if (error) throw error;
-  return path;
+  return { bucket: BUCKET_FILES, path, sha256 };
+}
+
+async function createFileRecord(input: {
+  id: string;
+  bucket: string;
+  path: string;
+  type: string;
+  label?: string | null;
+  mime_type?: string | null;
+  size_bytes?: number | null;
+  sha256?: string | null;
+}) {
+  const { error } = await supabase.from("files").insert({
+    id: input.id,
+    bucket: input.bucket,
+    path: input.path,
+    type: input.type,
+    label: input.label ?? null,
+    mime_type: input.mime_type ?? null,
+    size_bytes: input.size_bytes ?? null,
+    sha256: input.sha256 ?? null,
+  });
+  if (error) throw error;
+}
+
+async function getFileMeta(fileId: string) {
+  const { data, error } = await supabase
+    .from("files")
+    .select("bucket, path")
+    .eq("id", fileId)
+    .single();
+  if (error) throw error;
+  return data as { bucket: string; path: string };
+}
+
+async function deleteFileRecord(fileId: string) {
+  const meta = await getFileMeta(fileId);
+  await supabase.storage.from(meta.bucket).remove([meta.path]);
+  const { error } = await supabase.from("files").delete().eq("id", fileId);
+  if (error) throw error;
 }
 
 async function deletePdfIfExists(kind: "welder" | "ndt", pdf_path: string | null) {
@@ -139,7 +255,7 @@ async function deletePdfIfExists(kind: "welder" | "ndt", pdf_path: string | null
 export async function insertWelderCert(base: UpsertWelderCertInput) {
   const { data, error } = await supabase
     .from("welder_certificates")
-    .insert({ ...base, pdf_path: "" }) // settes etter upload
+    .insert({ ...base, pdf_path: "" }) // legacy
     .select("id")
     .single();
 
@@ -147,30 +263,46 @@ export async function insertWelderCert(base: UpsertWelderCertInput) {
   return data.id as string;
 }
 
-export async function updateWelderCert(id: string, base: UpsertWelderCertInput & { pdf_path?: string }) {
+export async function updateWelderCert(id: string, base: Partial<UpsertWelderCertInput> & { pdf_path?: string }) {
   const { error } = await supabase.from("welder_certificates").update(base).eq("id", id);
   if (error) throw error;
 }
 
 export async function getWelderCertPdfPath(id: string) {
-  const { data, error } = await supabase.from("welder_certificates").select("pdf_path").eq("id", id).single();
+  const { data, error } = await supabase
+    .from("welder_certificates")
+    .select("pdf_path, file_id")
+    .eq("id", id)
+    .single();
   if (error) throw error;
-  return (data?.pdf_path ?? null) as string | null;
+  return {
+    pdf_path: (data?.pdf_path ?? null) as string | null,
+    file_id: (data?.file_id ?? null) as string | null,
+  };
 }
 
 export async function createWelderCertWithPdf(base: UpsertWelderCertInput, pdfFile: File) {
-  const id = await insertWelderCert(base);
+  const fileId = crypto.randomUUID();
+  const certId = await insertWelderCert({ ...base, file_id: fileId });
 
   try {
-    const path = await uploadPdfToIdPath("welder", id, pdfFile);
-    await updateWelderCert(id, { pdf_path: path });
-    return id;
+    const { bucket, path, sha256 } = await uploadFileToIdPath("welder_certificate", fileId, pdfFile);
+    await createFileRecord({
+      id: fileId,
+      bucket,
+      path,
+      type: "welder_certificate",
+      mime_type: pdfFile.type || "application/pdf",
+      size_bytes: pdfFile.size,
+      sha256,
+    });
+    return certId;
   } catch (e) {
     try {
-      await deletePdfIfExists("welder", pdfPath("welder", id));
+      await deleteFileRecord(fileId);
     } catch {}
     try {
-      await supabase.from("welder_certificates").delete().eq("id", id);
+      await supabase.from("welder_certificates").delete().eq("id", certId);
     } catch {}
     throw e;
   }
@@ -186,17 +318,34 @@ export async function updateWelderCertWithPdf(
   await updateWelderCert(id, base);
 
   if (opts.removePdf) {
-    // pdf_path er not null i tabellen din? hvis ja: sett til id-path tom streng er ikke bra.
-    // anbefaling: tillat null i pdf_path, men hvis du vil beholde NOT NULL: behold current.
-    await updateWelderCert(id, { pdf_path: current ?? "" });
-    if (current) await deletePdfIfExists("welder", current);
+    if (current.file_id) {
+      await updateWelderCert(id, { file_id: null });
+      await deleteFileRecord(current.file_id);
+    }
+    if (current.pdf_path) {
+      await updateWelderCert(id, { pdf_path: current.pdf_path });
+      await deletePdfIfExists("welder", current.pdf_path);
+    }
     return;
   }
 
   if (opts.pdfFile) {
-    const newPath = await uploadPdfToIdPath("welder", id, opts.pdfFile);
-    await updateWelderCert(id, { pdf_path: newPath });
-    if (current && current !== newPath) await deletePdfIfExists("welder", current);
+    const fileId = crypto.randomUUID();
+    const { bucket, path, sha256 } = await uploadFileToIdPath("welder_certificate", fileId, opts.pdfFile);
+    await createFileRecord({
+      id: fileId,
+      bucket,
+      path,
+      type: "welder_certificate",
+      mime_type: opts.pdfFile.type || "application/pdf",
+      size_bytes: opts.pdfFile.size,
+      sha256,
+    });
+
+    await updateWelderCert(id, { file_id: fileId });
+
+    if (current.file_id) await deleteFileRecord(current.file_id);
+    if (current.pdf_path) await deletePdfIfExists("welder", current.pdf_path);
   }
 }
 
@@ -204,7 +353,8 @@ export async function deleteWelderCert(id: string) {
   const pdf = await getWelderCertPdfPath(id);
   const { error: delErr } = await supabase.from("welder_certificates").delete().eq("id", id);
   if (delErr) throw delErr;
-  if (pdf) await deletePdfIfExists("welder", pdf);
+  if (pdf.file_id) await deleteFileRecord(pdf.file_id);
+  if (pdf.pdf_path) await deletePdfIfExists("welder", pdf.pdf_path);
 }
 
 /** ---- CRUD: NDT certificates ---- */
@@ -219,30 +369,46 @@ export async function insertNdtCert(base: UpsertNdtCertInput) {
   return data.id as string;
 }
 
-export async function updateNdtCert(id: string, base: UpsertNdtCertInput & { pdf_path?: string }) {
+export async function updateNdtCert(id: string, base: Partial<UpsertNdtCertInput> & { pdf_path?: string }) {
   const { error } = await supabase.from("ndt_certificates").update(base).eq("id", id);
   if (error) throw error;
 }
 
 export async function getNdtCertPdfPath(id: string) {
-  const { data, error } = await supabase.from("ndt_certificates").select("pdf_path").eq("id", id).single();
+  const { data, error } = await supabase
+    .from("ndt_certificates")
+    .select("pdf_path, file_id")
+    .eq("id", id)
+    .single();
   if (error) throw error;
-  return (data?.pdf_path ?? null) as string | null;
+  return {
+    pdf_path: (data?.pdf_path ?? null) as string | null,
+    file_id: (data?.file_id ?? null) as string | null,
+  };
 }
 
 export async function createNdtCertWithPdf(base: UpsertNdtCertInput, pdfFile: File) {
-  const id = await insertNdtCert(base);
+  const fileId = crypto.randomUUID();
+  const certId = await insertNdtCert({ ...base, file_id: fileId });
 
   try {
-    const path = await uploadPdfToIdPath("ndt", id, pdfFile);
-    await updateNdtCert(id, { pdf_path: path });
-    return id;
+    const { bucket, path, sha256 } = await uploadFileToIdPath("ndt_report", fileId, pdfFile);
+    await createFileRecord({
+      id: fileId,
+      bucket,
+      path,
+      type: "ndt_report",
+      mime_type: pdfFile.type || "application/pdf",
+      size_bytes: pdfFile.size,
+      sha256,
+    });
+    return certId;
   } catch (e) {
     try {
-      await deletePdfIfExists("ndt", pdfPath("ndt", id));
+      await deleteFileRecord(fileId);
     } catch {}
     try {
-      await supabase.from("ndt_certificates").delete().eq("id", id);
+      await supabase.from("ndt_certificates").delete().eq("id", certId);
     } catch {}
     throw e;
   }
@@ -258,15 +424,34 @@ export async function updateNdtCertWithPdf(
   await updateNdtCert(id, base);
 
   if (opts.removePdf) {
-    await updateNdtCert(id, { pdf_path: current ?? "" });
-    if (current) await deletePdfIfExists("ndt", current);
+    if (current.file_id) {
+      await updateNdtCert(id, { file_id: null });
+      await deleteFileRecord(current.file_id);
+    }
+    if (current.pdf_path) {
+      await updateNdtCert(id, { pdf_path: current.pdf_path });
+      await deletePdfIfExists("ndt", current.pdf_path);
+    }
     return;
   }
 
   if (opts.pdfFile) {
-    const newPath = await uploadPdfToIdPath("ndt", id, opts.pdfFile);
-    await updateNdtCert(id, { pdf_path: newPath });
-    if (current && current !== newPath) await deletePdfIfExists("ndt", current);
+    const fileId = crypto.randomUUID();
+    const { bucket, path, sha256 } = await uploadFileToIdPath("ndt_report", fileId, opts.pdfFile);
+    await createFileRecord({
+      id: fileId,
+      bucket,
+      path,
+      type: "ndt_report",
+      mime_type: opts.pdfFile.type || "application/pdf",
+      size_bytes: opts.pdfFile.size,
+      sha256,
+    });
+
+    await updateNdtCert(id, { file_id: fileId });
+
+    if (current.file_id) await deleteFileRecord(current.file_id);
+    if (current.pdf_path) await deletePdfIfExists("ndt", current.pdf_path);
   }
 }
 
@@ -274,5 +459,6 @@ export async function deleteNdtCert(id: string) {
   const pdf = await getNdtCertPdfPath(id);
   const { error: delErr } = await supabase.from("ndt_certificates").delete().eq("id", id);
   if (delErr) throw delErr;
-  if (pdf) await deletePdfIfExists("ndt", pdf);
+  if (pdf.file_id) await deleteFileRecord(pdf.file_id);
+  if (pdf.pdf_path) await deletePdfIfExists("ndt", pdf.pdf_path);
 }

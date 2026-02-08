@@ -1,6 +1,10 @@
 import type { WelderCertRow, NdtCertRow, ProfileWelderRow } from "../../repo/certRepo";
+import type { StandardRow } from "../../repo/standardRepo";
+import type { MaterialRow } from "../../repo/materialRepo";
+import type { NdtMethodRow } from "../../repo/ndtReportRepo";
 import { esc, renderOptions } from "../../utils/dom";
 import { fmtDate } from "../../utils/format";
+import { renderIconButton, } from "../../ui/iconButton";
 
 function icon(name: "pencil" | "trash") {
   if (name === "pencil") {
@@ -24,20 +28,8 @@ export function actionBtn(
 ) {
   const danger = kind.includes("del");
   const svg = kind.includes("del") ? icon("trash") : icon("pencil");
-  const cls = `iconbtn${danger ? " danger" : ""}`;
-  const dataAttr = `data-${kind}="${esc(id)}"`;
   const title = danger ? "Slett" : "Endre";
-  const aria = `${title} ${esc(label)}`;
-  return `
-    <button class="${cls}" type="button" ${dataAttr} data-label="${esc(label)}" aria-label="${aria}" title="${title}">
-      ${svg}
-    </button>
-  `;
-}
-
-export function padWelderNo(n: number | null) {
-  if (n == null) return "";
-  return String(n).padStart(3, "0");
+  return renderIconButton({ dataKey: kind, id, title, icon: svg, danger, label });
 }
 
 /** ---- Status chip helpers ----
@@ -64,52 +56,53 @@ function statusFromExpires(expires_at: string | null) {
   const diffMs = exp.getTime() - today.getTime();
   const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffDays < 0) return { cls: "expired", label: "Utløpt", dateLabel: fmtDate(expires_at) };
-  if (diffDays <= SOON_DAYS) return { cls: "soon", label: "Utløper snart", dateLabel: fmtDate(expires_at) };
+  if (diffDays < 0) return { cls: "fault", label: "Utløpt", dateLabel: fmtDate(expires_at) };
+  if (diffDays <= SOON_DAYS) return { cls: "warn", label: "Utløper snart", dateLabel: fmtDate(expires_at) };
   return { cls: "ok", label: "Gyldig", dateLabel: fmtDate(expires_at) };
 }
 
+
+
 function renderExpiryCell(expires_at: string | null) {
+  if (!expires_at) return "";
   const s = statusFromExpires(expires_at);
+  return `<span class="status-pill ${esc(s.cls)}" title="${esc(s.label)}" aria-label="${esc(s.label)}">${esc(s.dateLabel)}</span>`;
+}
 
-  // Hvis ingen dato: vis bare status
-  if (!expires_at) {
-    return `
-      <span class="certstatus compact ${esc(s.cls)}" title="${esc(s.label)}">
-        <span class="dot" aria-hidden="true"></span>
-        ${esc(s.label)}
-      </span>
-    `;
-  }
-
-  return `
-    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-      <span>${esc(s.dateLabel)}</span>
-      <span class="certstatus compact ${esc(s.cls)}" title="${esc(s.label)}">
-        <span class="dot" aria-hidden="true"></span>
-        ${esc(s.label)}
-      </span>
-    </div>
-  `;
+export function materialLabel(m: Pick<MaterialRow, "name" | "material_code" | "material_group">) {
+  return `${m.name} (${m.material_code}) - ${m.material_group}`;
 }
 
 /** ---- Groups: Welder ---- */
-export function renderWelderGroup(keyTitle: string, rows: WelderCertRow[], showActions: boolean) {
+function formatStandardLabel(s: StandardRow) {
+  return s.revision ? `${s.label}:${s.revision}` : s.label;
+}
+
+export function renderWelderGroup(
+  keyTitle: string,
+  rows: WelderCertRow[],
+  showActions: boolean,
+  standards: StandardRow[]
+) {
+  const standardMap = new Map(standards.map((s) => [s.label, formatStandardLabel(s)]));
+
   return `
-    <div class="wpsgroup">
-      <div class="wpsgrouphead">
-        <div class="wpsgrouptitle">${esc(keyTitle)}</div>
-        <div class="wpsgroupmeta">${rows.length} stk</div>
+    <div class="group">
+      <div class="group-head">
+        <div class="group-title">${esc(keyTitle)}</div>
+        <div class="group-meta">${rows.length} stk</div>
       </div>
 
-      <div class="wpsscroll">
-        <table class="wpstable">
+      <div class="table-scroll">
+        <table class="data-table">
           <thead>
             <tr>
-              <th>Sertifikatnr</th>
+              <th>Sertifikatnummer</th>
               <th>Standard</th>
-              <th>Type fuge</th>
-              <th>Tykkelse</th>
+              <th>Grunnmaterial</th>
+              <th>FM-gruppe</th>
+              <th>Fugetype</th>
+              <th>Tykkelsesområde</th>
               <th>Utløpsdato</th>
               <th></th>
             </tr>
@@ -117,16 +110,25 @@ export function renderWelderGroup(keyTitle: string, rows: WelderCertRow[], showA
           <tbody>
             ${rows
               .map((r) => {
-                const linkCell = r.pdf_path
-                  ? `<button class="linkbtn" data-openpdf-welder="${esc(r.pdf_path)}">${esc(r.certificate_no)}</button>`
-                  : `<span>${esc(r.certificate_no)}</span>`;
+                const fileRef = r.file_id || r.pdf_path;
+                const linkCell = fileRef
+                  ? `<button class="file-pill" data-openpdf-welder="${esc(fileRef)}">${esc(r.certificate_no)}</button>`
+                  : `<span class="file-pill">${esc(r.certificate_no)}</span>`;
 
                 return `
                   <tr>
-                    <td data-label="Sertifikatnr">${linkCell}</td>
-                    <td data-label="Standard">${esc(r.standard)}</td>
-                    <td data-label="Type fuge">${esc(r.coverage_joint_type ?? "")}</td>
-                    <td data-label="Tykkelse">${esc(r.coverage_thickness ?? "")}</td>
+                    <td data-label="Sertifikatnummer">${linkCell}</td>
+                    <td data-label="Standard">${esc(standardMap.get(r.standard) ?? r.standard)}</td>
+                    <td data-label="Grunnmaterial">${esc(
+                      r.base_material
+                        ? materialLabel(r.base_material)
+                        : r.base_material_id
+                        ? ""
+                        : ""
+                    )}</td>
+                    <td data-label="FM-gruppe">${esc(r.fm_group ?? "")}</td>
+                    <td data-label="Fugetype">${esc(r.coverage_joint_type ?? "")}</td>
+                    <td data-label="Tykkelsesområde">${r.coverage_thickness ? `${esc(r.coverage_thickness)} mm` : ""}</td>
                     <td data-label="Utløpsdato" class="mutedcell">${renderExpiryCell(r.expires_at ?? null)}</td>
                     <td class="actcell">
                       ${
@@ -150,21 +152,22 @@ export function renderWelderGroup(keyTitle: string, rows: WelderCertRow[], showA
   `;
 }
 
-/** ---- Groups: NDT method ---- */
-export function renderNdtGroup(method: string, rows: NdtCertRow[], showActions: boolean) {
+/** ---- Groups: NDT company ---- */
+export function renderNdtGroup(company: string, rows: NdtCertRow[], showActions: boolean) {
   return `
-    <div class="wpsgroup">
-      <div class="wpsgrouphead">
-        <div class="wpsgrouptitle">Metode: ${esc(method)}</div>
-        <div class="wpsgroupmeta">${rows.length} stk</div>
+    <div class="group">
+      <div class="group-head">
+        <div class="group-title">Firma: ${esc(company)}</div>
+        <div class="group-meta">${rows.length} stk</div>
       </div>
 
-      <div class="wpsscroll">
-        <table class="wpstable">
+      <div class="table-scroll">
+        <table class="data-table">
           <thead>
             <tr>
-              <th>Navn</th>
-              <th>Sertifikatnr</th>
+              <th>Sertifikatnummer</th> 
+              <th>NDT-metode</th>
+              <th>NDT-kontrollør</th>
               <th>Utløpsdato</th>
               <th></th>
             </tr>
@@ -172,14 +175,16 @@ export function renderNdtGroup(method: string, rows: NdtCertRow[], showActions: 
           <tbody>
             ${rows
               .map((r) => {
-                const linkCell = r.pdf_path
-                  ? `<button class="linkbtn" data-openpdf-ndt="${esc(r.pdf_path)}">${esc(r.certificate_no)}</button>`
-                  : `<span>${esc(r.certificate_no)}</span>`;
+                const fileRef = r.file_id || r.pdf_path;
+                const linkCell = fileRef
+                  ? `&nbsp;<button class="file-pill" data-openpdf-ndt="${esc(fileRef)}">${esc(r.certificate_no)}</button>`
+                  : `<span class="file-pill">${esc(r.certificate_no)}</span>`;
 
                 return `
                   <tr>
-                    <td data-label="Navn">${esc(r.personnel_name)}</td>
-                    <td data-label="Sertifikatnr">${linkCell}</td>
+                    <td data-label="Sertifikatnummer">${linkCell}</td>    
+                    <td data-label="NDT-metode">${esc(r.ndt_method ?? "")}</td>
+                    <td data-label="NDT-kontrollør">${esc(r.personnel_name)}</td>
                     <td data-label="Utløpsdato" class="mutedcell">${renderExpiryCell(r.expires_at ?? null)}</td>
                     <td class="actcell">
                       ${
@@ -204,7 +209,17 @@ export function renderNdtGroup(method: string, rows: NdtCertRow[], showActions: 
 }
 
 /** ---- Forms (admin) ---- */
-export function welderCertFormBody(welders: ProfileWelderRow[]) {
+export function welderCertFormBody(
+  welders: ProfileWelderRow[],
+  standards: StandardRow[],
+  materials: MaterialRow[]
+) {
+  const thicknessOptions = [`<option value="">Velg…</option>`]
+    .concat(Array.from({ length: 50 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`))
+    .join("");
+  const thicknessToOptions = [`<option value="">Velg…</option>`, `<option value="∞">∞</option>`]
+    .concat(Array.from({ length: 50 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`))
+    .join("");
   const optionsHtml =
     `<option value="">Velg sveiser…</option>` +
     welders
@@ -216,6 +231,10 @@ export function welderCertFormBody(welders: ProfileWelderRow[]) {
       })
       .join("");
 
+  const materialOptions = materials
+    .map((m) => `<option value="${esc(m.id)}">${esc(materialLabel(m))}</option>`)
+    .join("");
+
   return `
     <div class="modalgrid">
       <div class="field">
@@ -226,28 +245,61 @@ export function welderCertFormBody(welders: ProfileWelderRow[]) {
       </div>
 
       <div class="field">
-        <label>Sertifikatnr</label>
+        <label>Sertifikatnummer</label>
         <input data-f="certificate_no" class="input" placeholder="ISO9606-..." />
       </div>
 
       <div class="field">
         <label>Standard</label>
-        <input data-f="standard" class="input" placeholder="ISO 9606-1" />
+        <select data-f="standard" class="select">
+          <option value="">Velg standard…</option>
+          ${standards
+            .map((s) => `<option value="${esc(s.label)}">${esc(formatStandardLabel(s))}</option>`)
+            .join("")}
+        </select>
       </div>
-
       <div class="field">
-        <label>Dekningsområde type fuge</label>
-        <input data-f="coverage_joint_type" class="input" placeholder="FW / BW / ..." />
+        <label>Grunnmaterial</label>
+        <select data-f="base_material_id" class="select">
+          <option value="">Velg material…</option>
+          ${materialOptions}
+        </select>
       </div>
-
       <div class="field">
-        <label>Dekningsområde tykkelse</label>
-        <input data-f="coverage_thickness" class="input" placeholder="3-20 mm" />
+        <label>FM-gruppe</label>
+        <select data-f="fm_group" class="select" disabled>
+          <option value="">Velg standard først…</option>
+        </select>
       </div>
-
       <div class="field">
         <label>Utløpsdato</label>
-        <input data-f="expires_at" class="input" type="date" />
+        <input data-f="expires_at" class="input" type="date" min="2000-01-01" max="2099-12-31" />
+      </div>
+
+      <div class="field cert-thickness">
+        <label>Tykkelsesområde (mm)</label>
+        <div class="inputgroup join">
+          <select data-f="coverage_thickness_from" class="select">
+            ${thicknessOptions}
+          </select>
+          <select data-f="coverage_thickness_to" class="select">
+            ${thicknessToOptions}
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Fugetype</label>
+        <div class="checkboxgroup cert-fugegroup">
+          <label class="checkboxpill">
+            <input data-f="coverage_joint_type_fw" type="checkbox" />
+            <span>FW (Kilsveis)</span>
+          </label>
+          <label class="checkboxpill">
+            <input data-f="coverage_joint_type_bw" type="checkbox" />
+            <span>BW (Buttsveis)</span>
+          </label>
+        </div>
       </div>
 
       <div class="field" style="grid-column:1 / -1;">
@@ -260,27 +312,33 @@ export function welderCertFormBody(welders: ProfileWelderRow[]) {
 }
 
 
-export function ndtCertFormBody() {
+export function ndtCertFormBody(methods: NdtMethodRow[]) {
+  const options = methods.map((m) => m.label);
   return `
     <div class="modalgrid">
       <div class="field">
-        <label>Navn</label>
+        <label>NDT-kontrollør</label>
         <input data-f="personnel_name" class="input" placeholder="Ola Nordmann" />
       </div>
 
       <div class="field">
-        <label>Sertifikatnr</label>
+        <label>Firma</label>
+        <input data-f="company" class="input" placeholder="Firma AS" required />
+      </div>
+
+      <div class="field">
+        <label>Sertifikatnummer</label>
         <input data-f="certificate_no" class="input" placeholder="12345" />
       </div>
 
       <div class="field">
-        <label>NDT metode</label>
-        <input data-f="ndt_method" class="input" placeholder="UT / PT / MT / VT / RT" />
+        <label>NDT-metode</label>
+        <select data-f="ndt_method" class="select">${renderOptions(options, "Velg metode…")}</select>
       </div>
 
       <div class="field">
         <label>Utløpsdato</label>
-        <input data-f="expires_at" class="input" type="date" />
+        <input data-f="expires_at" class="input" type="date" min="2000-01-01" max="2099-12-31" />
       </div>
 
       <div class="field" style="grid-column:1 / -1;">

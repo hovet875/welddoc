@@ -1,11 +1,25 @@
-import { signOut } from "../app/auth";
+import { getSession, getProfileAccess } from "../app/auth";
 import { renderHeader, wireHeader } from "../components/header";
 import { Footer } from "../components/footer";
 
-export function renderHome(app: HTMLElement) {
+export async function renderHome(app: HTMLElement) {
+  // Fetch user session and display name
+  const session = await getSession();
+  let displayName = "Bruker";
+  const email = session?.user?.email ?? "";
+  
+  if (session?.user) {
+    try {
+      const access = await getProfileAccess(session.user);
+      displayName = access.displayName;
+    } catch (err) {
+      console.warn("Feilet å hente profil", err);
+    }
+  }
+
   app.innerHTML = `
     <div class="shell page-home">
-      ${renderHeader()}
+      ${renderHeader(displayName, email)}
       <main class="main">
         <section class="hero">
           <div class="herotext">
@@ -76,8 +90,4 @@ export function renderHome(app: HTMLElement) {
     </div>
   `;
   wireHeader(app);
-  app.querySelector<HTMLButtonElement>("#logout")?.addEventListener("click", async () => {
-    await signOut();
-    location.reload();
-  });
 }
