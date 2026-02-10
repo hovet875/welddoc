@@ -1,5 +1,6 @@
 .shell{
-  max-width: 1280px;
+  max-width: 1600px;
+  width: 100%;
   margin: 0 auto;
 
   /* iOS safe-area + litt mer luft */

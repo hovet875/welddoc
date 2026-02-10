@@ -89,6 +89,14 @@
   overflow: hidden;
 }
 
+.page-projects .weld-panel{
+  overflow: visible;
+}
+
+.page-projects .weld-panel .panel-body{
+  overflow: visible;
+}
+
 .page-projects .panel-head{
   display: flex;
   justify-content: space-between;
@@ -236,6 +244,143 @@
 .page-projects .trace-table th:nth-child(4){ min-width: 220px; }
 .page-projects .trace-table th:nth-child(5){ min-width: 140px; }
 
+.page-projects .weld-toolbar{
+  display:flex;
+  gap: 8px;
+  align-items:center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.page-projects .weld-toolbar-left{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+
+.page-projects .weld-toolbar-actions{
+  display:flex;
+  align-items:center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.page-projects .weld-bulk{
+  border: 1px dashed rgba(255,255,255,0.16);
+  border-radius: var(--radius-lg);
+  padding: 8px;
+  margin-bottom: 10px;
+  background: rgba(255,255,255,0.02);
+}
+
+.page-projects .weld-bulk-row{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.page-projects .weld-bulk-select{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+}
+
+.page-projects .weld-bulk-grid{
+  display:grid;
+  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin-bottom: 6px;
+}
+
+.page-projects .weld-bulk-actions{
+  display:flex;
+  justify-content:flex-end;
+}
+
+.page-projects .weld-cell-stack{
+  display:grid;
+  gap: 4px;
+}
+
+.page-projects .weld-cell-stack.compact{
+  gap: 3px;
+}
+
+.page-projects .weld-cell-stack.compact .input{
+  height: 28px;
+}
+
+.page-projects .weld-lookup{
+  position: relative;
+}
+
+
+.page-projects .weld-table .input,
+.page-projects .weld-table .select{
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 8px;
+  font-size: 12px;
+  height: 30px;
+}
+
+.page-projects .weld-table .select{
+  padding-right: 28px;
+}
+
+.page-projects .weld-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.page-projects .weld-table thead .weld-group th{
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: rgba(255,255,255,0.04);
+  text-align: center;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.page-projects .weld-table thead .weld-group th + th{
+  border-left: 1px solid rgba(255,255,255,0.12);
+}
+
+.page-projects .weld-table thead tr:last-child th:nth-child(5),
+.page-projects .weld-table thead tr:last-child th:nth-child(9),
+.page-projects .weld-table thead tr:last-child th:nth-child(12),
+.page-projects .weld-table tbody td:nth-child(5),
+.page-projects .weld-table tbody td:nth-child(9),
+.page-projects .weld-table tbody td:nth-child(12){
+  border-left: 1px solid rgba(255,255,255,0.12);
+}
+
+.page-projects .weld-panel .table-scroll{
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+/*.page-projects .weld-table th:nth-child(1){ min-width: 42px; }
+.page-projects .weld-table th:nth-child(2){ min-width: 70px; }
+.page-projects .weld-table th:nth-child(3){ min-width: 100px; }
+.page-projects .weld-table th:nth-child(4){ min-width: 150px; }
+.page-projects .weld-table th:nth-child(5){ min-width: 150px; }
+.page-projects .weld-table th:nth-child(6){ min-width: 130px; }
+.page-projects .weld-table th:nth-child(7){ min-width: 110px; }
+.page-projects .weld-table th:nth-child(8){ min-width: 120px; }
+.page-projects .weld-table th:nth-child(9){ min-width: 150px; }
+.page-projects .weld-table th:nth-child(10){ min-width: 130px; }
+.page-projects .weld-table th:nth-child(11){ min-width: 160px; }
+.page-projects .weld-table th:nth-child(12){ min-width: 160px; }
+.page-projects .weld-table th:nth-child(13){ min-width: 110px; }*/
+
 .page-projects .project-ndt-table{
   width: 100%;
   table-layout: auto;
@@ -249,6 +394,326 @@
 .page-projects .project-ndt-table th:nth-child(1),
 .page-projects .project-ndt-table td:nth-child(1){
   width: 32%;
+}
+
+/* ===============================
+   Weld log master-detail
+   =============================== */
+
+.page-projects .weld-log-actions{
+  display:flex;
+  gap: 8px;
+}
+
+.page-projects .weld-log-toolbar{
+  display:flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.page-projects .weld-log-filters{
+  display:grid;
+  gap: 10px;
+  grid-template-columns: 160px minmax(220px, 1fr);
+  align-items: end;
+}
+
+.page-projects .weld-log-filters .field{
+  display:grid;
+  gap: 6px;
+}
+
+.page-projects .weld-log-filters .field.is-wide{
+  min-width: 260px;
+}
+
+.page-projects .weld-table-wrap{
+  overflow: auto;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-lg);
+}
+
+.page-projects .weld-log-table{
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 920px;
+}
+
+.page-projects .weld-log-table thead th{
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: rgba(12, 18, 28, 0.95);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.page-projects .weld-log-table .sticky-col{
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: rgba(12, 18, 28, 0.96);
+}
+
+.page-projects .weld-log-table .id-col{
+  left: 42px;
+  z-index: 2;
+}
+
+.page-projects .weld-log-table tbody td,
+.page-projects .weld-log-table thead th{
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  white-space: nowrap;
+}
+
+.page-projects .weld-log-table tbody tr{
+  transition: background 0.12s ease;
+  cursor: pointer;
+}
+
+.page-projects .weld-log-table tbody tr:hover{
+  background: rgba(255,255,255,0.04);
+}
+
+.page-projects .weld-log-table tbody tr:focus{
+  outline: 2px solid rgba(56, 151, 255, 0.35);
+  outline-offset: -2px;
+}
+
+.page-projects .weld-log-table .select-col{
+  width: 42px;
+}
+
+.page-projects .weld-log-table .row-menu-cell{
+  text-align: right;
+  width: 64px;
+}
+
+.page-projects .weld-log-table .row-menu{
+  position: absolute;
+  right: 10px;
+  top: 36px;
+  display: none;
+  flex-direction: column;
+  background: rgba(16, 22, 34, 0.98);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--radius-md);
+  min-width: 140px;
+  padding: 6px;
+  z-index: 5;
+}
+
+.page-projects .weld-log-table .row-menu.is-open{
+  display:flex;
+}
+
+.page-projects .weld-log-table .row-menu button{
+  background: transparent;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.page-projects .weld-log-table .row-menu button:hover{
+  background: rgba(255,255,255,0.08);
+}
+
+.page-projects .weld-log-table .row-menu button.danger{
+  color: #ff7a7a;
+}
+
+.page-projects .chip{
+  display:inline-flex;
+  align-items:center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(255,255,255,0.1);
+  gap: 4px;
+}
+
+.page-projects .chip.ok{ background: rgba(44, 170, 120, 0.18); color: #9ff0c9; }
+.page-projects .chip.warn{ background: rgba(255, 185, 86, 0.18); color: #ffd59a; }
+.page-projects .chip.pending{ background: rgba(56, 151, 255, 0.18); color: #b7d8ff; }
+.page-projects .chip.danger{ background: rgba(255, 97, 97, 0.18); color: #ffb0b0; }
+.page-projects .chip.ghost{ background: transparent; border-style: dashed; }
+
+.page-projects .ndt-cell{
+  display:flex;
+  gap: 6px;
+}
+
+.page-projects .weld-bulkbar{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-lg);
+  background: rgba(255,255,255,0.03);
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.page-projects .weld-bulk-left,
+.page-projects .weld-bulk-right{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.page-projects .weld-pagination{
+  display:flex;
+  justify-content:center;
+  margin-top: 12px;
+}
+
+.page-projects .weld-drawer-root{
+  position: relative;
+}
+
+.page-projects .weld-drawer-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 14, 22, 0.6);
+  opacity: 1;
+  transition: opacity 0.2s ease;
+  z-index: 40;
+}
+
+.page-projects .weld-drawer{
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: min(540px, 92vw);
+  background: rgba(14, 20, 32, 0.98);
+  border-left: 1px solid rgba(255,255,255,0.1);
+  box-shadow: -12px 0 32px rgba(0,0,0,0.35);
+  display:flex;
+  flex-direction: column;
+  transform: translateX(0);
+  transition: transform 0.2s ease;
+  z-index: 50;
+}
+
+.page-projects .weld-drawer.is-hidden,
+.page-projects .weld-drawer-backdrop.is-hidden{
+  pointer-events: none;
+  opacity: 0;
+}
+
+.page-projects .weld-drawer.is-hidden{
+  transform: translateX(100%);
+}
+
+.page-projects .drawer-head{
+  display:flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.page-projects .drawer-title{ font-weight: 600; font-size: 18px; }
+.page-projects .drawer-sub{ color: var(--muted); font-size: 12px; }
+
+.page-projects .drawer-body{
+  padding: 16px 18px 80px;
+  overflow-y: auto;
+  display: grid;
+  gap: 18px;
+}
+
+.page-projects .drawer-section h3{
+  margin: 0 0 10px;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+.page-projects .drawer-grid{
+  display:grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.page-projects .drawer-grid .field{
+  display:grid;
+  gap: 6px;
+}
+
+.page-projects .drawer-grid .field-toggle{
+  align-items: center;
+  grid-template-columns: 1fr auto;
+}
+
+.page-projects .field-error{
+  color: #ff9a9a;
+  font-size: 12px;
+}
+
+.page-projects .drawer-footer{
+  position: sticky;
+  bottom: 0;
+  background: rgba(14, 20, 32, 0.98);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding: 12px 18px;
+  display:flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.page-projects .ndt-grid{
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.page-projects .ndt-block{
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-lg);
+  padding: 10px;
+  display:grid;
+  gap: 8px;
+  background: rgba(255,255,255,0.02);
+}
+
+.page-projects .ndt-head{
+  display:flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.page-projects .drawer-recent{
+  display:grid;
+  gap: 6px;
+}
+
+.page-projects .drawer-recent-list{
+  display:flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+@media (max-width: 900px){
+  .page-projects .drawer-grid{ grid-template-columns: 1fr; }
+  .page-projects .ndt-grid{ grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .page-projects .weld-drawer,
+  .page-projects .weld-drawer-backdrop,
+  .page-projects .weld-log-table tbody tr{
+    transition: none;
+  }
 }
 
 .page-projects .project-ndt-table th:nth-child(2),

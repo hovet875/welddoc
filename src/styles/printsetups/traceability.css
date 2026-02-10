@@ -18,6 +18,10 @@ body.print-traceability .trace-print-sheet{
   display:block;
 }
 
+body.print-traceability > *:not(.trace-print-sheet){
+  display:none !important;
+}
+
 .trace-print-sheet *{
   box-sizing:border-box;
 }
@@ -182,10 +186,6 @@ body.print-traceability .trace-print-sheet{
     content: none !important;
     display: none !important;
     background: none !important;
-  }
-
-  body.print-traceability > *:not(.trace-print-sheet){
-    display:none !important;
   }
 
   body.print-traceability .trace-print-sheet{

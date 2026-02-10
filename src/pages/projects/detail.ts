@@ -7,6 +7,7 @@ import { renderProjectDrawingsSection } from "./sections/drawings";
 import { renderProjectWorkOrderSection } from "./sections/work-order";
 import { renderProjectTraceabilitySection } from "./sections/traceability";
 import { renderProjectNdtSection } from "./sections/ndt";
+import { renderProjectWeldLogSection } from "./sections/weld-log";
 
 import "../../styles/pages/projects.css";
 
@@ -83,6 +84,7 @@ export async function renderProjectDetail(app: HTMLElement, projectId: string, s
             ${currentSection === "tegninger" && isAdmin ? `<button data-open-drawing-upload class="btn accent small" type="button">Last opp tegninger</button>` : ""}
             ${currentSection === "arbeidsordre" && isAdmin ? `<button data-open-workorder-upload class="btn accent small" type="button">Last opp arbeidsordre</button>` : ""}
             ${currentSection === "sporbarhet" && isAdmin ? `<button data-open-trace-add class="btn accent small" type="button">Ny sporbarhet</button>` : ""}
+            ${currentSection === "sveiselogg" ? `<button data-open-weld-add class="btn accent small" type="button">Ny sveis</button>` : ""}
             <a class="btn small" href="#/prosjekter">Tilbake</a>
           </div>
         </section>
@@ -139,6 +141,11 @@ export async function renderProjectDetail(app: HTMLElement, projectId: string, s
 
   if (currentSection === "ndt") {
     await renderProjectNdtSection({ mount: sectionMount, project, signal });
+    return;
+  }
+
+  if (currentSection === "sveiselogg") {
+    await renderProjectWeldLogSection({ app, mount: sectionMount, modalMount, project, isAdmin, signal });
     return;
   }
 

@@ -1,4 +1,5 @@
 import { supabase } from "../services/supabaseClient";
+import { PDFDocument } from "pdf-lib";
 import {
   createFileRecord,
   createFileLink,
@@ -92,6 +93,25 @@ export async function createProjectDrawingWithFile(input: {
     } catch {}
     throw e;
   }
+}
+
+export async function createPlaceholderProjectDrawing(input: {
+  project_id: string;
+  drawing_no: string;
+  revision?: string | null;
+}) {
+  const pdf = await PDFDocument.create();
+  pdf.addPage([595.28, 841.89]);
+  const bytes = await pdf.save();
+  const blob = new Blob([bytes], { type: "application/pdf" });
+  const file = new File([blob], `${input.drawing_no}.pdf`, { type: "application/pdf" });
+
+  return createProjectDrawingWithFile({
+    project_id: input.project_id,
+    drawing_no: input.drawing_no,
+    revision: input.revision ?? "-",
+    file,
+  });
 }
 
 export async function updateProjectDrawing(
