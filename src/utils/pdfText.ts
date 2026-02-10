@@ -23,9 +23,7 @@ async function renderPageToCanvas(page: any, scale: number) {
 
 async function runOcrOnPdf(pdf: any, maxPages: number) {
   const { createWorker } = await import("tesseract.js");
-  const worker = await createWorker();
-  await worker.loadLanguage("eng");
-  await worker.initialize("eng");
+  const worker = await createWorker("eng");
 
   const chunks: string[] = [];
   const pages = Math.min(maxPages, pdf.numPages);

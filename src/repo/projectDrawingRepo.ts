@@ -103,8 +103,7 @@ export async function createPlaceholderProjectDrawing(input: {
   const pdf = await PDFDocument.create();
   pdf.addPage([595.28, 841.89]);
   const bytes = await pdf.save();
-  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-  const blob = new Blob([buffer], { type: "application/pdf" });
+  const blob = new Blob([new Uint8Array(bytes)], { type: "application/pdf" });
   const file = new File([blob], `${input.drawing_no}.pdf`, { type: "application/pdf" });
 
   return createProjectDrawingWithFile({
