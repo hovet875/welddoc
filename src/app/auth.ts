@@ -58,13 +58,24 @@ export async function getProfileAccess(
     .maybeSingle();
 
   if (profileError) {
-    console.warn("Feilet å hente profil", profileError);
+    throw profileError;
+  }
+
+  // Fail closed: no profile row means no access until user is provisioned.
+  if (!profile) {
+    const value = {
+      isAdmin: false,
+      loginEnabled: false,
+      displayName: "Bruker",
+    };
+    cachedAccess = { userId: user.id, value, ts: Date.now() };
+    return value;
   }
 
   const value = {
-    isAdmin: profile?.role === "admin",
-    loginEnabled: profile?.login_enabled ?? true,
-    displayName: profile?.display_name ?? "Bruker",
+    isAdmin: profile.role === "admin",
+    loginEnabled: profile.login_enabled ?? false,
+    displayName: profile.display_name ?? "Bruker",
   };
 
   cachedAccess = { userId: user.id, value, ts: Date.now() };
@@ -76,8 +87,12 @@ export async function getProfileAccess(
 export async function getIsAdmin(): Promise<boolean> {
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) return false;
-  const access = await getProfileAccess(data.user);
-  return access.isAdmin;
+  try {
+    const access = await getProfileAccess(data.user);
+    return access.isAdmin;
+  } catch {
+    return false;
+  }
 }
 
 export async function getSession() {
@@ -116,8 +131,11 @@ export async function signIn(email: string, password: string) {
 }
 
 export async function signOut() {
-  await supabase.auth.signOut({ scope: "global" });
-  clearAuthStorage();
-  cachedSession = { value: null, ts: Date.now() };
-  cachedAccess = null;
+  try {
+    await supabase.auth.signOut({ scope: "global" });
+  } finally {
+    clearAuthStorage();
+    cachedSession = { value: null, ts: Date.now() };
+    cachedAccess = null;
+  }
 }

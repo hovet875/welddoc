@@ -1,5 +1,16 @@
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
 
 export function renderHeader(displayName = "Bruker", email = "") {
+  const safeDisplayName = escapeHtml(displayName);
+  const safeEmail = escapeHtml(email);
+
   return /*html*/`
     <header class="topbar">
       <div class="brand">
@@ -7,7 +18,7 @@ export function renderHeader(displayName = "Bruker", email = "") {
       </div>
 
       <nav class="nav">
-        <a class="navlink" href="#/home">Hjem</a>
+        <a class="navlink" href="#/">Hjem</a>
         <a class="navlink" href="#/prosjekter">Prosjekter</a>
         <a class="navlink" href="#/materialsertifikater">Materialsertifikater</a>
         <a class="navlink" href="#/wps">Sveiseprosedyrer</a>
@@ -22,15 +33,15 @@ export function renderHeader(displayName = "Bruker", email = "") {
               <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
             </svg>
           </div>
-          <div class="user-name">${displayName}</div>
+          <div class="user-name">${safeDisplayName}</div>
         </button>
         <div class="user-menu" role="menu" aria-label="Brukermeny">
-          ${email ? `
+          ${safeEmail ? `
             <div class="user-menu__email">
               <svg viewBox="0 0 24 24" class="user-menu__email-icon" aria-hidden="true">
                 <path fill="currentColor" d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/>
               </svg>
-              <span>${email}</span>
+              <span>${safeEmail}</span>
             </div>
           ` : ""}
           <a class="user-menu__item" role="menuitem" href="#/settings">Innstillinger</a>
@@ -70,7 +81,8 @@ export function wireHeader(app: HTMLElement) {
     closeMenu();
   });
 
-  window.addEventListener("keydown", (e) => {
+  // Bound to app root, so listener is naturally removed when route root is replaced.
+  app.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeMenu();
   });
 }

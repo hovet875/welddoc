@@ -5,13 +5,22 @@ function fatal(err: unknown) {
   document.body.innerHTML = `<pre style="padding:16px;white-space:pre-wrap">FATAL:\n${msg}</pre>`;
 }
 
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((err) => {
+      console.warn("Service worker registration failed", err);
+    });
+  });
+}
+
 try {
   const appEl = document.querySelector<HTMLDivElement>("#app");
   if (!appEl) throw new Error("Missing #app in index.html");
 
   let app: HTMLDivElement = appEl;
 
-  // Først etter vi vet at app finnes:
   window.addEventListener("error", (e) => {
     app.innerHTML = `<pre style="padding:16px;white-space:pre-wrap">ERROR:\n${String(
       (e as any).error || (e as any).message
@@ -24,7 +33,6 @@ try {
     )}</pre>`;
   });
 
-  // IMPORTS etter at app finnes (viktig ved debugging)
   const { getSession, getProfileAccess, signOut } = await import("./app/auth");
   const { renderLogin } = await import("./pages/login");
   const { renderHome } = await import("./pages/home");
@@ -40,16 +48,22 @@ try {
   const { renderProjectsPage } = await import("./pages/projects");
   const { renderProjectDetail } = await import("./pages/projects/detail");
   const { renderMaterialCertsPage } = await import("./pages/material-certs");
+  const { initInstallPromptEvents } = await import("./ui/installPrompt");
 
-
-
+  registerServiceWorker();
+  initInstallPromptEvents();
 
   // Global logout handler - works on all pages
   document.addEventListener("click", async (e: Event) => {
     const target = e.target as HTMLElement;
     if (target.id === "logout" || target.closest("#logout")) {
-      await signOut();
-      location.reload();
+      try {
+        await signOut();
+      } catch (err) {
+        console.warn("Sign out failed", err);
+      } finally {
+        location.reload();
+      }
     }
   });
 
@@ -79,7 +93,7 @@ try {
     let showLoader = true;
     const loaderTimer = window.setTimeout(() => {
       if (seq !== navSeq || !showLoader) return;
-      app.innerHTML = `<div style="padding:16px" class="muted">Laster…</div>`;
+      app.innerHTML = `<div style="padding:16px" class="muted">Laster...</div>`;
     }, 180);
 
     const route = getRoute();
@@ -113,6 +127,13 @@ try {
       }
     } catch (err) {
       console.warn("Profile access check failed", err);
+      try {
+        await signOut();
+      } catch {}
+      currentUnmount = (renderLogin as any)(app) ?? null;
+      const errEl = app.querySelector<HTMLElement>("#err");
+      if (errEl) errEl.textContent = "Kunne ikke verifisere tilgang. Logg inn på nytt.";
+      return;
     }
 
     if (!location.hash || location.hash === "#") {
@@ -122,8 +143,7 @@ try {
 
     switch (route) {
       case "/":
-        await renderHome(app);
-        currentUnmount = null;
+        currentUnmount = (await (renderHome as any)(app)) ?? null;
         break;
 
       case "/prosjekter":
@@ -192,8 +212,7 @@ try {
             break;
           }
         }
-        await renderHome(app);
-        currentUnmount = null;
+        currentUnmount = (await (renderHome as any)(app)) ?? null;
         break;
     }
   }

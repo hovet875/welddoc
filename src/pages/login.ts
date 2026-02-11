@@ -1,4 +1,5 @@
 import { signIn } from "../app/auth";
+import { wireInstallHomeScreenButton } from "../ui/installPrompt";
 
 export function renderLogin(app: HTMLElement) {
   app.innerHTML = `
@@ -28,6 +29,18 @@ export function renderLogin(app: HTMLElement) {
 
             <div class="loginactions">
               <button id="btnLogin" class="btn primary">Logg inn</button>
+            </div>
+            <div class="logininstall">
+              <button id="install-home-screen" class="btn login-install-btn" type="button" hidden>
+                <svg viewBox="0 0 24 24" class="svgicon login-install-icon" aria-hidden="true">
+                  <path
+                    fill="currentColor"
+                    d="M12 3l9 8h-2v9h-5v-6H10v6H5v-9H3l9-8z"
+                  />
+                </svg>
+                <span data-install-label>Legg til på hjemskjerm</span>
+              </button>
+              <p id="install-home-screen-hint" class="login-install-hint" hidden></p>
             </div>
 
             <p id="err" class="loginerr"></p>
@@ -63,4 +76,9 @@ export function renderLogin(app: HTMLElement) {
   passEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter") doLogin();
   });
+
+  const cleanupInstall = wireInstallHomeScreenButton(app);
+  return () => {
+    cleanupInstall();
+  };
 }

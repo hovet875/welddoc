@@ -276,7 +276,7 @@ export async function insertWelderCert(base: UpsertWelderCertInput) {
   return data.id as string;
 }
 
-export async function updateWelderCert(id: string, base: Partial<UpsertWelderCertInput> & { pdf_path?: string }) {
+export async function updateWelderCert(id: string, base: Partial<UpsertWelderCertInput> & { pdf_path?: string | null }) {
   const { error } = await supabase.from("welder_certificates").update(base).eq("id", id);
   if (error) throw error;
 }
@@ -336,7 +336,7 @@ export async function updateWelderCertWithPdf(
       await deleteFileRecord(current.file_id);
     }
     if (current.pdf_path) {
-      await updateWelderCert(id, { pdf_path: current.pdf_path });
+      await updateWelderCert(id, { pdf_path: null });
       await deletePdfIfExists("welder", current.pdf_path);
     }
     return;
@@ -382,7 +382,7 @@ export async function insertNdtCert(base: UpsertNdtCertInput) {
   return data.id as string;
 }
 
-export async function updateNdtCert(id: string, base: Partial<UpsertNdtCertInput> & { pdf_path?: string }) {
+export async function updateNdtCert(id: string, base: Partial<UpsertNdtCertInput> & { pdf_path?: string | null }) {
   const { error } = await supabase.from("ndt_certificates").update(base).eq("id", id);
   if (error) throw error;
 }
@@ -442,7 +442,7 @@ export async function updateNdtCertWithPdf(
       await deleteFileRecord(current.file_id);
     }
     if (current.pdf_path) {
-      await updateNdtCert(id, { pdf_path: current.pdf_path });
+      await updateNdtCert(id, { pdf_path: null });
       await deletePdfIfExists("ndt", current.pdf_path);
     }
     return;

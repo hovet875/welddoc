@@ -1,19 +1,18 @@
-import { getSession, getProfileAccess } from "../app/auth";
+﻿import { getSession, getProfileAccess } from "../app/auth";
 import { renderHeader, wireHeader } from "../components/header";
 import { Footer } from "../components/footer";
 
 export async function renderHome(app: HTMLElement) {
-  // Fetch user session and display name
   const session = await getSession();
   let displayName = "Bruker";
   const email = session?.user?.email ?? "";
-  
+
   if (session?.user) {
     try {
       const access = await getProfileAccess(session.user);
       displayName = access.displayName;
     } catch (err) {
-      console.warn("Feilet å hente profil", err);
+      console.warn("Failed to read profile", err);
     }
   }
 
@@ -31,13 +30,13 @@ export async function renderHome(app: HTMLElement) {
 
             <div class="cta">
               <a class="btn primary" href="#/prosjekter">Åpne prosjekter</a>
-              <a class="btn" href="#/sveiselogg">Ny sveiselog</a>
+              <a class="btn" href="#/prosjekter">Ny sveiselog</a>
             </div>
 
             <div class="quick">
-              <div class="pill">✅ Prosjektstyrt struktur</div>
-              <div class="pill">✅ Klar for QR / sporbarhet</div>
-              <div class="pill">✅ Klar for PDF-export</div>
+              <div class="pill">Prosjektstyrt struktur</div>
+              <div class="pill">Klar for QR / sporbarhet</div>
+              <div class="pill">Klar for PDF-export</div>
             </div>
           </div>
 
@@ -46,17 +45,17 @@ export async function renderHome(app: HTMLElement) {
             <div class="cardgrid">
               <a class="card" href="#/prosjekter">
                 <div class="cardh">Prosjekter</div>
-                <div class="cardp">Opprett prosjekt → legg til tegninger → logg.</div>
+                <div class="cardp">Opprett prosjekt -> legg til tegninger -> logg.</div>
               </a>
               <a class="card" href="#/wps">
                 <div class="cardh">WPS</div>
                 <div class="cardp">Hold WPS-oversikt og koble mot sveis.</div>
               </a>
-              <a class="card" href="#/sveiselogg">
+              <a class="card" href="#/prosjekter">
                 <div class="cardh">Sveiselogg</div>
                 <div class="cardp">Excel-følelse i nettleser, med kontrollfelt.</div>
               </a>
-              <a class="card" href="#/trykktest">
+              <a class="card" href="#/ndt">
                 <div class="cardh">Trykktest</div>
                 <div class="cardp">Registrer testdata og generer rapport.</div>
               </a>
@@ -77,7 +76,7 @@ export async function renderHome(app: HTMLElement) {
             </div>
             <div class="tile">
               <div class="tileh">Sporbarhet</div>
-              <div class="tilep">Heat → kode (P1/P2…) → knyttes til prosjekt og linjer.</div>
+              <div class="tilep">Heat -> kode (P1/P2...) -> knyttes til prosjekt og linjer.</div>
             </div>
             <div class="tile">
               <div class="tileh">Dokumenter</div>
@@ -89,5 +88,7 @@ export async function renderHome(app: HTMLElement) {
       ${Footer()}
     </div>
   `;
+
   wireHeader(app);
 }
+
