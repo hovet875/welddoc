@@ -48,10 +48,8 @@ try {
   const { renderProjectsPage } = await import("./pages/projects");
   const { renderProjectDetail } = await import("./pages/projects/detail");
   const { renderMaterialCertsPage } = await import("./pages/material-certs");
-  const { initInstallPromptEvents } = await import("./ui/installPrompt");
 
   registerServiceWorker();
-  initInstallPromptEvents();
 
   // Global logout handler - works on all pages
   document.addEventListener("click", async (e: Event) => {

@@ -16,7 +16,7 @@ import { buildTypePillMap, typePillClass } from "../../ui/typePill";
 import { renderPagerButtons } from "../../ui/pager";
 import { openPdf, openNdtReportModal, handleDeleteReport, printNdtReportPdf, uploadNdtBatchWithMeta, type NdtUploadEntry } from "./handlers";
 import { openConfirmDelete } from "../../ui/confirm";
-import { iconSvg } from "../../ui/iconButton";
+import { iconSvg, renderIconButton } from "../../ui/iconButton";
 import { renderDatePickerInput, wireDatePickers } from "../../ui/datePicker";
 
 export async function renderNdtPage(app: HTMLElement) {
@@ -70,18 +70,26 @@ export async function renderNdtPage(app: HTMLElement) {
               <div class="panel-meta">Legg til flere NDT-rapporter og fyll inn prosjektnr, metode og sveisere.</div>
             </div>
             <div class="panel-actions">
-              <button class="iconbtn btnlike" type="button" data-upload-close aria-label="Skjul" title="Skjul">
-                ${iconSvg("chevron-up")}
-              </button>
+              ${renderIconButton({
+                dataKey: "upload-close",
+                id: "1",
+                title: "Skjul",
+                icon: iconSvg("chevron-up"),
+                extraClass: "btnlike",
+              })}
             </div>
           </div>
           <div class="panel-body" data-upload-body></div>
           <div class="panel-footer">
             <div class="upload-status muted" data-upload-status>—</div>
             <div class="upload-actions">
-              <button class="iconbtn btnlike" type="button" data-upload-clear aria-label="Nullstill" title="Nullstill">
-                ${iconSvg("rotate-ccw")}
-              </button>&nbsp;
+              ${renderIconButton({
+                dataKey: "upload-clear",
+                id: "1",
+                title: "Nullstill",
+                icon: iconSvg("rotate-ccw"),
+                extraClass: "btnlike",
+              })}&nbsp;
               <button class="btn accent small" type="button" data-upload-save>Last opp</button>
             </div>
           </div>
@@ -317,9 +325,13 @@ export async function renderNdtPage(app: HTMLElement) {
         <div class="upload-preview-dock">
           <div class="upload-preview-head">
             <div class="upload-preview-title">${esc(uploadPreviewName || "Forhåndsvisning")}</div>
-            <button type="button" class="iconbtn btnlike" data-preview-close aria-label="Lukk" title="Lukk">
-              ${iconSvg("x")}
-            </button>
+            ${renderIconButton({
+              dataKey: "preview-close",
+              id: "1",
+              title: "Lukk",
+              icon: iconSvg("x"),
+              extraClass: "btnlike",
+            })}
           </div>
           <iframe class="upload-preview-frame" src="${esc(uploadPreviewUrl)}" title="Forhåndsvisning"></iframe>
         </div>
@@ -389,15 +401,24 @@ export async function renderNdtPage(app: HTMLElement) {
                       <div class="upload-file-meta">Klar</div>
                     </div>
                     <div class="upload-file-actions">
-                      <button type="button" class="iconbtn btnlike" data-file-preview="${esc(entry.id)}" aria-label="Forhandsvis" title="Forhandsvis">
-                        ${iconSvg("eye")}
-                      </button>
+                      ${renderIconButton({
+                        dataKey: "file-preview",
+                        id: entry.id,
+                        title: "Forhandsvis",
+                        icon: iconSvg("eye"),
+                        extraClass: "btnlike",
+                      })}
                       <button type="button" class="btn tiny ${isUploading ? "" : "accent"}" data-file-upload="${esc(entry.id)}" ${isUploading ? "disabled" : ""}>
                         ${isUploading ? "Laster opp…" : "Last opp"}
                       </button>
-                      <button type="button" class="iconbtn btnlike danger" data-file-remove="${esc(entry.id)}" aria-label="Fjern" title="Fjern">
-                        ${iconSvg("trash")}
-                      </button>
+                      ${renderIconButton({
+                        dataKey: "file-remove",
+                        id: entry.id,
+                        title: "Fjern",
+                        icon: iconSvg("trash"),
+                        danger: true,
+                        extraClass: "btnlike",
+                      })}
                     </div>
                   </div>
                   <div class="upload-file-body">
@@ -947,114 +968,123 @@ export async function renderNdtPage(app: HTMLElement) {
       return { welds: row.weld_count ?? 0, defects: row.defect_count ?? 0 };
     };
 
-    const monthBuckets = new Map<number, Map<number, { welds: number; defects: number }>>();
     const yearTotals = new Map<number, { welds: number; defects: number }>();
     for (const r of rtRows) {
       if (!r.report_date) continue;
       const reportDate = new Date(r.report_date);
       const y = reportDate.getFullYear();
       if (Number.isNaN(y)) continue;
-      const m = reportDate.getMonth() + 1; // 1-12
-      if (!monthBuckets.has(y)) monthBuckets.set(y, new Map());
-      const byMonth = monthBuckets.get(y)!;
-      if (!byMonth.has(m)) byMonth.set(m, { welds: 0, defects: 0 });
-      const v = byMonth.get(m)!;
       const counts = getRtCounts(r);
-      v.welds += counts.welds;
-      v.defects += counts.defects;
       if (!yearTotals.has(y)) yearTotals.set(y, { welds: 0, defects: 0 });
       const yt = yearTotals.get(y)!;
       yt.welds += counts.welds;
       yt.defects += counts.defects;
     }
 
-    const years = Array.from(monthBuckets.keys()).sort((a, b) => b - a);
+    const years = Array.from(yearTotals.keys()).sort((a, b) => a - b);
     if (years.length === 0) {
       rtStats.innerHTML = `<div class="muted">Manglende år på RT-rapporter.</div>`;
       return;
     }
 
-    const series = years.map((y) => {
-      const byMonth = monthBuckets.get(y)!;
-      const points = Array.from({ length: 12 }, (_, i) => {
-        const m = i + 1;
-        const v = byMonth.get(m);
-        const rate = v && v.welds > 0 ? (v.defects / v.welds) * 100 : 0;
-        return { month: m, rate };
-      });
-      return { year: y, points };
+    const yearSeries = years.map((year) => {
+      const totals = yearTotals.get(year) ?? { welds: 0, defects: 0 };
+      const rate = totals.welds > 0 ? (totals.defects / totals.welds) * 100 : 0;
+      return { year, rate, welds: totals.welds, defects: totals.defects };
     });
 
-    const maxReported = Math.max(0, ...series.flatMap((s) => s.points.map((p) => p.rate)));
-    const maxRate = maxReported > 0 ? maxReported : 1;
+    const totalWelds = yearSeries.reduce((sum, s) => sum + s.welds, 0);
+    const totalDefects = yearSeries.reduce((sum, s) => sum + s.defects, 0);
+    const totalRate = totalWelds > 0 ? (totalDefects / totalWelds) * 100 : 0;
+
+    const maxReported = Math.max(2, totalRate, ...yearSeries.map((s) => s.rate));
+    const roundAxisMax = (value: number) => {
+      if (value <= 2) return 2;
+      if (value <= 5) return Math.ceil(value / 0.5) * 0.5;
+      if (value <= 10) return Math.ceil(value);
+      return Math.ceil(value / 2) * 2;
+    };
+    const maxRate = roundAxisMax(maxReported);
+
     const viewW = 720;
     const viewH = 240;
-    const padL = 36;
+    const padL = 44;
     const padR = 16;
     const padT = 16;
-    const padB = 28;
+    const padB = 34;
     const chartW = viewW - padL - padR;
     const chartH = viewH - padT - padB;
 
-    const xFor = (month: number) => padL + ((month - 1) / 11) * chartW;
+    const slotW = chartW / Math.max(1, yearSeries.length);
+    const barW = Math.max(16, Math.min(44, slotW * 0.58));
+    const xFor = (idx: number) => padL + idx * slotW + (slotW - barW) / 2;
     const yFor = (rate: number) => padT + (1 - Math.min(rate, maxRate) / maxRate) * chartH;
 
-    const colors = ["#5bd38f", "#5ea9ff", "#f3b54a", "#ff6b6b", "#b87bff"];
+    const colorForRate = (rate: number) => {
+      if (rate <= 2) return "#5bd38f";
+      if (rate <= 4) return "#f3b54a";
+      return "#ff6b6b";
+    };
 
-    const lines = series
-      .map((s, idx) => {
-        const pts = s.points.map((p) => `${xFor(p.month).toFixed(2)},${yFor(p.rate).toFixed(2)}`).join(" ");
-        return `<polyline fill="none" stroke="${colors[idx % colors.length]}" stroke-width="2.5" points="${pts}" />`;
-      })
-      .join("");
-
+    const tickValues = Array.from({ length: 5 }, (_, i) => (maxRate / 4) * i);
     const targetY = yFor(2);
-    const months = ["Jan", "Feb", "Mar", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Des"];
     const formatPercent = (value: number) => (value % 1 === 0 ? value.toFixed(0) : value.toFixed(1));
-    const yearRates = new Map<number, number>();
-    for (const [y, totals] of yearTotals.entries()) {
-      const rate = totals.welds > 0 ? (totals.defects / totals.welds) * 100 : 0;
-      yearRates.set(y, rate);
-    }
+    const showBarLabels = yearSeries.length <= 10;
 
     rtStats.innerHTML = `
       <div class="rt-linechart">
-        <svg viewBox="0 0 ${viewW} ${viewH}" role="img" aria-label="Statistikk">
+        <div class="rt-summary">
+          <span class="rt-summary-item">Samlet RT-feilrate: <strong>${formatPercent(totalRate)}%</strong></span>
+          <span class="rt-summary-item">RT feil: ${totalDefects}</span>
+          <span class="rt-summary-item">RT sveis: ${totalWelds}</span>
+        </div>
+        <svg viewBox="0 0 ${viewW} ${viewH}" role="img" aria-label="Årsaggregert RT-feilprosent">
           <g class="rt-grid">
-            ${[0, 0.5, 1].map((t) => {
-  const y = padT + t * chartH;
-  const value = (1 - t) * maxReported;
-
-  return `
-    <line x1="${padL}" y1="${y}" x2="${viewW - padR}" y2="${y}" />
-    <text class="rt-axis-text" x="${padL - 8}" y="${y + 4}" text-anchor="end">${formatPercent(value)}%</text>
-  `;
-}).join("")}
-
-            ${maxReported >= 2 ? `<line class="target" x1="${padL}" y1="${targetY}" x2="${viewW - padR}" y2="${targetY}" />` : ""}
+            ${tickValues
+              .map((value) => {
+                const y = yFor(value);
+                return `
+                  <line x1="${padL}" y1="${y}" x2="${viewW - padR}" y2="${y}" />
+                  <text class="rt-axis-text" x="${padL - 8}" y="${y + 4}" text-anchor="end">${formatPercent(value)}%</text>
+                `;
+              })
+              .join("")}
+            <line class="target" x1="${padL}" y1="${targetY}" x2="${viewW - padR}" y2="${targetY}" />
           </g>
-          <g class="rt-lines">${lines}</g>
           <g class="rt-axis">
-            ${Array.from({ length: 12 }, (_, i) => {
-              const m = i + 1;
-              const x = xFor(m);
-              return `<text x="${x}" y="${viewH - 8}" text-anchor="middle">${months[i]}</text>`;
-            }).join("")}
+            ${yearSeries
+              .map((s, idx) => {
+                const x = xFor(idx);
+                const y = yFor(s.rate);
+                const h = Math.max(0, viewH - padB - y);
+                const color = colorForRate(s.rate);
+                const valueY = Math.max(padT + 10, y - 6);
+                return `
+                  <g class="rt-bar-group">
+                    <rect class="rt-bar" x="${x}" y="${y}" width="${barW}" height="${h}" rx="6" ry="6" fill="${color}">
+                      <title>${s.year}: ${formatPercent(s.rate)}% (${s.defects} feil / ${s.welds} sveis)</title>
+                    </rect>
+                    ${showBarLabels ? `<text class="rt-bar-value" x="${x + barW / 2}" y="${valueY}" text-anchor="middle">${formatPercent(s.rate)}%</text>` : ""}
+                    <text x="${x + barW / 2}" y="${viewH - 10}" text-anchor="middle">${s.year}</text>
+                  </g>
+                `;
+              })
+              .join("")}
           </g>
         </svg>
         <div class="rt-legend">
-          ${series.map((s, idx) => {
-            const rate = yearRates.get(s.year) ?? 0;
-            const totals = yearTotals.get(s.year) ?? { welds: 0, defects: 0 };
-            return `
-            <span class="rt-legend-item"><span class="dot" style="background:${colors[idx % colors.length]}"></span>${s.year} (${formatPercent(rate)}%) · RT feil: ${totals.defects} · RT sveis: ${totals.welds}</span>
-          `;
-          }).join("")}
+          ${yearSeries
+            .slice()
+            .sort((a, b) => b.year - a.year)
+            .map(
+              (s) =>
+                `<span class="rt-legend-item"><span class="dot" style="background:${colorForRate(s.rate)}"></span>${s.year} (${formatPercent(s.rate)}%) · RT feil: ${s.defects} · RT sveis: ${s.welds}</span>`
+            )
+            .join("")}
         </div>
       </div>
     `;
   }
-
   function renderPager(totalPages: number) {
     pager.innerHTML = renderPagerButtons({ totalPages, currentPage: state.page });
   }

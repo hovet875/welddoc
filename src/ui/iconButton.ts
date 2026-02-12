@@ -3,18 +3,31 @@ import { esc } from "../utils/dom";
 type IconButtonOpts = {
   dataKey: string;
   id: string;
+  dataAttrs?: Record<string, string | number | boolean | null | undefined>;
   title: string;
   icon: string;
   danger?: boolean;
   label?: string;
   extraClass?: string;
+  disabled?: boolean;
 };
 
 export function renderIconButton(opts: IconButtonOpts) {
   const cls = ["iconbtn", opts.danger ? "danger" : "", opts.extraClass || ""].filter(Boolean).join(" ");
   const aria = opts.label ? `${opts.title} ${opts.label}` : opts.title;
+  const dataParts: string[] = [`data-${esc(opts.dataKey)}="${esc(String(opts.id))}"`];
+
+  if (opts.dataAttrs) {
+    for (const [key, value] of Object.entries(opts.dataAttrs)) {
+      if (value == null) continue;
+      dataParts.push(`data-${esc(key)}="${esc(String(value))}"`);
+    }
+  }
+
+  const disabledAttrs = opts.disabled ? ` disabled aria-disabled="true"` : "";
+  const dataAttrs = dataParts.length ? ` ${dataParts.join(" ")}` : "";
   return `
-    <button class="${cls}" type="button" data-${esc(opts.dataKey)}="${esc(opts.id)}" aria-label="${esc(aria)}" title="${esc(opts.title)}">
+    <button class="${cls}" type="button"${dataAttrs}${disabledAttrs} aria-label="${esc(aria)}" title="${esc(opts.title)}">
       ${opts.icon}
     </button>
   `;
