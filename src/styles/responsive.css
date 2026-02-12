@@ -246,7 +246,7 @@
 /* --- login.css (mobile) --- */
 @media (max-width: 768px){
   .loginlogo-main {
-    height: 90px;
+    height: 180px;
   }
   .loginwrap{ padding: 18px 0 10px; }
 }
@@ -273,7 +273,7 @@
   }
 
   .loginlogo-main {
-    height: 64px;
+    height: 128px;
   }
 
   .page-login .logincard {

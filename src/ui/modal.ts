@@ -5,6 +5,20 @@ export type ModalHandle = {
   root: HTMLElement;
 };
 
+let openModalCount = 0;
+
+function lockBodyForModal() {
+  openModalCount += 1;
+  document.body.classList.add("has-modal-open");
+}
+
+function unlockBodyForModal() {
+  openModalCount = Math.max(0, openModalCount - 1);
+  if (openModalCount === 0) {
+    document.body.classList.remove("has-modal-open");
+  }
+}
+
 export function renderModal(title: string, bodyHtml: string, saveLabel = "Lagre") {
   return `
     <div class="modalbackdrop" data-modal-backdrop>
@@ -23,13 +37,28 @@ export function renderModal(title: string, bodyHtml: string, saveLabel = "Lagre"
 }
 
 export function openModal(mount: HTMLElement, html: string, signal: AbortSignal): ModalHandle {
-  mount.innerHTML = html;
+  // Keep API stable: `mount` is intentionally unused after we moved to a body portal.
+  void mount;
 
-  const backdrop = qs<HTMLElement>(mount, "[data-modal-backdrop]");
-  const modal = qs<HTMLElement>(mount, ".modal");
-  const cancel = qs<HTMLButtonElement>(mount, "[data-modal-cancel]");
+  const portal = document.createElement("div");
+  portal.className = "modalportal";
+  portal.innerHTML = html;
+  document.body.appendChild(portal);
+  lockBodyForModal();
 
-  const close = () => (mount.innerHTML = "");
+  const backdrop = qs<HTMLElement>(portal, "[data-modal-backdrop]");
+  const modal = qs<HTMLElement>(portal, ".modal");
+  const cancel = qs<HTMLButtonElement>(portal, "[data-modal-cancel]");
+  let closed = false;
+
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    portal.remove();
+    unlockBodyForModal();
+  };
+
+  signal.addEventListener("abort", close, { once: true });
 
   cancel.addEventListener("click", close, { signal });
 

@@ -5,6 +5,7 @@ import type { NdtMethodRow, NdtReportRow } from "../../repo/ndtReportRepo";
 import { esc } from "../../utils/dom";
 import { fmtDate, truncateLabel } from "../../utils/format";
 import { renderIconButton, iconSvg } from "../../ui/iconButton";
+import { renderDatePickerInput } from "../../ui/datePicker";
 
 function formatWelderLabel(w: ProfileWelderRow) {
   const no = w.welder_no ? String(w.welder_no).padStart(3, "0") : "—";
@@ -143,7 +144,11 @@ export function ndtReportFormBody(
 
       <div class="field">
         <label>Rapportdato</label>
-        <input data-f="report_date" type="date" class="input" value="${new Date().toISOString().slice(0, 10)}" />
+        ${renderDatePickerInput({
+          value: new Date().toISOString().slice(0, 10),
+          inputAttrs: `data-f="report_date" class="input"`,
+          openLabel: "Velg rapportdato",
+        })}
       </div>
 
       <div class="field">

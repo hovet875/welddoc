@@ -9,6 +9,7 @@
 @import "./components/forms.css";
 @import "./components/modal.css";
 @import "./components/table.css";
+@import "./components/date-picker.css";
 
 @import "./printsetups/traceability.css";
 

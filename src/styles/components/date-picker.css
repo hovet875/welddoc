@@ -1,0 +1,27 @@
+.date-picker{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.date-picker__btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.date-picker__btn:hover{
+  background: rgba(255,255,255,0.10);
+}
+
+input[type="date"][data-date-input]::-webkit-calendar-picker-indicator{
+  opacity: 0;
+}

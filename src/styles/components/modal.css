@@ -7,20 +7,37 @@
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.55);
-  backdrop-filter: blur(8px);
+  /* Avoid Safari/iOS repaint glitches against filtered headers */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 
   display: flex;
   align-items: center;        /* alltid midt */
   justify-content: center;
 
   padding: 18px;
-  z-index: 100;
+  z-index: 1000;
 
   /* Viktig for mobil */
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+}
+
+.modalportal{
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.modalportal .modalbackdrop{
+  pointer-events: auto;
+}
+
+body.has-modal-open{
+  overflow: hidden;
 }
 
 .modal{

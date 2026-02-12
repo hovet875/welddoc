@@ -14,7 +14,7 @@ export function renderHeader(displayName = "Bruker", email = "") {
   return /*html*/`
     <header class="topbar">
       <div class="brand">
-        <img class="logo" src="/welddoc-logo.png" alt="WeldDoc" />
+        <img class="logo" src="/images/titech-logo-header.png" alt="WeldDoc" />
       </div>
 
       <nav class="nav">

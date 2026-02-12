@@ -8,7 +8,7 @@ export function renderLogin(app: HTMLElement) {
         <div class="loginwrap">
           <section class="logincard">
             <div class="loginbrand">
-              <img class="loginlogo-main" src="/welddoc-logo.png" alt="WeldDoc" />
+              <img class="loginlogo-main" src="/images/titech-logo-login.png" alt="WeldDoc" />
             </div>
             <div class="loginrow">
               <label>E-post</label>

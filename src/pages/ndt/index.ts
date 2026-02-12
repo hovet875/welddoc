@@ -17,6 +17,7 @@ import { renderPagerButtons } from "../../ui/pager";
 import { openPdf, openNdtReportModal, handleDeleteReport, printNdtReportPdf, uploadNdtBatchWithMeta, type NdtUploadEntry } from "./handlers";
 import { openConfirmDelete } from "../../ui/confirm";
 import { iconSvg } from "../../ui/iconButton";
+import { renderDatePickerInput, wireDatePickers } from "../../ui/datePicker";
 
 export async function renderNdtPage(app: HTMLElement) {
   // ---- SPA lifecycle: unngå dobbel mount ----
@@ -268,7 +269,11 @@ export async function renderNdtPage(app: HTMLElement) {
         </div>
         <div class="field">
           <label>Rapportdato (for alle)</label>
-          <input data-upload-date class="input" type="date" value="${today}" />
+          ${renderDatePickerInput({
+            value: today,
+            inputAttrs: `data-upload-date class="input"`,
+            openLabel: "Velg rapportdato",
+          })}
         </div>
         <div class="field">
           <label>NDT-metode (for alle)</label>
@@ -414,7 +419,11 @@ export async function renderNdtPage(app: HTMLElement) {
                         </div>
                         <div class="field">
                           <label>Rapportdato</label>
-                          <input class="input" type="date" data-file-date data-file-id="${esc(entry.id)}" value="${esc(entry.reportDate)}" />
+                          ${renderDatePickerInput({
+                            value: entry.reportDate,
+                            inputAttrs: `class="input" data-file-date data-file-id="${esc(entry.id)}"`,
+                            openLabel: "Velg rapportdato",
+                          })}
                         </div>
                         <div class="field">
                           <label>NDT-metode</label>
@@ -579,6 +588,7 @@ export async function renderNdtPage(app: HTMLElement) {
     uploadInput = qs<HTMLInputElement>(uploadBody, "[data-upload-files]");
     uploadList = qs<HTMLDivElement>(uploadBody, "[data-upload-list]");
     uploadDropzone = qs<HTMLDivElement>(uploadBody, "[data-upload-dropzone]");
+    wireDatePickers(uploadBody, signal);
 
     uploadProject.addEventListener(
       "change",

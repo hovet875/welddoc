@@ -16,6 +16,7 @@ import { printPdfUrl } from "../../utils/print";
 import { validatePdfFile } from "../../utils/format";
 import { openModal, modalSaveButton, renderModal } from "../../ui/modal";
 import { openPdfPreview } from "../../ui/pdfPreview";
+import { wireDatePickers } from "../../ui/datePicker";
 import { currentPdfMeta, ndtReportFormBody } from "./templates";
 
 function getField<T extends Element>(modalRoot: HTMLElement, key: string) {
@@ -91,6 +92,7 @@ export function openNdtReportModal(
     saveLabel
   );
   const h = openModal(mount, modalHtml, signal);
+  wireDatePickers(h.root, signal);
 
   const methodSelect = getField<HTMLSelectElement>(h.root, "method_id");
   const customerSelect = getField<HTMLSelectElement>(h.root, "customer");
