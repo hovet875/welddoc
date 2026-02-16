@@ -34,7 +34,7 @@ export type ProjectWeldRow = {
   volumetric_inspector: string | null;
   volumetric_report_id: string | null;
   volumetric_report_no: string | null;
-  status: string;
+  status: boolean;
   created_by: string | null;
   created_at: string;
 
@@ -239,7 +239,7 @@ export async function createProjectWeld(input: {
   volumetric_inspector?: string | null;
   volumetric_report_id?: string | null;
   volumetric_report_no?: string | null;
-  status?: string | null;
+  status?: boolean | null;
 }) {
   const payload = {
     id: crypto.randomUUID(),
@@ -260,7 +260,7 @@ export async function createProjectWeld(input: {
     volumetric_inspector: input.volumetric_inspector ?? null,
     volumetric_report_id: input.volumetric_report_id ?? null,
     volumetric_report_no: input.volumetric_report_no ?? null,
-    status: input.status ?? "kontroll",
+    status: input.status ?? false,
   };
 
   const { error } = await supabase.from("project_welds").insert(payload);

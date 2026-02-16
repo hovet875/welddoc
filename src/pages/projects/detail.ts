@@ -8,6 +8,8 @@ import { renderProjectWorkOrderSection } from "./sections/work-order";
 import { renderProjectTraceabilitySection } from "./sections/traceability";
 import { renderProjectNdtSection } from "./sections/ndt";
 import { renderProjectWeldLogSection } from "./sections/weld-log";
+import { renderProjectDocumentationPackageSection } from "./sections/documentation-pack";
+import { renderProjectPressureTestSection } from "./sections/pressure-test";
 
 import "../../styles/pages/projects.css";
 
@@ -20,6 +22,7 @@ const sections = [
   { key: "sveisesertifikat", label: "Sveisesertifikat" },
   { key: "ndt", label: "NDT" },
   { key: "trykktest", label: "Trykktest" },
+  { key: "dokumentasjonspakke", label: "Generer dokumentasjonspakke" },
 ];
 
 export async function renderProjectDetail(app: HTMLElement, projectId: string, section?: string | null) {
@@ -99,7 +102,8 @@ export async function renderProjectDetail(app: HTMLElement, projectId: string, s
               ${sections
                 .map((s) => {
                   const isActive = s.key === currentSection;
-                  const cls = `project-card${isActive ? " is-active" : ""}`;
+                  const isDocPack = s.key === "dokumentasjonspakke";
+                  const cls = `project-card${isActive ? " is-active" : ""}${isDocPack ? " is-docpack" : ""}`;
                   return `
                     <a class="${cls}" href="#/prosjekter/${project.id}/${s.key}">
                       <div class="project-card-title">${s.label}</div>
@@ -146,6 +150,16 @@ export async function renderProjectDetail(app: HTMLElement, projectId: string, s
 
   if (currentSection === "sveiselogg") {
     await renderProjectWeldLogSection({ app, mount: sectionMount, modalMount, project, isAdmin, signal });
+    return;
+  }
+
+  if (currentSection === "trykktest") {
+    await renderProjectPressureTestSection({ mount: sectionMount, modalMount, project, isAdmin, signal });
+    return;
+  }
+
+  if (currentSection === "dokumentasjonspakke") {
+    await renderProjectDocumentationPackageSection({ mount: sectionMount, project, signal });
     return;
   }
 

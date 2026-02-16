@@ -140,7 +140,6 @@ export async function renderNdtPage(app: HTMLElement) {
           <div class="panel">
             <div class="panel-head">
               <div class="panel-title">Rapporter</div>
-              <div class="panel-head-center" data-method-pills></div>
               <div class="panel-actions">
                 <div data-report-count class="panel-meta">—</div>
               </div>
@@ -166,7 +165,6 @@ export async function renderNdtPage(app: HTMLElement) {
   const reportBody = qs<HTMLDivElement>(app, "[data-report-body]");
   const reportCount = qs<HTMLDivElement>(app, "[data-report-count]");
   const pager = qs<HTMLDivElement>(app, "[data-pager]");
-  const methodPills = qs<HTMLDivElement>(app, "[data-method-pills]");
   const rtStats = qs<HTMLDivElement>(app, "[data-rt-stats]");
   const modalMount = qs<HTMLDivElement>(app, "[data-modal-mount]");
 
@@ -1102,19 +1100,9 @@ export async function renderNdtPage(app: HTMLElement) {
     reportCount.textContent = `${total} stk`;
     renderPager(totalPages);
 
-    const activeMethod = (filterMethod.value || "").trim();
     const methodLabels = state.methods.map((m) => (m.code || m.label || "").trim()).filter(Boolean);
     const pillMap = buildTypePillMap(methodLabels);
     const getPillClass = (label: string) => typePillClass(label, pillMap);
-    methodPills.innerHTML = state.methods
-      .map((m) => {
-        const label = (m.code || m.label || "?").trim();
-        const baseClass = getPillClass(label);
-        const active = activeMethod === m.id ? " is-active" : "";
-        const muted = activeMethod && activeMethod !== m.id ? " is-muted" : "";
-        return `<button type="button" class="${baseClass}${active}${muted}" data-method-id="${m.id}">${label}</button>`;
-      })
-      .join("");
 
     renderRtStats(rows);
 
@@ -1253,19 +1241,6 @@ export async function renderNdtPage(app: HTMLElement) {
   filterYear.addEventListener("change", onFilterChange, { signal });
   filterWelder.addEventListener("change", onFilterChange, { signal });
   filterText.addEventListener("input", onFilterChange, { signal });
-
-  methodPills.addEventListener(
-    "click",
-    (e) => {
-      const target = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-method-id]");
-      if (!target) return;
-      const next = target.getAttribute("data-method-id") || "";
-      const current = (filterMethod.value || "").trim();
-      filterMethod.value = current === next ? "" : next;
-      onFilterChange();
-    },
-    { signal }
-  );
 
   pager.addEventListener(
     "click",

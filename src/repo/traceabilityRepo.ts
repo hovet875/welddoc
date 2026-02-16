@@ -39,7 +39,7 @@ export type ProjectTraceabilityRow = {
   heat_number: string | null;
   created_at: string;
   type?: TraceabilityTypeRow | null;
-  material?: { id: string; name: string } | null;
+  material?: { id: string; name: string; material_code: string | null } | null;
   cert?: {
     id: string;
     certificate_type: "material" | "filler";
@@ -170,7 +170,8 @@ export async function fetchProjectTraceability(projectId: string) {
       ),
       material:material_id (
         id,
-        name
+        name,
+        material_code
       ),
       cert:material_certificate_id (
         id,

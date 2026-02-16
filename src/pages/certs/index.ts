@@ -10,6 +10,7 @@ import { fetchCertData, type WelderCertRow, type NdtCertRow } from "../../repo/c
 import { fetchStandards, fetchStandardFmGroups } from "../../repo/standardRepo";
 import { fetchMaterials } from "../../repo/materialRepo";
 import { fetchNdtMethods } from "../../repo/ndtReportRepo";
+import { fetchWeldJointTypes } from "../../repo/weldJointTypeRepo";
 import { createState, groupByWelder, groupByCompany } from "./state";
 
 import { renderWelderGroup, renderNdtGroup, materialLabel } from "./templates";
@@ -94,9 +95,7 @@ export async function renderCertsPage(app: HTMLElement) {
                 <div class="filter-field">
                   <label>Fugetype</label>
                   <select class="select" data-filter-welder-joint>
-                    <option value="">Alle</option>
-                    <option value="FW">FW (Kilsveis)</option>
-                    <option value="BW">BW (Buttsveis)</option>
+                    <option value="">Alle fugetyper</option>
                   </select>
                 </div>
                 <div class="filter-field">
@@ -337,6 +336,20 @@ export async function renderCertsPage(app: HTMLElement) {
     setSelectOptions(welderMaterialFilter, materialItems, "Alle materialer");
     filters.material = welderMaterialFilter.value;
 
+    const jointSet = new Set(state.jointTypes.map((j) => (j.label || "").trim()).filter(Boolean));
+    for (const row of state.welderCerts) {
+      (row.coverage_joint_type || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .forEach((value) => jointSet.add(value));
+    }
+    const jointItems = Array.from(jointSet)
+      .sort((a, b) => a.localeCompare(b))
+      .map((j) => ({ value: j, label: j }));
+    setSelectOptions(welderJointFilter, jointItems, "Alle fugetyper");
+    filters.joint = welderJointFilter.value;
+
     const companySet = new Set(state.ndtCerts.map((r) => (r.company || "").trim()).filter(Boolean));
     const companyItems = Array.from(companySet)
       .sort((a, b) => a.localeCompare(b))
@@ -490,12 +503,13 @@ export async function renderCertsPage(app: HTMLElement) {
     ndtBody.innerHTML = `<div class="muted">Laster…</div>`;
 
     try {
-      const [res, standards, fmGroups, materials, ndtMethods] = await Promise.all([
+      const [res, standards, fmGroups, materials, ndtMethods, jointTypes] = await Promise.all([
         fetchCertData(),
         fetchStandards(),
         fetchStandardFmGroups(),
         fetchMaterials(),
         fetchNdtMethods(),
+        fetchWeldJointTypes(),
       ]);
 
       if (seq !== state.loadSeq) return;
@@ -507,6 +521,7 @@ export async function renderCertsPage(app: HTMLElement) {
       state.fmGroups = fmGroups;
       state.materials = materials;
       state.ndtMethods = ndtMethods;
+      state.jointTypes = jointTypes;
 
       renderFilterOptions();
       renderLists();
@@ -534,6 +549,7 @@ export async function renderCertsPage(app: HTMLElement) {
         state.standards,
         state.fmGroups,
         state.materials,
+        state.jointTypes.map((j) => j.label),
         "new",
         null,
         load
@@ -623,6 +639,7 @@ export async function renderCertsPage(app: HTMLElement) {
             state.standards,
             state.fmGroups,
             state.materials,
+            state.jointTypes.map((j) => j.label),
             "edit",
             row,
             load

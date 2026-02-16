@@ -169,13 +169,14 @@ export function openWpqrModal(
   materials: WpsPageState["materials"],
   standards: StandardRow[],
   processes: WpsPageState["processes"],
+  jointTypes: string[],
   onDone: () => Promise<void>
 ) {
   const selectableStandards = standards.filter((s) => s.type === "Sveiseprosedyreprøving");
   const title = mode === "new" ? "Ny WPQR" : "Endre WPQR";
   const saveLabel = mode === "new" ? "Lagre" : "Oppdater";
 
-  const modalHtml = renderModal(title, wpqrFormBody(selectableStandards, processes, materials), saveLabel);
+  const modalHtml = renderModal(title, wpqrFormBody(selectableStandards, processes, materials, jointTypes), saveLabel);
   const h = openModal(mount, modalHtml, signal);
 
   // prefill
@@ -277,7 +278,12 @@ export function openWpsModal(
 
   const modalHtml = renderModal(
     title,
-    wpsFormBody(selectableStandards, state.processes, state.materials),
+    wpsFormBody(
+      selectableStandards,
+      state.processes,
+      state.materials,
+      state.jointTypes.map((j) => j.label)
+    ),
     saveLabel
   );
   const h = openModal(mount, modalHtml, signal);

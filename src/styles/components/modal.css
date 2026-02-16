@@ -245,3 +245,155 @@ body.has-modal-open{
   margin: 0;
   padding: 0;
 }
+
+/* ---------- Weld info modal ---------- */
+
+.modal .weld-info-modal{
+  display: grid;
+  gap: 12px;
+}
+
+.modal .weld-info-hero{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+}
+
+.modal .weld-info-hero-main{
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.modal .weld-info-hero-title{
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.modal .weld-info-hero-sub{
+  color: rgba(255,255,255,0.72);
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.modal .weld-info-pill{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.16);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.modal .weld-info-pill.is-ok{
+  color: #9ff0c9;
+  background: rgba(44,170,120,0.2);
+}
+
+.modal .weld-info-pill.is-pending{
+  color: #b7d8ff;
+  background: rgba(56,151,255,0.2);
+}
+
+.modal .weld-info-section{
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.02);
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.modal .weld-info-section h3{
+  margin: 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: rgba(255,255,255,0.72);
+}
+
+.modal .weld-info-list{
+  display: grid;
+  gap: 6px;
+}
+
+.modal .weld-info-row{
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  background: rgba(9, 18, 31, 0.55);
+  padding: 8px 10px;
+}
+
+.modal .weld-info-key{
+  color: rgba(255,255,255,0.65);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.modal .weld-info-val{
+  color: rgba(255,255,255,0.93);
+  line-height: 1.35;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.modal .weld-info-empty{
+  color: rgba(255,255,255,0.5);
+}
+
+.modal .weld-info-tech{
+  border: 1px dashed rgba(255,255,255,0.16);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.01);
+  padding: 10px;
+}
+
+.modal .weld-info-tech > summary{
+  cursor: pointer;
+  font-weight: 600;
+  color: rgba(255,255,255,0.82);
+  outline: none;
+}
+
+.modal .weld-info-tech > summary::-webkit-details-marker{
+  color: rgba(255,255,255,0.72);
+}
+
+.modal .weld-info-tech[open] > summary{
+  margin-bottom: 10px;
+}
+
+.modal .weld-info-list-tech .weld-info-key{
+  font-size: 11px;
+}
+
+@media (max-width: 720px){
+  .modal .weld-info-hero{
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .modal .weld-info-pill{
+    justify-self: flex-start;
+    width: fit-content;
+  }
+
+  .modal .weld-info-row{
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

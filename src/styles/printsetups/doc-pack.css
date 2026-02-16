@@ -1,0 +1,319 @@
+:root{
+  --docpack-ink:#1a1f28;
+  --docpack-muted:#5f6978;
+  --docpack-line:#c6ced9;
+  --docpack-line-strong:#9da9ba;
+  --docpack-accent:#17395f;
+  --docpack-accent-soft:#edf3fb;
+  --docpack-alt:#f4f7fb;
+}
+
+.docpack-print-sheet{
+  display:none;
+  background:#fff;
+  background-image:none;
+}
+
+body.print-docpack .docpack-print-sheet{
+  display:block;
+}
+
+body.print-docpack > *:not(.docpack-print-sheet){
+  display:none !important;
+}
+
+.docpack-print-sheet *{
+  box-sizing:border-box;
+}
+
+.docpack-print-sheet .docpack-page{
+  width: 100%;
+  max-width: 297mm;
+  min-height: 210mm;
+  margin: 0 auto;
+  padding: 9mm 10mm;
+  background:#fff;
+  color: var(--docpack-ink);
+  font-family: Calibri, "Segoe UI", Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 6mm;
+  page-break-after: always;
+}
+
+.docpack-print-sheet .docpack-page:last-child{
+  page-break-after: auto;
+}
+
+.docpack-print-sheet .docpack-page-content{
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.docpack-print-sheet .docpack-page.is-cover .docpack-page-content{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.docpack-print-sheet .docpack-page-footer{
+  flex: 0 0 auto;
+  margin-top: auto;
+  border-top: 1px solid var(--docpack-line);
+  padding-top: 2.5mm;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--docpack-muted);
+  font-size: 11px;
+  letter-spacing: 0.25px;
+}
+
+.docpack-print-sheet .docpack-cover{
+  min-height: 100%;
+ /* border: 1.5px solid var(--docpack-line-strong);
+  border-radius: 7px;
+  background: linear-gradient(180deg, #f7fbff 0%, #eef5ff 58%, #e8f1fc 100%);*/
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+  gap: 4mm;
+  padding: 12mm;
+  width: 100%;
+}
+
+.docpack-print-sheet .docpack-cover-logo{
+  width: 150px;
+  height: 150px;
+ /* border: 1.5px solid var(--docpack-line-strong);
+  border-radius: 7px;*/
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+}
+
+.docpack-print-sheet .docpack-cover-logo img{
+  width: auto;
+  height: 100%;
+  display: block;
+}
+
+.docpack-print-sheet .docpack-cover-kicker{
+  font-size: 24px;
+  color: var(--docpack-muted);
+  letter-spacing: 1.7px;
+  text-transform: uppercase;
+}
+
+.docpack-print-sheet .docpack-cover-title{
+  margin: 0;
+  font-size: 34px;
+  letter-spacing: 0.55px;
+  color: #11263f;
+}
+
+.docpack-print-sheet .docpack-cover-project{
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.docpack-print-sheet .docpack-cover-meta{
+  font-size: 12.5px;
+  color: #2d425b;
+}
+
+.docpack-print-sheet .docpack-overview{
+  border: 1px solid var(--docpack-line);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.docpack-print-sheet .docpack-overview-head{
+  background: linear-gradient(180deg, #1b446f, #143455);
+  color: #fff;
+  padding: 5mm 6mm;
+  display: flex;
+   align-items: center;
+  justify-content: space-between;
+  gap: 8mm;
+}
+
+.docpack-print-sheet .docpack-headline{
+  display: inline-flex;
+  align-items: center;
+  gap: 2.6mm;
+  min-width: 0;
+}
+
+.docpack-print-sheet .docpack-headline-logo{
+  width: 64px;
+  height: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.docpack-print-sheet .docpack-headline-logo img{
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.docpack-print-sheet .docpack-overview-head h2{
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 0.3px;
+}
+
+.docpack-print-sheet .docpack-overview-meta{
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.84);
+}
+
+.docpack-print-sheet .docpack-overview-grid{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 8px;
+  padding: 4mm 6mm;
+  border-bottom: 1px solid var(--docpack-line);
+  background: var(--docpack-accent-soft);
+}
+
+.docpack-print-sheet .docpack-overview-grid > div{
+  display: grid;
+  gap: 2px;
+}
+
+.docpack-print-sheet .docpack-overview-grid strong{
+  font-size: 10.5px;
+  color: var(--docpack-muted);
+  letter-spacing: 0.45px;
+  text-transform: uppercase;
+}
+
+.docpack-print-sheet .docpack-overview-grid span{
+  font-size: 12px;
+  color: var(--docpack-ink);
+}
+
+.docpack-print-sheet .docpack-overview-table-wrap{
+  padding: 4mm 6mm 6mm;
+}
+
+.docpack-print-sheet .docpack-section{
+  border: 1px solid var(--docpack-line);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.docpack-print-sheet .docpack-section-head{
+  background: linear-gradient(180deg, rgba(23, 57, 95, 0.96), rgba(20, 49, 82, 0.92));
+  color: #fff;
+  padding: 4mm 5mm;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8mm;
+}
+
+.docpack-print-sheet .docpack-section-title{
+  margin: 0;
+  font-size: 17px;
+  letter-spacing: 0.2px;
+}
+
+.docpack-print-sheet .docpack-section-subtitle{
+  font-size: 10.8px;
+  letter-spacing: 0.55px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.85);
+}
+
+.docpack-print-sheet .docpack-table-wrap{
+  overflow: hidden;
+}
+
+.docpack-print-sheet .docpack-table{
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.docpack-print-sheet .docpack-table th,
+.docpack-print-sheet .docpack-table td{
+  border-top: 1px solid var(--docpack-line);
+  border-right: 1px solid var(--docpack-line);
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: middle;
+  font-size: 10.5px;
+  color: var(--docpack-ink);
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.docpack-print-sheet .docpack-table th:last-child,
+.docpack-print-sheet .docpack-table td:last-child{
+  border-right: 0;
+}
+
+.docpack-print-sheet .docpack-table th{
+  background: var(--docpack-accent);
+  color: #fff;
+  border-top: 0;
+  font-size: 9.8px;
+  font-weight: 800;
+  letter-spacing: 0.62px;
+  text-transform: uppercase;
+}
+
+.docpack-print-sheet .docpack-table tbody tr:nth-child(even) td{
+  background: var(--docpack-alt);
+}
+
+.docpack-print-sheet .docpack-table td.is-empty{
+  text-align: center;
+  color: var(--docpack-muted);
+  padding-top: 9mm;
+  padding-bottom: 9mm;
+}
+
+.docpack-print-sheet .docpack-table.is-compact th,
+.docpack-print-sheet .docpack-table.is-compact td{
+  font-size: 9.2px;
+  padding: 3px 5px;
+}
+
+.docpack-print-sheet .docpack-page.is-cover .docpack-page-footer{
+  border-top-color: rgba(157, 169, 186, 0.7);
+}
+
+@media print{
+  body.print-docpack{
+    margin: 0;
+    background: #fff;
+    background-image: none;
+    color: #111;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    text-rendering: geometricPrecision;
+  }
+
+  body.print-docpack::before,
+  body.print-docpack::after{
+    content: none !important;
+    display: none !important;
+    background: none !important;
+  }
+
+  body.print-docpack .docpack-print-sheet{
+    display: block;
+  }
+}

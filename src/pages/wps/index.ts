@@ -8,6 +8,7 @@ import type { WPQRRow, WPSRow } from "../../repo/wpsRepo";
 import { fetchMaterials } from "../../repo/materialRepo";
 import { fetchStandards } from "../../repo/standardRepo";
 import { fetchWeldingProcesses } from "../../repo/weldingProcessRepo";
+import { fetchWeldJointTypes } from "../../repo/weldJointTypeRepo";
 import { createState } from "./state";
 import { renderMethodPill, renderWpqrTable, renderWpsTable } from "./templates";
 import { buildTypePillMap, typePillClass } from "../../ui/typePill";
@@ -172,6 +173,10 @@ export async function renderWpsPage(app: HTMLElement) {
 
   function buildFugeList() {
     const set = new Set<string>();
+    state.jointTypes.forEach((j) => {
+      const label = (j.label || "").trim();
+      if (label) set.add(label);
+    });
     [...state.wpsAll, ...state.wpqrAll].forEach((r: any) => {
       const f = (r.fuge || "").trim();
       if (f) set.add(f);
@@ -309,11 +314,12 @@ export async function renderWpsPage(app: HTMLElement) {
     wpsBody.innerHTML = `<div class="muted">Laster…</div>`;
 
     try {
-      const [res, materials, standards, processes] = await Promise.all([
+      const [res, materials, standards, processes, jointTypes] = await Promise.all([
         fetchWpsData(),
         fetchMaterials(),
         fetchStandards(),
         fetchWeldingProcesses(),
+        fetchWeldJointTypes(),
       ]);
 
       // race-safe: dropp hvis en nyere load har startet
@@ -324,6 +330,7 @@ export async function renderWpsPage(app: HTMLElement) {
       state.materials = materials;
       state.standards = standards;
       state.processes = processes;
+      state.jointTypes = jointTypes;
 
       const methodList = buildMethodList();
       filterProcess.innerHTML = [
@@ -404,6 +411,7 @@ export async function renderWpsPage(app: HTMLElement) {
         state.materials,
         state.standards,
         state.processes,
+        state.jointTypes.map((j) => j.label),
         load
       );
     },
@@ -456,6 +464,7 @@ export async function renderWpsPage(app: HTMLElement) {
             state.materials,
             state.standards,
             state.processes,
+            state.jointTypes.map((j) => j.label),
             load
           );
         return;

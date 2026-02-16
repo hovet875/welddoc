@@ -3,7 +3,6 @@ import type { StandardRow } from "../../repo/standardRepo";
 import type { MaterialRow } from "../../repo/materialRepo";
 import { esc, renderOptions } from "../../utils/dom";
 import { fmtDate } from "../../utils/format";
-import { fugeER } from "../../data/customOptions";
 import type { WeldingProcessRow } from "../../repo/weldingProcessRepo";
 import { renderIconButton } from "../../ui/iconButton";
 
@@ -166,7 +165,8 @@ export function renderWpsTable(
 export function wpqrFormBody(
   standards: StandardRow[],
   processes: WeldingProcessRow[],
-  materials: MaterialRow[]
+  materials: MaterialRow[],
+  jointTypes: string[]
 ) {
   const thicknessOptions = [`<option value="">Velg…</option>`]
     .concat(Array.from({ length: 50 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`))
@@ -205,7 +205,7 @@ export function wpqrFormBody(
       </div>
       <div class="field">
         <label>Fuge</label>
-        <select data-f="fuge" class="select">${renderOptions(fugeER, "Velg sammenføyning…")}</select>
+        <select data-f="fuge" class="select">${renderOptions(jointTypes, "Velg sammenføyning…")}</select>
       </div>
       <div class="field">
         <label>Tykkelse (mm)</label>
@@ -231,7 +231,8 @@ export function wpqrFormBody(
 export function wpsFormBody(
   standards: StandardRow[],
   processes: WeldingProcessRow[],
-  materials: MaterialRow[]
+  materials: MaterialRow[],
+  jointTypes: string[]
 ) {
   const thicknessOptions = [`<option value="">Velg…</option>`]
     .concat(Array.from({ length: 50 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`))
@@ -270,7 +271,7 @@ export function wpsFormBody(
       </div>
       <div class="field">
         <label>Fuge</label>
-        <select data-f="fuge" class="select">${renderOptions(fugeER, "Velg sammenføyning…")}</select>
+        <select data-f="fuge" class="select">${renderOptions(jointTypes, "Velg sammenføyning…")}</select>
       </div>
       <div class="field">
         <label>Koble til WPQR (valgfritt)</label>

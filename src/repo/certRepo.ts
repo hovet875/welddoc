@@ -25,7 +25,10 @@ export type WelderCertRow = {
   base_material?: { id: string; name: string; material_code: string; material_group: string } | null;
 };
 
-export type WelderCertLookupRow = Pick<WelderCertRow, "id" | "profile_id" | "certificate_no" | "standard" | "expires_at">;
+export type WelderCertLookupRow = Pick<
+  WelderCertRow,
+  "id" | "profile_id" | "certificate_no" | "standard" | "expires_at" | "coverage_joint_type"
+>;
 
 export type NdtCertRow = {
   id: string;
@@ -60,7 +63,7 @@ export async function fetchWelders(): Promise<ProfileWelderRow[]> {
 export async function fetchWelderCerts(): Promise<WelderCertLookupRow[]> {
   const { data, error } = await supabase
     .from("welder_certificates")
-    .select("id, profile_id, certificate_no, standard, expires_at")
+    .select("id, profile_id, certificate_no, standard, expires_at, coverage_joint_type")
     .order("certificate_no", { ascending: true })
     .order("expires_at", { ascending: true, nullsFirst: false });
 

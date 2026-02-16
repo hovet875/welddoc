@@ -42,6 +42,13 @@ import {
   type WeldingProcessRow,
 } from "../../repo/weldingProcessRepo";
 import {
+  fetchWeldJointTypes,
+  createWeldJointType,
+  updateWeldJointType,
+  deleteWeldJointType,
+  type WeldJointTypeRow,
+} from "../../repo/weldJointTypeRepo";
+import {
   fetchTraceabilityTypes,
   upsertTraceabilityType,
   deleteTraceabilityType,
@@ -146,7 +153,7 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
         <section class="section-header">
           <div>
             <h1 class="section-title">App-parametere – Teknisk / Sveising</h1>
-            <p class="section-subtitle">Materialer, standarder, NDT-metoder og sveiseprosesser.</p>
+            <p class="section-subtitle">Materialer, standarder, NDT-metoder, sveiseprosesser og sveisefuger.</p>
           </div>
           <div class="section-actions">
             <a class="btn small" href="#/company-settings">← App-parametere</a>
@@ -242,6 +249,24 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
                   <button data-add-process class="btn primary small">Legg til</button>
                 </div>
                 <div data-process-list class="settings-list"><div class="muted">Laster…</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel panel-collapsible is-collapsed">
+            <div class="panel-head">
+              <div class="panel-title">Sveisefuger</div>
+              <div class="panel-meta">Admin</div>
+              <button class="panel-toggle" type="button" data-panel-toggle aria-expanded="false">Vis</button>
+            </div>
+            <div class="panel-body">
+              <div class="settings-form">
+                <div class="settings-row inline">
+                  <input id="jointTypeInput" class="input" type="text" placeholder="Ny fugetype… (f.eks BW eller FW)" />
+                  <button data-add-joint-type class="btn primary small">Legg til</button>
+                </div>
+                <div class="muted" style="font-size:12px;">Brukes i dropdown for fugetype i WPS/WPQR.</div>
+                <div data-joint-type-list class="settings-list"><div class="muted">Laster…</div></div>
               </div>
             </div>
           </div>
@@ -359,6 +384,9 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
   const processList = qs<HTMLDivElement>(app, "[data-process-list]");
   const addProcessBtn = app.querySelector<HTMLButtonElement>("[data-add-process]");
   const processInput = app.querySelector<HTMLInputElement>("#processInput");
+  const jointTypeList = qs<HTMLDivElement>(app, "[data-joint-type-list]");
+  const addJointTypeBtn = app.querySelector<HTMLButtonElement>("[data-add-joint-type]");
+  const jointTypeInput = app.querySelector<HTMLInputElement>("#jointTypeInput");
 
   const traceTypeList = qs<HTMLDivElement>(app, "[data-trace-type-list]");
   const traceTypeCode = app.querySelector<HTMLInputElement>("#traceTypeCode");
@@ -517,6 +545,28 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
       .join("");
   };
 
+  const renderJointTypes = (rows: WeldJointTypeRow[]) => {
+    if (rows.length === 0) {
+      jointTypeList.innerHTML = `<div class="muted">Ingen sveisefuger.</div>`;
+      return;
+    }
+
+    jointTypeList.innerHTML = rows
+      .map((r) => {
+        return `
+          <div class="settings-item" data-joint-type-id="${esc(r.id)}">
+            <div class="settings-item__title">${esc(r.label)}</div>
+            <div class="settings-item__meta"></div>
+            <div class="settings-item__actions">
+              ${renderIconButton({ dataKey: "joint-type-edit", id: r.id, title: "Endre", icon: icon("pencil"), extraClass: "small" })}
+              ${renderIconButton({ dataKey: "joint-type-delete", id: r.id, title: "Slett", icon: icon("trash"), danger: true, extraClass: "small" })}
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  };
+
   const renderTraceTypes = (rows: TraceabilityTypeRow[]) => {
     if (rows.length === 0) {
       traceTypeList.innerHTML = `<div class="muted">Ingen typer.</div>`;
@@ -622,6 +672,17 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
     }
   }
 
+  async function loadJointTypes() {
+    jointTypeList.innerHTML = `<div class="muted">Lasterâ€¦</div>`;
+    try {
+      const rows = await fetchWeldJointTypes({ includeInactive: true });
+      renderJointTypes(rows);
+    } catch (err: any) {
+      console.error(err);
+      jointTypeList.innerHTML = `<div class="err">Feil: ${esc(err?.message ?? err)}</div>`;
+    }
+  }
+
   async function loadTraceability() {
     traceTypeList.innerHTML = `<div class="muted">Laster…</div>`;
     traceDnList.innerHTML = `<div class="muted">Laster…</div>`;
@@ -724,6 +785,20 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
       if (processInput) processInput.value = "";
       await loadProcesses();
       toast("Sveiseprosess lagt til.");
+    } catch (err: any) {
+      console.error(err);
+      toast(String(err?.message ?? err));
+    }
+  });
+
+  addJointTypeBtn?.addEventListener("click", async () => {
+    const label = (jointTypeInput?.value ?? "").trim().toUpperCase();
+    if (!label) return toast("Skriv inn fugetype.");
+    try {
+      await createWeldJointType(label);
+      if (jointTypeInput) jointTypeInput.value = "";
+      await loadJointTypes();
+      toast("Sveisefuge lagt til.");
     } catch (err: any) {
       console.error(err);
       toast(String(err?.message ?? err));
@@ -1382,9 +1457,80 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
     }
   });
 
+  jointTypeList.addEventListener("click", async (e) => {
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    const item = target.closest<HTMLElement>("[data-joint-type-id]");
+    if (!item) return;
+    const id = item.getAttribute("data-joint-type-id") || "";
+    if (!id) return;
+
+    if (target.closest("[data-joint-type-delete]")) {
+      const label = item.querySelector(".settings-item__title")?.textContent?.trim() || "fugetypen";
+      const [wpsRef, wpqrRef] = await Promise.all([
+        supabase.from("wps").select("id", { count: "exact", head: true }).eq("fuge", label),
+        supabase.from("wpqr").select("id", { count: "exact", head: true }).eq("fuge", label),
+      ]);
+      const wpsCount = wpsRef.count ?? 0;
+      const wpqrCount = wpqrRef.count ?? 0;
+      if (wpsCount > 0 || wpqrCount > 0) {
+        toast("Kan ikke slette: sveisefugen brukes i WPS/WPQR.");
+        return;
+      }
+
+      await openConfirmDelete(modalMount, modalSignal.signal, {
+        title: "Slett sveisefuge",
+        messageHtml: `Er du sikker på at du vil slette <b>${esc(label)}</b>?`,
+        onConfirm: async () => {
+          await deleteWeldJointType(id);
+        },
+        onDone: async () => {
+          await loadJointTypes();
+          toast("Sveisefuge slettet.");
+        },
+      });
+      return;
+    }
+
+    if (target.closest("[data-joint-type-edit]")) {
+      const current = item.querySelector(".settings-item__title")?.textContent?.trim() ?? "";
+      const modalHtml = renderModal(
+        "Endre sveisefuge",
+        `
+          <div class="modalgrid">
+            <div class="field" style="grid-column:1 / -1;">
+              <label>Fugetype</label>
+              <input data-f="label" class="input" type="text" value="${esc(current)}" />
+            </div>
+          </div>
+        `,
+        "Lagre"
+      );
+
+      const h = openModal(modalMount, modalHtml, modalSignal.signal);
+      const save = modalSaveButton(h.root);
+
+      save.addEventListener("click", async () => {
+        const label = (h.root.querySelector<HTMLInputElement>("[data-f=label]")?.value ?? "").trim().toUpperCase();
+        if (!label) return toast("Skriv inn fugetype.");
+        try {
+          await updateWeldJointType(id, label);
+          h.close();
+          await loadJointTypes();
+          toast("Oppdatert.");
+        } catch (err: any) {
+          console.error(err);
+          toast(String(err?.message ?? err));
+        }
+      });
+    }
+  });
+
   await loadMaterials();
   await loadStandards();
   await loadNdtMethods();
   await loadProcesses();
+  await loadJointTypes();
   await loadTraceability();
 }

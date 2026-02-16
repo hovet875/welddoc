@@ -212,7 +212,8 @@ export function renderNdtGroup(company: string, rows: NdtCertRow[], showActions:
 export function welderCertFormBody(
   welders: ProfileWelderRow[],
   standards: StandardRow[],
-  materials: MaterialRow[]
+  materials: MaterialRow[],
+  jointTypes: string[]
 ) {
   const thicknessOptions = [`<option value="">Velg…</option>`]
     .concat(Array.from({ length: 50 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`))
@@ -291,14 +292,16 @@ export function welderCertFormBody(
       <div class="field">
         <label>Fugetype</label>
         <div class="checkboxgroup cert-fugegroup">
-          <label class="checkboxpill">
-            <input data-f="coverage_joint_type_fw" type="checkbox" />
-            <span>FW (Kilsveis)</span>
-          </label>
-          <label class="checkboxpill">
-            <input data-f="coverage_joint_type_bw" type="checkbox" />
-            <span>BW (Buttsveis)</span>
-          </label>
+          ${jointTypes
+            .map(
+              (jointType) => `
+                <label class="checkboxpill">
+                  <input data-f="coverage_joint_type" type="checkbox" value="${esc(jointType)}" />
+                  <span>${esc(jointType)}</span>
+                </label>
+              `
+            )
+            .join("")}
         </div>
       </div>
 

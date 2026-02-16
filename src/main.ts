@@ -1,7 +1,10 @@
 import "./styles/index.css";
+import { formatErrorMessage } from "./utils/error";
 
 function fatal(err: unknown) {
-  const msg = err instanceof Error ? `${err.message}\n\n${err.stack ?? ""}` : String(err);
+  const base = formatErrorMessage(err, "Ukjent feil");
+  const stack = err instanceof Error ? `\n\n${err.stack ?? ""}` : "";
+  const msg = `${base}${stack}`;
   document.body.innerHTML = `<pre style="padding:16px;white-space:pre-wrap">FATAL:\n${msg}</pre>`;
 }
 
@@ -22,13 +25,12 @@ try {
   let app: HTMLDivElement = appEl;
 
   window.addEventListener("error", (e) => {
-    app.innerHTML = `<pre style="padding:16px;white-space:pre-wrap">ERROR:\n${String(
-      (e as any).error || (e as any).message
-    )}</pre>`;
+    const reason = (e as any).error ?? (e as any).message;
+    app.innerHTML = `<pre style="padding:16px;white-space:pre-wrap">ERROR:\n${formatErrorMessage(reason)}</pre>`;
   });
 
   window.addEventListener("unhandledrejection", (e: any) => {
-    app.innerHTML = `<pre style="padding:16px;white-space:pre-wrap">PROMISE ERROR:\n${String(
+    app.innerHTML = `<pre style="padding:16px;white-space:pre-wrap">PROMISE ERROR:\n${formatErrorMessage(
       e.reason
     )}</pre>`;
   });
@@ -58,7 +60,7 @@ try {
       try {
         await signOut();
       } catch (err) {
-        console.warn("Sign out failed", err);
+        console.warn("Utlogging feilet", err);
       } finally {
         location.reload();
       }

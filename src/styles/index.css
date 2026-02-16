@@ -13,6 +13,8 @@
 @import "./components/pager.css";
 
 @import "./printsetups/traceability.css";
+@import "./printsetups/weld-log.css";
+@import "./printsetups/doc-pack.css";
 
 @import "./pages/home.css";
 @import "./pages/login.css";

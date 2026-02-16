@@ -3,6 +3,7 @@ import type { ProfileWelderRow, WelderCertRow, NdtCertRow } from "../../repo/cer
 import type { StandardRow, StandardFmGroupRow } from "../../repo/standardRepo";
 import type { MaterialRow } from "../../repo/materialRepo";
 import type { NdtMethodRow } from "../../repo/ndtReportRepo";
+import type { WeldJointTypeRow } from "../../repo/weldJointTypeRepo";
 
 export type CertsPageState = {
   welders: ProfileWelderRow[];
@@ -12,6 +13,7 @@ export type CertsPageState = {
   fmGroups: StandardFmGroupRow[];
   materials: MaterialRow[];
   ndtMethods: NdtMethodRow[];
+  jointTypes: WeldJointTypeRow[];
   loadSeq: number;
   loading: boolean;
   isAdmin: boolean;
@@ -26,6 +28,7 @@ export function createState(): CertsPageState {
     fmGroups: [],
     materials: [],
     ndtMethods: [],
+    jointTypes: [],
     loadSeq: 0,
     loading: false,
     isAdmin: false,

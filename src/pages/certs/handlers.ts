@@ -61,6 +61,7 @@ export function openWelderCertModal(
   standards: StandardRow[],
   fmGroups: StandardFmGroupRow[],
   materials: MaterialRow[],
+  jointTypes: string[],
   mode: "new" | "edit",
   row: WelderCertRow | null,
   onDone: () => Promise<void>
@@ -68,8 +69,19 @@ export function openWelderCertModal(
   const selectableStandards = standards.filter((s) => s.type === "Sveisesertifisering");
   const title = mode === "new" ? "Legg til sveisesertifikat" : "Endre sveisesertifikat";
   const saveLabel = mode === "new" ? "Lagre" : "Oppdater";
+  const jointTypeSet = new Set(jointTypes.map((j) => (j || "").trim()).filter(Boolean));
+  (row?.coverage_joint_type || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .forEach((value) => jointTypeSet.add(value));
+  const jointTypeOptions = Array.from(jointTypeSet);
 
-  const modalHtml = renderModal(title, welderCertFormBody(welders, selectableStandards, materials), saveLabel);
+  const modalHtml = renderModal(
+    title,
+    welderCertFormBody(welders, selectableStandards, materials, jointTypeOptions),
+    saveLabel
+  );
   const h = openModal(mount, modalHtml, signal);
 
   // prefill
@@ -90,14 +102,16 @@ export function openWelderCertModal(
       materialSelect.value = row.base_material_id;
     }
     
-    // Parse coverage_joint_type string into checkboxes
-    const jointTypes = (row.coverage_joint_type ?? "").split(",").map(s => s.trim());
-    if (jointTypes.includes("FW")) {
-      getField<HTMLInputElement>(h.root, "coverage_joint_type_fw").checked = true;
-    }
-    if (jointTypes.includes("BW")) {
-      getField<HTMLInputElement>(h.root, "coverage_joint_type_bw").checked = true;
-    }
+    const selectedJointTypes = new Set(
+      (row.coverage_joint_type ?? "")
+        .split(",")
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean)
+    );
+    const jointTypeEls = h.root.querySelectorAll<HTMLInputElement>("[data-f=coverage_joint_type]");
+    jointTypeEls.forEach((el) => {
+      el.checked = selectedJointTypes.has((el.value || "").trim().toUpperCase());
+    });
     
     const thicknessVal = row.coverage_thickness ?? "";
     const [fromRaw, toRaw] = thicknessVal.includes("-") ? thicknessVal.split("-") : [thicknessVal, thicknessVal];
@@ -172,15 +186,12 @@ export function openWelderCertModal(
         const certificate_no = (getField<HTMLInputElement>(h.root, "certificate_no").value || "").trim();
         const standard = (getField<HTMLInputElement>(h.root, "standard").value || "").trim();
         
-        // Build coverage_joint_type from checkboxes
-        const jointTypes: string[] = [];
-        if (getField<HTMLInputElement>(h.root, "coverage_joint_type_fw").checked) {
-          jointTypes.push("FW");
-        }
-        if (getField<HTMLInputElement>(h.root, "coverage_joint_type_bw").checked) {
-          jointTypes.push("BW");
-        }
-        const coverage_joint_type = jointTypes.length > 0 ? jointTypes.join(",") : null;
+        const selectedJointTypes = Array.from(
+          h.root.querySelectorAll<HTMLInputElement>("[data-f=coverage_joint_type]:checked")
+        )
+          .map((el) => (el.value || "").trim())
+          .filter(Boolean);
+        const coverage_joint_type = selectedJointTypes.length > 0 ? selectedJointTypes.join(",") : null;
         
         const base_material_id = (getField<HTMLSelectElement>(h.root, "base_material_id").value || "").trim() || null;
         const thicknessFrom = (h.root.querySelector<HTMLSelectElement>("[data-f=coverage_thickness_from]")?.value || "").trim();
