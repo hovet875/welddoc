@@ -2,6 +2,8 @@ import type { WelderCertRow, NdtCertRow, ProfileWelderRow } from "../../repo/cer
 import type { StandardRow, StandardFmGroupRow } from "../../repo/standardRepo";
 import type { MaterialRow } from "../../repo/materialRepo";
 import type { NdtMethodRow } from "../../repo/ndtReportRepo";
+import type { NdtSupplierRow, NdtInspectorRow } from "../../repo/ndtSupplierRepo";
+import type { WeldingProcessRow } from "../../repo/weldingProcessRepo";
 
 import {
   createCertPdfSignedUrl,
@@ -13,12 +15,13 @@ import {
   deleteNdtCert,
 } from "../../repo/certRepo";
 
-import { qs } from "../../utils/dom";
+import { esc, qs, renderOptions } from "../../utils/dom";
 import { validatePdfFile } from "../../utils/format";
 import { openModal, modalSaveButton, renderModal } from "../../ui/modal";
 import { openPdfPreview } from "../../ui/pdfPreview";
 import { currentPdfMeta, welderCertFormBody, ndtCertFormBody, materialLabel } from "./templates";
 import { printPdfUrl } from "../../utils/print";
+import { renderDatePickerInput, wireDatePickers } from "../../ui/datePicker";
 
 function getField<T extends Element>(modalRoot: HTMLElement, key: string) {
   return qs<T>(modalRoot, `[data-f="${key}"]`);
@@ -31,6 +34,219 @@ function disableSave(btn: HTMLButtonElement, text: string) {
 function enableSave(btn: HTMLButtonElement, text: string) {
   btn.disabled = false;
   btn.textContent = text;
+}
+
+const THICKNESS_INFINITE = "\u221E";
+
+function isInfiniteThicknessPart(value: string | null | undefined) {
+  const v = (value || "").trim().toLowerCase();
+  return v === THICKNESS_INFINITE || v === "inf" || v === "infinite" || v === "ubegrenset";
+}
+
+function normalizeThicknessPart(raw: string) {
+  const trimmed = (raw || "").trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.replace(",", ".");
+  if (!/^\d+(?:\.\d)?$/.test(normalized)) return null;
+  return normalized.replace(".", ",");
+}
+
+function thicknessPartToNumber(part: string) {
+  return Number(part.replace(",", "."));
+}
+
+function normalizeThicknessNote(raw: string) {
+  let value = (raw || "").trim();
+  if (!value) return null;
+  if (value.startsWith("(") && value.endsWith(")") && value.length > 2) {
+    value = value.slice(1, -1).trim();
+  }
+  value = value.replace(/\s+/g, " ").trim();
+  return value || null;
+}
+
+function splitCoverageThickness(raw: string | null | undefined) {
+  const source = (raw || "").trim();
+  if (!source) return { base: "", note: "" };
+
+  let base = source;
+  let note = "";
+  if (source.endsWith(")")) {
+    const start = source.lastIndexOf("(");
+    if (start > 0) {
+      const maybeBase = source.slice(0, start).trim();
+      const maybeNote = source.slice(start + 1, -1).trim();
+      if (maybeBase && maybeNote) {
+        base = maybeBase;
+        note = maybeNote;
+      }
+    }
+  }
+
+  base = base.replace(/\s*mm$/i, "").trim();
+  return { base, note };
+}
+
+function splitThicknessRange(rawBase: string) {
+  const value = (rawBase || "").trim();
+  if (!value) return { fromRaw: "", toRaw: "" };
+  const dashIndex = value.indexOf("-");
+  if (dashIndex === -1) return { fromRaw: value, toRaw: value };
+  return {
+    fromRaw: value.slice(0, dashIndex).trim(),
+    toRaw: value.slice(dashIndex + 1).trim(),
+  };
+}
+
+function isPdfFile(file: File) {
+  const mime = (file.type || "").toLowerCase();
+  const name = (file.name || "").toLowerCase();
+  return mime === "application/pdf" || name.endsWith(".pdf");
+}
+
+type CertPdfUploadHandle = {
+  getSelectedFile: () => File | null;
+};
+
+function wireCertPdfUploadField(modalRoot: HTMLElement, signal: AbortSignal): CertPdfUploadHandle {
+  const input = modalRoot.querySelector<HTMLInputElement>("[data-f=pdf]");
+  const dropzone = modalRoot.querySelector<HTMLElement>("[data-f=pdf_dropzone]");
+  const previewMount = modalRoot.querySelector<HTMLDivElement>("[data-f=pdf_preview]");
+  const removePdfInput = modalRoot.querySelector<HTMLInputElement>("[data-f=remove_pdf]");
+  let selectedFile: File | null = input?.files?.[0] ?? null;
+  let previewUrl: string | null = null;
+
+  const clearPreviewUrl = () => {
+    if (!previewUrl) return;
+    URL.revokeObjectURL(previewUrl);
+    previewUrl = null;
+  };
+
+  const syncRemoveCheckbox = () => {
+    if (!removePdfInput) return;
+    removePdfInput.disabled = Boolean(selectedFile);
+    if (selectedFile) removePdfInput.checked = false;
+  };
+
+  const renderPreview = () => {
+    if (!previewMount) return;
+    clearPreviewUrl();
+    if (!selectedFile) {
+      previewMount.innerHTML = `<div class="muted">Ingen ny PDF valgt.</div>`;
+      return;
+    }
+    previewUrl = URL.createObjectURL(selectedFile);
+    previewMount.innerHTML = `
+      <div class="cert-upload-preview">
+        <div class="cert-upload-preview-head">
+          <div class="cert-upload-preview-title">${esc(selectedFile.name)}</div>
+          <button type="button" class="btn small" data-pdf-preview-clear>Fjern</button>
+        </div>
+        <iframe class="cert-upload-preview-frame" src="${esc(previewUrl)}" title="Forhåndsvisning"></iframe>
+      </div>
+    `;
+  };
+
+  const setSelectedFile = (next: File | null, opts?: { clearInput?: boolean }) => {
+    selectedFile = next;
+    if (opts?.clearInput && input) input.value = "";
+    syncRemoveCheckbox();
+    renderPreview();
+  };
+
+  const pickDroppedFile = (files: File[]) => {
+    const pdf = files.find((file) => isPdfFile(file)) ?? null;
+    if (!pdf) {
+      alert("Kun PDF-filer er tillatt.");
+      return;
+    }
+    setSelectedFile(pdf, { clearInput: true });
+  };
+
+  input?.addEventListener(
+    "change",
+    () => {
+      const file = input.files?.[0] ?? null;
+      if (file && !isPdfFile(file)) {
+        input.value = "";
+        alert("Kun PDF-filer er tillatt.");
+        setSelectedFile(null);
+        return;
+      }
+      setSelectedFile(file);
+    },
+    { signal }
+  );
+
+  dropzone?.addEventListener(
+    "dragover",
+    (e) => {
+      e.preventDefault();
+      dropzone.classList.add("is-drag");
+    },
+    { signal }
+  );
+
+  dropzone?.addEventListener(
+    "dragleave",
+    () => {
+      dropzone.classList.remove("is-drag");
+    },
+    { signal }
+  );
+
+  dropzone?.addEventListener(
+    "drop",
+    (e) => {
+      e.preventDefault();
+      dropzone.classList.remove("is-drag");
+      const dt = (e as DragEvent).dataTransfer;
+      const files = dt?.files ? Array.from(dt.files) : [];
+      if (!files.length) return;
+      pickDroppedFile(files);
+    },
+    { signal }
+  );
+
+  previewMount?.addEventListener(
+    "click",
+    (e) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-pdf-preview-clear]")) return;
+      setSelectedFile(null, { clearInput: true });
+    },
+    { signal }
+  );
+
+  signal.addEventListener("abort", clearPreviewUrl, { once: true });
+  syncRemoveCheckbox();
+  renderPreview();
+
+  return {
+    getSelectedFile: () => selectedFile,
+  };
+}
+
+function wireExistingPdfPreview(
+  modalRoot: HTMLElement,
+  signal: AbortSignal,
+  openExistingPdf: (ref: string) => Promise<void>
+) {
+  const button = modalRoot.querySelector<HTMLButtonElement>("[data-open-existing-pdf]");
+  if (!button) return;
+
+  button.addEventListener(
+    "click",
+    () => {
+      const ref = (button.getAttribute("data-open-existing-pdf") || "").trim();
+      if (!ref) return;
+      void openExistingPdf(ref).catch((err) => {
+        console.error(err);
+        alert("Klarte ikke å åpne PDF.");
+      });
+    },
+    { signal }
+  );
 }
 
 export async function openWelderPdf(ref: string) {
@@ -53,6 +269,168 @@ export async function printNdtPdf(ref: string) {
   await printPdfUrl(url);
 }
 
+export function openWelderCertRenewModal(
+  mount: HTMLElement,
+  signal: AbortSignal,
+  row: WelderCertRow,
+  onDone: () => Promise<void>
+) {
+  const body = `
+    <div class="modalgrid">
+      <div class="field" style="grid-column:1 / -1;">
+        <label>Sertifikat</label>
+        <input data-f="certificate_no_read" class="input" disabled />
+      </div>
+      <div class="field">
+        <label>Ny utløpsdato</label>
+        ${renderDatePickerInput({
+          inputAttrs: `data-f="expires_at" class="input" min="2000-01-01" max="2099-12-31"`,
+          openLabel: "Velg utlopsdato",
+        })}
+      </div>
+      <div class="field" style="grid-column:1 / -1;">
+        <label>Ny PDF</label>
+        <input data-f="pdf" class="input" type="file" accept="application/pdf" />
+        <div class="muted" style="font-size:12px;">Kun utløpsdato og PDF oppdateres.</div>
+      </div>
+    </div>
+  `;
+
+  const h = openModal(mount, renderModal("Oppdater sveisesertifikat", body, "Oppdater"), signal);
+  wireDatePickers(h.root, signal);
+  getField<HTMLInputElement>(h.root, "certificate_no_read").value = row.certificate_no ?? "";
+  getField<HTMLInputElement>(h.root, "expires_at").value = row.expires_at ?? "";
+
+  const save = modalSaveButton(h.root);
+  save.addEventListener(
+    "click",
+    async () => {
+      disableSave(save, "Oppdaterer…");
+
+      try {
+        const expires_at = (getField<HTMLInputElement>(h.root, "expires_at").value || "").trim() || null;
+        if (!expires_at) {
+          throw new Error("Velg ny utløpsdato.");
+        }
+
+        const pdfInput = getField<HTMLInputElement>(h.root, "pdf");
+        const pdfFile = pdfInput.files?.[0] ?? null;
+        if (!pdfFile) {
+          throw new Error("Velg ny PDF.");
+        }
+
+        const err = validatePdfFile(pdfFile, 25);
+        if (err) throw new Error(err);
+
+        await updateWelderCertWithPdf(
+          row.id,
+          {
+            profile_id: row.profile_id,
+            certificate_no: row.certificate_no ?? "",
+            standard: row.standard ?? "",
+            welding_process_code: row.welding_process_code ?? null,
+            base_material_id: row.base_material_id ?? null,
+            coverage_joint_type: row.coverage_joint_type ?? null,
+            coverage_thickness: row.coverage_thickness ?? null,
+            expires_at,
+            fm_group: row.fm_group ?? null,
+            file_id: row.file_id ?? null,
+          },
+          { pdfFile, removePdf: false }
+        );
+
+        h.close();
+        await onDone();
+      } catch (e: any) {
+        console.error(e);
+        alert(String(e?.message ?? e));
+      } finally {
+        enableSave(save, "Oppdater");
+      }
+    },
+    { signal }
+  );
+}
+
+export function openNdtCertRenewModal(
+  mount: HTMLElement,
+  signal: AbortSignal,
+  row: NdtCertRow,
+  onDone: () => Promise<void>
+) {
+  const body = `
+    <div class="modalgrid">
+      <div class="field" style="grid-column:1 / -1;">
+        <label>Sertifikat</label>
+        <input data-f="certificate_no_read" class="input" disabled />
+      </div>
+      <div class="field">
+        <label>Ny utlopsdato</label>
+        ${renderDatePickerInput({
+          inputAttrs: `data-f="expires_at" class="input" min="2000-01-01" max="2099-12-31"`,
+          openLabel: "Velg utlopsdato",
+        })}
+      </div>
+      <div class="field" style="grid-column:1 / -1;">
+        <label>Ny PDF</label>
+        <input data-f="pdf" class="input" type="file" accept="application/pdf" />
+        <div class="muted" style="font-size:12px;">Kun utlopsdato og PDF oppdateres.</div>
+      </div>
+    </div>
+  `;
+
+  const h = openModal(mount, renderModal("Oppdater NDT-sertifikat", body, "Oppdater"), signal);
+  wireDatePickers(h.root, signal);
+  getField<HTMLInputElement>(h.root, "certificate_no_read").value = row.certificate_no ?? "";
+  getField<HTMLInputElement>(h.root, "expires_at").value = row.expires_at ?? "";
+
+  const save = modalSaveButton(h.root);
+  save.addEventListener(
+    "click",
+    async () => {
+      disableSave(save, "Oppdaterer...");
+
+      try {
+        const expires_at = (getField<HTMLInputElement>(h.root, "expires_at").value || "").trim() || null;
+        if (!expires_at) {
+          throw new Error("Velg ny utlopsdato.");
+        }
+
+        const pdfInput = getField<HTMLInputElement>(h.root, "pdf");
+        const pdfFile = pdfInput.files?.[0] ?? null;
+        if (!pdfFile) {
+          throw new Error("Velg ny PDF.");
+        }
+
+        const err = validatePdfFile(pdfFile, 25);
+        if (err) throw new Error(err);
+
+        await updateNdtCertWithPdf(
+          row.id,
+          {
+            personnel_name: row.personnel_name,
+            company: row.company,
+            certificate_no: row.certificate_no ?? "",
+            ndt_method: row.ndt_method ?? "",
+            expires_at,
+            file_id: row.file_id ?? null,
+          },
+          { pdfFile, removePdf: false }
+        );
+
+        h.close();
+        await onDone();
+      } catch (e: any) {
+        console.error(e);
+        alert(String(e?.message ?? e));
+      } finally {
+        enableSave(save, "Oppdater");
+      }
+    },
+    { signal }
+  );
+}
+
 /** ---------- WELDER CERT MODAL ---------- */
 export function openWelderCertModal(
   mount: HTMLElement,
@@ -61,6 +439,7 @@ export function openWelderCertModal(
   standards: StandardRow[],
   fmGroups: StandardFmGroupRow[],
   materials: MaterialRow[],
+  weldingProcesses: WeldingProcessRow[],
   jointTypes: string[],
   mode: "new" | "edit",
   row: WelderCertRow | null,
@@ -79,16 +458,37 @@ export function openWelderCertModal(
 
   const modalHtml = renderModal(
     title,
-    welderCertFormBody(welders, selectableStandards, materials, jointTypeOptions),
+    welderCertFormBody(welders, selectableStandards, materials, weldingProcesses, jointTypeOptions),
     saveLabel
   );
   const h = openModal(mount, modalHtml, signal);
+  wireDatePickers(h.root, signal);
+  const thicknessFromInput = h.root.querySelector<HTMLInputElement>("[data-f=coverage_thickness_from]");
+  const thicknessToInput = h.root.querySelector<HTMLInputElement>("[data-f=coverage_thickness_to]");
+  const thicknessToInfiniteInput = h.root.querySelector<HTMLInputElement>("[data-f=coverage_thickness_to_infinite]");
+
+  const syncThicknessToInputState = () => {
+    if (!thicknessToInput || !thicknessToInfiniteInput) return;
+    thicknessToInput.disabled = thicknessToInfiniteInput.checked;
+    if (thicknessToInfiniteInput.checked) thicknessToInput.value = "";
+  };
+
+  thicknessToInfiniteInput?.addEventListener("change", syncThicknessToInputState, { signal });
 
   // prefill
   if (row) {
     getField<HTMLSelectElement>(h.root, "profile_id").value = row.profile_id;
     getField<HTMLInputElement>(h.root, "certificate_no").value = row.certificate_no ?? "";
     getField<HTMLInputElement>(h.root, "standard").value = row.standard ?? "";
+    const processSelect = getField<HTMLSelectElement>(h.root, "welding_process_code");
+    processSelect.value = row.welding_process_code ?? "";
+    if (row.welding_process_code && !Array.from(processSelect.options).some((opt) => opt.value === row.welding_process_code)) {
+      const opt = document.createElement("option");
+      opt.value = row.welding_process_code;
+      opt.textContent = row.welding_process_code;
+      processSelect.appendChild(opt);
+      processSelect.value = row.welding_process_code;
+    }
     const materialSelect = getField<HTMLSelectElement>(h.root, "base_material_id");
     if (row.base_material_id) {
       const hasOption = Array.from(materialSelect.options).some((opt) => opt.value === row.base_material_id);
@@ -113,18 +513,26 @@ export function openWelderCertModal(
       el.checked = selectedJointTypes.has((el.value || "").trim().toUpperCase());
     });
     
-    const thicknessVal = row.coverage_thickness ?? "";
-    const [fromRaw, toRaw] = thicknessVal.includes("-") ? thicknessVal.split("-") : [thicknessVal, thicknessVal];
-    const thicknessFrom = h.root.querySelector<HTMLSelectElement>("[data-f=coverage_thickness_from]");
-    const thicknessTo = h.root.querySelector<HTMLSelectElement>("[data-f=coverage_thickness_to]");
-    if (thicknessFrom) thicknessFrom.value = (fromRaw || "").trim();
-    if (thicknessTo) thicknessTo.value = (toRaw || "").trim();
+    const { base: thicknessBase, note: thicknessNote } = splitCoverageThickness(row.coverage_thickness);
+    const { fromRaw, toRaw } = splitThicknessRange(thicknessBase);
+    const fromPart = (fromRaw || "").trim().replace(".", ",");
+    const toPart = (toRaw || "").trim().replace(".", ",");
+    const toIsInfinite = isInfiniteThicknessPart(toPart);
+    if (thicknessFromInput) thicknessFromInput.value = fromPart;
+    if (thicknessToInfiniteInput) thicknessToInfiniteInput.checked = toIsInfinite;
+    if (thicknessToInput && !toIsInfinite) thicknessToInput.value = toPart;
+    const noteInput = h.root.querySelector<HTMLInputElement>("[data-f=coverage_thickness_note]");
+    if (noteInput) noteInput.value = thicknessNote;
     getField<HTMLInputElement>(h.root, "expires_at").value = row.expires_at ?? "";
 
-    getField<HTMLDivElement>(h.root, "pdfMeta").innerHTML = currentPdfMeta(!!row.pdf_path);
+    const existingPdfRef = row.file_id || row.pdf_path || null;
+    getField<HTMLDivElement>(h.root, "pdfMeta").innerHTML = currentPdfMeta(existingPdfRef);
   } else {
-    getField<HTMLDivElement>(h.root, "pdfMeta").innerHTML = currentPdfMeta(false);
+    getField<HTMLDivElement>(h.root, "pdfMeta").innerHTML = currentPdfMeta(null);
   }
+  wireExistingPdfPreview(h.root, signal, openWelderPdf);
+  const welderPdfUpload = wireCertPdfUploadField(h.root, signal);
+  syncThicknessToInputState();
 
   // Set up FM group dropdown based on standard selection
   const standardSelect = getField<HTMLSelectElement>(h.root, "standard");
@@ -185,6 +593,8 @@ export function openWelderCertModal(
         const profile_id = (getField<HTMLSelectElement>(h.root, "profile_id").value || "").trim();
         const certificate_no = (getField<HTMLInputElement>(h.root, "certificate_no").value || "").trim();
         const standard = (getField<HTMLInputElement>(h.root, "standard").value || "").trim();
+        const welding_process_code =
+          (getField<HTMLSelectElement>(h.root, "welding_process_code").value || "").trim() || null;
         
         const selectedJointTypes = Array.from(
           h.root.querySelectorAll<HTMLInputElement>("[data-f=coverage_joint_type]:checked")
@@ -194,9 +604,45 @@ export function openWelderCertModal(
         const coverage_joint_type = selectedJointTypes.length > 0 ? selectedJointTypes.join(",") : null;
         
         const base_material_id = (getField<HTMLSelectElement>(h.root, "base_material_id").value || "").trim() || null;
-        const thicknessFrom = (h.root.querySelector<HTMLSelectElement>("[data-f=coverage_thickness_from]")?.value || "").trim();
-        const thicknessTo = (h.root.querySelector<HTMLSelectElement>("[data-f=coverage_thickness_to]")?.value || "").trim();
-        const coverage_thickness = thicknessFrom && thicknessTo ? `${thicknessFrom}-${thicknessTo}` : null;
+        const thicknessFromRaw = (h.root.querySelector<HTMLInputElement>("[data-f=coverage_thickness_from]")?.value || "").trim();
+        const thicknessToRaw = (h.root.querySelector<HTMLInputElement>("[data-f=coverage_thickness_to]")?.value || "").trim();
+        const thicknessNoteRaw =
+          (h.root.querySelector<HTMLInputElement>("[data-f=coverage_thickness_note]")?.value || "").trim();
+        const thicknessNote = normalizeThicknessNote(thicknessNoteRaw);
+        const thicknessToInfinite =
+          (h.root.querySelector<HTMLInputElement>("[data-f=coverage_thickness_to_infinite]")?.checked ?? false) ===
+          true;
+        const normalizedFrom = normalizeThicknessPart(thicknessFromRaw);
+        const normalizedTo = normalizeThicknessPart(thicknessToRaw);
+        let coverage_thickness: string | null = null;
+        if (thicknessToInfinite) {
+          if (!thicknessFromRaw) {
+            throw new Error("Fyll ut tykkelse fra når øvre grense er ubegrenset.");
+          }
+          if (!normalizedFrom) {
+            throw new Error("Tykkelse fra må være et tall med maks 1 desimal (f.eks. 2,8).");
+          }
+          coverage_thickness = `${normalizedFrom}-${THICKNESS_INFINITE}`;
+        } else if (thicknessFromRaw || thicknessToRaw) {
+          if (!thicknessFromRaw || !thicknessToRaw) {
+            throw new Error("Fyll ut både fra og til i tykkelsesområdet, eller velg ubegrenset øvre grense.");
+          }
+          if (!normalizedFrom || !normalizedTo) {
+            throw new Error("Tykkelsesområde må være tall med maks 1 desimal (f.eks. 2,8-5,6).");
+          }
+          const fromNum = thicknessPartToNumber(normalizedFrom);
+          const toNum = thicknessPartToNumber(normalizedTo);
+          if (fromNum > toNum) {
+            throw new Error("Tykkelse fra kan ikke være større enn tykkelse til.");
+          }
+          coverage_thickness = `${normalizedFrom}-${normalizedTo}`;
+        }
+        if (!coverage_thickness && thicknessNote) {
+          throw new Error("Fyll ut tykkelsesområde før du legger til notat.");
+        }
+        if (coverage_thickness && thicknessNote) {
+          coverage_thickness = `${coverage_thickness} (${thicknessNote})`;
+        }
         const expires_at = (getField<HTMLInputElement>(h.root, "expires_at").value || "").trim() || null;
         let fm_group = (getField<HTMLSelectElement>(h.root, "fm_group").value || "").trim() || null;
 
@@ -211,14 +657,14 @@ export function openWelderCertModal(
           }
         }
 
-        if (!profile_id || !certificate_no || !standard) {
-          throw new Error("Fyll ut Sveiser, Sertifikatnr og Standard. (PDF er valgfri.)");
+        if (!profile_id || !certificate_no || !standard || !welding_process_code) {
+          throw new Error("Fyll ut Sveiser, Sertifikatnr, Standard og Sveisemetode. (PDF er valgfri.)");
         }
 
-        const pdfInput = getField<HTMLInputElement>(h.root, "pdf");
-        const pdfFile = pdfInput.files?.[0] ?? null;
-        const removePdf =
+        const pdfFile = welderPdfUpload.getSelectedFile();
+        let removePdf =
           (h.root.querySelector<HTMLInputElement>(`[data-f="remove_pdf"]`)?.checked ?? false) === true;
+        if (pdfFile) removePdf = false;
 
         if (pdfFile) {
           const err = validatePdfFile(pdfFile, 25);
@@ -229,6 +675,7 @@ export function openWelderCertModal(
           profile_id,
           certificate_no,
           standard,
+          welding_process_code,
           base_material_id,
           coverage_joint_type,
           coverage_thickness,
@@ -261,6 +708,8 @@ export function openNdtCertModal(
   mount: HTMLElement,
   signal: AbortSignal,
   methods: NdtMethodRow[],
+  suppliers: NdtSupplierRow[],
+  inspectors: NdtInspectorRow[],
   mode: "new" | "edit",
   row: NdtCertRow | null,
   onDone: () => Promise<void>
@@ -268,12 +717,61 @@ export function openNdtCertModal(
   const title = mode === "new" ? "Legg til NDT-personell sertifikat" : "Endre NDT-sertifikat";
   const saveLabel = mode === "new" ? "Lagre" : "Oppdater";
 
-  const modalHtml = renderModal(title, ndtCertFormBody(methods), saveLabel);
+  const modalHtml = renderModal(title, ndtCertFormBody(methods, suppliers, inspectors), saveLabel);
   const h = openModal(mount, modalHtml, signal);
+  wireDatePickers(h.root, signal);
+
+  const companySelect = getField<HTMLSelectElement>(h.root, "company");
+  const inspectorSelect = getField<HTMLSelectElement>(h.root, "personnel_name");
+  const supplierIdByName = new Map(
+    suppliers.map((supplier) => [supplier.name.trim(), supplier.id] as const)
+  );
+
+  function updateInspectorOptions(companyName: string, selectedInspector = "") {
+    const supplierId = supplierIdByName.get(companyName.trim()) ?? null;
+    const inspectorNames = (supplierId
+      ? inspectors.filter((inspector) => inspector.supplier_id === supplierId).map((inspector) => inspector.name)
+      : []
+    ).sort((a, b) => a.localeCompare(b));
+
+    const placeholder = supplierId ? "Velg kontrollør..." : "Velg firma først...";
+    inspectorSelect.innerHTML = renderOptions(inspectorNames, placeholder);
+
+    if (selectedInspector && inspectorNames.includes(selectedInspector)) {
+      inspectorSelect.value = selectedInspector;
+      return;
+    }
+
+    if (selectedInspector) {
+      const opt = document.createElement("option");
+      opt.value = selectedInspector;
+      opt.textContent = selectedInspector;
+      inspectorSelect.appendChild(opt);
+      inspectorSelect.value = selectedInspector;
+      return;
+    }
+
+    inspectorSelect.value = "";
+  }
+
+  companySelect.addEventListener(
+    "change",
+    () => {
+      updateInspectorOptions(companySelect.value);
+    },
+    { signal }
+  );
 
   if (row) {
-    getField<HTMLInputElement>(h.root, "personnel_name").value = row.personnel_name ?? "";
-    getField<HTMLInputElement>(h.root, "company").value = row.company ?? "";
+    companySelect.value = row.company ?? "";
+    if (row.company && !suppliers.some((supplier) => supplier.name === row.company)) {
+      const opt = document.createElement("option");
+      opt.value = row.company;
+      opt.textContent = row.company;
+      companySelect.appendChild(opt);
+      companySelect.value = row.company;
+    }
+    updateInspectorOptions(companySelect.value, row.personnel_name ?? "");
     getField<HTMLInputElement>(h.root, "certificate_no").value = row.certificate_no ?? "";
     const methodSelect = getField<HTMLSelectElement>(h.root, "ndt_method");
     methodSelect.value = row.ndt_method ?? "";
@@ -285,10 +783,14 @@ export function openNdtCertModal(
       methodSelect.value = row.ndt_method;
     }
     getField<HTMLInputElement>(h.root, "expires_at").value = row.expires_at ?? "";
-    getField<HTMLDivElement>(h.root, "pdfMeta").innerHTML = currentPdfMeta(!!row.pdf_path);
+    const existingPdfRef = row.file_id || row.pdf_path || null;
+    getField<HTMLDivElement>(h.root, "pdfMeta").innerHTML = currentPdfMeta(existingPdfRef);
   } else {
-    getField<HTMLDivElement>(h.root, "pdfMeta").innerHTML = currentPdfMeta(false);
+    updateInspectorOptions(companySelect.value);
+    getField<HTMLDivElement>(h.root, "pdfMeta").innerHTML = currentPdfMeta(null);
   }
+  wireExistingPdfPreview(h.root, signal, openNdtPdf);
+  const ndtPdfUpload = wireCertPdfUploadField(h.root, signal);
 
   const save = modalSaveButton(h.root);
 
@@ -298,20 +800,20 @@ export function openNdtCertModal(
       disableSave(save, mode === "new" ? "Lagrer…" : "Oppdaterer…");
 
       try {
-        const personnel_name = (getField<HTMLInputElement>(h.root, "personnel_name").value || "").trim();
-        const company = (getField<HTMLInputElement>(h.root, "company").value || "").trim();
+        const personnel_name = (getField<HTMLSelectElement>(h.root, "personnel_name").value || "").trim();
+        const company = (getField<HTMLSelectElement>(h.root, "company").value || "").trim();
         const certificate_no = (getField<HTMLInputElement>(h.root, "certificate_no").value || "").trim();
-        const ndt_method = (getField<HTMLInputElement>(h.root, "ndt_method").value || "").trim();
+        const ndt_method = (getField<HTMLSelectElement>(h.root, "ndt_method").value || "").trim();
         const expires_at = (getField<HTMLInputElement>(h.root, "expires_at").value || "").trim() || null;
 
         if (!personnel_name || !company || !certificate_no || !ndt_method) {
-          throw new Error("Fyll ut Navn, Firma, Sertifikatnr og NDT metode. (PDF er valgfri.)");
+          throw new Error("Fyll ut kontrollør, firma, sertifikatnr og NDT-metode. (PDF er valgfri.)");
         }
 
-        const pdfInput = getField<HTMLInputElement>(h.root, "pdf");
-        const pdfFile = pdfInput.files?.[0] ?? null;
-        const removePdf =
+        const pdfFile = ndtPdfUpload.getSelectedFile();
+        let removePdf =
           (h.root.querySelector<HTMLInputElement>(`[data-f="remove_pdf"]`)?.checked ?? false) === true;
+        if (pdfFile) removePdf = false;
 
         if (pdfFile) {
           const err = validatePdfFile(pdfFile, 25);
@@ -347,3 +849,5 @@ export async function handleDeleteWelderCert(id: string) {
 export async function handleDeleteNdtCert(id: string) {
   await deleteNdtCert(id);
 }
+
+

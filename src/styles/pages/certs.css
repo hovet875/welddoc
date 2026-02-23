@@ -145,22 +145,164 @@
   font-size: 12.5px;
 }
 
-/* Welder cert thickness spacing */
+.page-certs .data-table .row-menu-cell{
+  width: 92px;
+  text-align: right;
+  position: relative;
+}
+
+.page-certs .data-table .row-menu{
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  display: none;
+  min-width: 200px;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 10px;
+  background: rgba(10,18,34,0.98);
+  box-shadow: 0 14px 28px rgba(0,0,0,0.4);
+  padding: 6px;
+}
+
+.page-certs .data-table .row-menu.is-open{
+  display: block;
+}
+
+.page-certs .data-table .row-menu.is-floating{
+  position: fixed;
+  right: auto;
+  top: 0;
+  left: 0;
+}
+
+.page-certs .data-table .row-menu button{
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: rgba(255,255,255,0.9);
+  padding: 9px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.page-certs .data-table .row-menu button:hover{
+  background: rgba(255,255,255,0.08);
+}
+
+.page-certs .data-table .row-menu button.danger{
+  color: #fca5a5;
+}
+
+/* Cert modal fields rendered in body portal */
+.modal .cert-thickness .inputgroup.join,
 .page-certs .cert-thickness .inputgroup.join{
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
-/* Fugetype (welder cert) layout */
+.modal .cert-fugegroup,
 .page-certs .cert-fugegroup{
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
+.modal .cert-fugegroup .checkboxpill,
 .page-certs .cert-fugegroup .checkboxpill{
   width: 100%;
   justify-content: center;
   height: 48px;
+}
+
+.modal .cert-upload-field .dropzone{
+  border: 1px dashed rgba(255,255,255,0.25);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  background: rgba(0,0,0,0.18);
+  display: grid;
+  gap: 6px;
+}
+
+.modal .cert-upload-field .dropzone.is-drag{
+  border-color: rgba(120,170,255,0.6);
+  background: rgba(0,102,204,0.08);
+}
+
+.modal .cert-upload-field .dropzone-title{
+  font-weight: 600;
+}
+
+.modal .cert-upload-field .dropzone-sub{
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.modal .cert-upload-field .dropzone input[type="file"]{
+  margin-top: 6px;
+}
+
+.modal .cert-upload-field .filelist{
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px dashed rgba(255,255,255,0.15);
+  border-radius: var(--radius-lg);
+  background: rgba(0,0,0,0.2);
+  min-height: 44px;
+}
+
+.modal .cert-upload-preview{
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--radius-lg);
+  background: rgba(0,0,0,0.22);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+}
+
+.modal .cert-upload-preview-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+
+.modal .cert-upload-preview-title{
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.modal .cert-upload-preview-frame{
+  width: 100%;
+  height: 460px;
+  border: 0;
+  background: #0b0e12;
+}
+
+.modal .cert-pdf-meta{
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.modal .cert-pdf-existing{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+@media (max-width: 900px){
+  .modal .cert-fugegroup{
+    grid-template-columns: 1fr;
+  }
+  .modal .cert-upload-preview-frame{
+    height: 360px;
+  }
 }

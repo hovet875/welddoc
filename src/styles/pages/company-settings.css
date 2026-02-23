@@ -122,6 +122,17 @@
   gap: 8px;
 }
 
+.page-company-settings .settings-subgroup{
+  display: grid;
+  gap: 8px;
+}
+
+.page-company-settings .settings-sublist{
+  display: grid;
+  gap: 8px;
+  padding-left: 14px;
+}
+
 .page-company-settings .settings-item{
   display: grid;
   grid-template-columns: 1fr auto auto;
@@ -131,6 +142,10 @@
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 12px;
   background: rgba(255,255,255,0.03);
+}
+
+.page-company-settings .settings-item.settings-item--sub{
+  background: rgba(255,255,255,0.02);
 }
 
 .page-company-settings .settings-item__title{

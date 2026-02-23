@@ -17,6 +17,7 @@ export type MaterialRef = {
 export type WPQRRow = {
   id: string;
   doc_no: string;
+  doc_date: string | null;
   standard_id: string | null;
   material_id: string | null;
   materiale: string | null;
@@ -32,6 +33,7 @@ export type WPQRRow = {
 export type WPSRow = {
   id: string;
   doc_no: string;
+  doc_date: string | null;
   standard_id: string | null;
   material_id: string | null;
   materiale: string | null;
@@ -53,6 +55,7 @@ export type WpsFetchResult = {
 
 export type UpsertWPQRInput = {
   doc_no: string;
+  doc_date: string;
   standard_id: string;
   process: string;
   material_id: string;
@@ -75,6 +78,7 @@ export async function fetchWpsData(): Promise<WpsFetchResult> {
       .select(`
         id,
         doc_no,
+        doc_date,
         standard_id,
         material_id,
         materiale,
@@ -104,6 +108,7 @@ export async function fetchWpsData(): Promise<WpsFetchResult> {
       .select(`
         id,
         doc_no,
+        doc_date,
         standard_id,
         material_id,
         materiale,

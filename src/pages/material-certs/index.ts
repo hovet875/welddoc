@@ -10,6 +10,12 @@ import { fetchMaterialCertificates, type MaterialCertificateRow, type MaterialCe
 import { fetchMaterials } from "../../repo/materialRepo";
 import { createSupplier, fetchSuppliers } from "../../repo/supplierRepo";
 import { fetchTraceabilityOptions } from "../../repo/traceabilityRepo";
+import {
+  countNewFileInboxByTarget,
+  deleteFileInboxEntryAndMaybeFile,
+  fetchNewFileInboxByTarget,
+  type FileInboxRow,
+} from "../../repo/fileInboxRepo";
 import { createState } from "./state";
 import { renderMaterialCertTable } from "./templates";
 import { openConfirmDelete } from "../../ui/confirm";
@@ -142,9 +148,13 @@ export async function renderMaterialCertsPage(app: HTMLElement) {
     filler: [],
   };
 
+  type UploadEntrySource =
+    | { kind: "local"; file: File }
+    | { kind: "inbox"; inboxId: string; fileId: string; fileName: string };
+
   type UploadEntry = {
     id: string;
-    file: File;
+    source: UploadEntrySource;
     heatNumbers: string[];
     materialId: string | null;
     supplier: string | null;
@@ -168,6 +178,8 @@ export async function renderMaterialCertsPage(app: HTMLElement) {
   let uploadInput: HTMLInputElement | null = null;
   let uploadList: HTMLDivElement | null = null;
   let uploadDropzone: HTMLDivElement | null = null;
+  let inboxNewCount = 0;
+  const openUploadBtnBaseLabel = (openUploadBtn.textContent || "Legg til filer").trim();
 
   const pageSizeStorageKey = "materialCertsPageSize";
   state.pageSize = 20;
@@ -185,8 +197,13 @@ export async function renderMaterialCertsPage(app: HTMLElement) {
   }
 
   function updateAdminUi() {
-    if (state.isAdmin) return;
-    openUploadBtn.style.display = "none";
+    if (!state.isAdmin) {
+      openUploadBtn.style.display = "none";
+      openUploadBtn.textContent = openUploadBtnBaseLabel;
+      return;
+    }
+    openUploadBtn.style.display = "";
+    updateOpenUploadButtonLabel();
   }
 
   function updateSelectionUi() {
@@ -367,6 +384,70 @@ export async function renderMaterialCertsPage(app: HTMLElement) {
       .map((v) => normalizeHeat(v))
       .filter(Boolean);
 
+  const getUploadEntryName = (entry: UploadEntry) => {
+    return entry.source.kind === "local" ? entry.source.file.name : entry.source.fileName;
+  };
+
+  const inferFileNameFromPath = (input: string) => {
+    const normalized = input.replace(/\\/g, "/");
+    const parts = normalized.split("/");
+    return parts[parts.length - 1] || input;
+  };
+
+  const toStringOrEmpty = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+
+  const toStringArray = (value: unknown) => {
+    if (Array.isArray(value)) return value.map((item) => toStringOrEmpty(item)).filter(Boolean);
+    if (typeof value === "string") return parseHeatNumbers(value);
+    return [] as string[];
+  };
+
+  const updateOpenUploadButtonLabel = () => {
+    if (!state.isAdmin) return;
+    openUploadBtn.textContent = inboxNewCount > 0 ? `${openUploadBtnBaseLabel} (${inboxNewCount} nye)` : openUploadBtnBaseLabel;
+  };
+
+  const syncInboxUploadEntries = (rows: FileInboxRow[]) => {
+    const existingInbox = new Map<string, UploadEntry>();
+    uploadEntries.forEach((entry) => {
+      if (entry.source.kind !== "inbox") return;
+      existingInbox.set(entry.source.inboxId, entry);
+    });
+    const localEntries = uploadEntries.filter((entry) => entry.source.kind === "local");
+
+    const nextInboxEntries: UploadEntry[] = rows.map((row) => {
+      const current = existingInbox.get(row.id);
+      const meta = row.suggested_meta && typeof row.suggested_meta === "object"
+        ? (row.suggested_meta as Record<string, unknown>)
+        : {};
+
+      return {
+        id: current?.id ?? `inbox:${row.id}`,
+        source: {
+          kind: "inbox",
+          inboxId: row.id,
+          fileId: row.file_id,
+          fileName: row.file?.label || inferFileNameFromPath(row.source_path),
+        },
+        heatNumbers: current?.heatNumbers ?? toStringArray(meta.heat_numbers),
+        materialId: current?.materialId ?? (toStringOrEmpty(meta.material_id) || null),
+        supplier: current?.supplier ?? (toStringOrEmpty(meta.supplier) || null),
+        fillerType: current?.fillerType ?? (toStringOrEmpty(meta.filler_type) || null),
+      };
+    });
+
+    uploadEntries = [...localEntries, ...nextInboxEntries];
+    if (uploadPreviewId && !uploadEntries.some((entry) => entry.id === uploadPreviewId)) {
+      uploadPreviewId = null;
+      uploadPreviewName = null;
+      if (uploadPreviewUrl) {
+        URL.revokeObjectURL(uploadPreviewUrl);
+        uploadPreviewUrl = null;
+      }
+    }
+    renderUploadList();
+  };
+
   const renderUploadList = () => {
     if (!uploadList) return;
 
@@ -444,8 +525,8 @@ export async function renderMaterialCertsPage(app: HTMLElement) {
                 <div class="upload-file-card" data-file-id="${esc(entry.id)}">
                   <div class="upload-file-head">
                     <div>
-                      <div class="upload-file-name">${esc(entry.file.name)}</div>
-                      <div class="upload-file-meta">Klar</div>
+                      <div class="upload-file-name">${esc(getUploadEntryName(entry))}</div>
+                      <div class="upload-file-meta">${entry.source.kind === "inbox" ? "Ny i innboks" : "Klar"}</div>
                     </div>
                     <div class="upload-file-actions">
                       <button type="button" class="iconbtn btnlike" data-file-preview="${esc(entry.id)}" aria-label="Forhandsvis" title="Forhandsvis">
@@ -531,8 +612,12 @@ export async function renderMaterialCertsPage(app: HTMLElement) {
       renderUploadList();
       return;
     }
-    uploadPreviewUrl = URL.createObjectURL(entry.file);
-    uploadPreviewName = entry.file.name;
+    if (entry.source.kind !== "local") {
+      renderUploadList();
+      return;
+    }
+    uploadPreviewUrl = URL.createObjectURL(entry.source.file);
+    uploadPreviewName = entry.source.file.name;
     uploadPreviewId = entry.id;
     renderUploadList();
   };
@@ -560,7 +645,10 @@ export async function renderMaterialCertsPage(app: HTMLElement) {
 
     const entries: MaterialCertUploadEntry[] = [
       {
-        file: entry.file,
+        file: entry.source.kind === "local" ? entry.source.file : null,
+        file_id: entry.source.kind === "inbox" ? entry.source.fileId : null,
+        inbox_id: entry.source.kind === "inbox" ? entry.source.inboxId : null,
+        source_name: getUploadEntryName(entry),
         certificate_type: type,
         cert_type: certType,
         supplier: entry.supplier,
@@ -640,7 +728,9 @@ export async function renderMaterialCertsPage(app: HTMLElement) {
   };
 
   const addUploadFiles = (files: File[]) => {
-    const existingKeys = new Set(uploadEntries.map((e) => `${e.file.name}:${e.file.size}`));
+    const existingKeys = new Set(
+      uploadEntries.map((e) => (e.source.kind === "local" ? `local:${e.source.file.name}:${e.source.file.size}` : `inbox:${e.source.fileId}`))
+    );
     const nextEntries: UploadEntry[] = [];
     const type = (uploadType?.value || "material").trim();
     const globalMaterial = (uploadMaterial?.value || "").trim() || null;
@@ -648,7 +738,7 @@ export async function renderMaterialCertsPage(app: HTMLElement) {
     const globalFiller = (uploadFiller?.value || "").trim() || null;
 
     files.forEach((file) => {
-      const key = `${file.name}:${file.size}`;
+      const key = `local:${file.name}:${file.size}`;
       const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
       if (!isPdf) {
         toast(`Hopper over ${file.name}: ikke en PDF.`);
@@ -657,7 +747,7 @@ export async function renderMaterialCertsPage(app: HTMLElement) {
       if (existingKeys.has(key)) return;
       nextEntries.push({
         id: crypto.randomUUID(),
-        file,
+        source: { kind: "local", file },
         heatNumbers: [],
         materialId: type === "material" ? globalMaterial : null,
         supplier: globalSupplier,
@@ -810,7 +900,7 @@ export async function renderMaterialCertsPage(app: HTMLElement) {
 
     uploadList.addEventListener(
       "click",
-      (e) => {
+      async (e) => {
         const target = e.target as HTMLElement;
         const closePreviewBtn = target.closest<HTMLButtonElement>("[data-preview-close]");
         if (closePreviewBtn) {
@@ -822,6 +912,13 @@ export async function renderMaterialCertsPage(app: HTMLElement) {
           const id = previewBtn.getAttribute("data-file-preview") || "";
           const entry = uploadEntries.find((item) => item.id === id);
           if (!entry) return;
+          if (entry.source.kind === "inbox") {
+            void openPdf(entry.source.fileId).catch((err) => {
+              console.error(err);
+              alert("Klarte ikke å åpne PDF.");
+            });
+            return;
+          }
           setUploadPreview(entry);
           return;
         }
@@ -836,8 +933,26 @@ export async function renderMaterialCertsPage(app: HTMLElement) {
         const removeBtn = target.closest<HTMLButtonElement>("[data-file-remove]");
         if (removeBtn) {
           const id = removeBtn.getAttribute("data-file-remove") || "";
+          const entry = uploadEntries.find((item) => item.id === id);
+          if (!entry) return;
+
+          if (entry.source.kind === "inbox") {
+            const ok = window.confirm("Slette filen fra innboks og lagring? Dette kan ikke angres.");
+            if (!ok) return;
+            try {
+              await deleteFileInboxEntryAndMaybeFile(entry.source.inboxId);
+              toast("Fil fjernet fra innboks.");
+            } catch (err: any) {
+              console.error(err);
+              alert(String(err?.message ?? err));
+            } finally {
+              await load();
+            }
+            return;
+          }
+
           if (uploadPreviewId && uploadPreviewId === id) setUploadPreview(null);
-          uploadEntries = uploadEntries.filter((entry) => entry.id !== id);
+          uploadEntries = uploadEntries.filter((item) => item.id !== id);
           renderUploadList();
           return;
         }
@@ -924,7 +1039,7 @@ export async function renderMaterialCertsPage(app: HTMLElement) {
       "click",
       () => {
         setUploadPreview(null);
-        uploadEntries = [];
+        uploadEntries = uploadEntries.filter((entry) => entry.source.kind === "inbox");
         renderUploadList();
       },
       { signal }
@@ -1223,19 +1338,24 @@ export async function renderMaterialCertsPage(app: HTMLElement) {
     fillerBody.innerHTML = `<div class="muted">Laster…</div>`;
 
     try {
-      const [rows, suppliers, materials, fillerOptions] = await Promise.all([
+      const [rows, suppliers, materials, fillerOptions, inboxRows, inboxCount] = await Promise.all([
         fetchMaterialCertificates(),
         fetchSuppliers(),
         fetchMaterials(),
         fetchTraceabilityOptions("filler_type"),
+        state.isAdmin ? fetchNewFileInboxByTarget("material_certificate") : Promise.resolve([] as FileInboxRow[]),
+        state.isAdmin ? countNewFileInboxByTarget("material_certificate") : Promise.resolve(0),
       ]);
       if (seq !== state.loadSeq) return;
       state.rows = rows;
       state.suppliers = suppliers;
       state.materials = materials;
       state.fillerOptions = fillerOptions;
+      inboxNewCount = inboxCount;
       selectedIds.clear();
       renderList(true);
+      syncInboxUploadEntries(inboxRows);
+      updateOpenUploadButtonLabel();
       ensureUploadPanel();
     } catch (e: any) {
       console.error(e);
@@ -1330,7 +1450,10 @@ export async function renderMaterialCertsPage(app: HTMLElement) {
       }
 
       const entries: MaterialCertUploadEntry[] = uploadEntries.map((entry) => ({
-        file: entry.file,
+        file: entry.source.kind === "local" ? entry.source.file : null,
+        file_id: entry.source.kind === "inbox" ? entry.source.fileId : null,
+        inbox_id: entry.source.kind === "inbox" ? entry.source.inboxId : null,
+        source_name: getUploadEntryName(entry),
         certificate_type: type,
         cert_type: certType,
         supplier: entry.supplier,

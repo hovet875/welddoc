@@ -10,6 +10,8 @@ import { fetchCertData, type WelderCertRow, type NdtCertRow } from "../../repo/c
 import { fetchStandards, fetchStandardFmGroups } from "../../repo/standardRepo";
 import { fetchMaterials } from "../../repo/materialRepo";
 import { fetchNdtMethods } from "../../repo/ndtReportRepo";
+import { fetchNdtSuppliers, fetchNdtInspectors } from "../../repo/ndtSupplierRepo";
+import { fetchWeldingProcesses } from "../../repo/weldingProcessRepo";
 import { fetchWeldJointTypes } from "../../repo/weldJointTypeRepo";
 import { createState, groupByWelder, groupByCompany } from "./state";
 
@@ -20,6 +22,8 @@ import {
   openNdtPdf,
   printWelderPdf,
   printNdtPdf,
+  openWelderCertRenewModal,
+  openNdtCertRenewModal,
   openWelderCertModal,
   openNdtCertModal,
   handleDeleteWelderCert,
@@ -262,6 +266,7 @@ export async function renderCertsPage(app: HTMLElement) {
         const hay = [
           r.certificate_no,
           r.standard,
+          r.welding_process_code || "",
           r.fm_group || "",
           r.coverage_joint_type || "",
           r.coverage_thickness || "",
@@ -350,7 +355,10 @@ export async function renderCertsPage(app: HTMLElement) {
     setSelectOptions(welderJointFilter, jointItems, "Alle fugetyper");
     filters.joint = welderJointFilter.value;
 
-    const companySet = new Set(state.ndtCerts.map((r) => (r.company || "").trim()).filter(Boolean));
+    const companySet = new Set(state.ndtSuppliers.map((s) => (s.name || "").trim()).filter(Boolean));
+    for (const row of state.ndtCerts) {
+      if (row.company) companySet.add(row.company);
+    }
     const companyItems = Array.from(companySet)
       .sort((a, b) => a.localeCompare(b))
       .map((c) => ({ value: c, label: c }));
@@ -475,7 +483,16 @@ export async function renderCertsPage(app: HTMLElement) {
     welderBody.innerHTML =
       welderGrouped.length === 0
         ? `<div class="muted">${hasWelderFilters() ? "Ingen treff." : "Ingen data."}</div>`
-        : welderGrouped.map(([k, rows]) => renderWelderGroup(k, rows, showActions, state.standards)).join("");
+        : welderGrouped
+            .map(([k, rows]) =>
+              renderWelderGroup(
+                k,
+                rows,
+                showActions,
+                state.standards
+              )
+            )
+            .join("");
 
     ndtBody.innerHTML =
       ndtGrouped.length === 0
@@ -495,6 +512,46 @@ export async function renderCertsPage(app: HTMLElement) {
     newNdtBtn.style.display = show ? "" : "none";
   }
 
+  const closeWelderRowMenus = () => {
+    const openMenus = pageRoot.querySelectorAll<HTMLElement>("[data-welder-row-menu-panel].is-open");
+    openMenus.forEach((panel) => {
+      panel.classList.remove("is-open", "is-floating");
+      panel.style.removeProperty("left");
+      panel.style.removeProperty("top");
+    });
+  };
+
+  const closeNdtRowMenus = () => {
+    const openMenus = pageRoot.querySelectorAll<HTMLElement>("[data-ndt-row-menu-panel].is-open");
+    openMenus.forEach((panel) => {
+      panel.classList.remove("is-open", "is-floating");
+      panel.style.removeProperty("left");
+      panel.style.removeProperty("top");
+    });
+  };
+
+  const closeAllRowMenus = () => {
+    closeWelderRowMenus();
+    closeNdtRowMenus();
+  };
+
+  const positionRowMenu = (trigger: HTMLElement, panel: HTMLElement) => {
+    panel.classList.add("is-floating");
+    panel.style.left = "0px";
+    panel.style.top = "0px";
+    const triggerRect = trigger.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    const gap = 6;
+    let left = triggerRect.right - panelRect.width;
+    left = Math.max(8, Math.min(left, window.innerWidth - panelRect.width - 8));
+    let top = triggerRect.bottom + gap;
+    if (top + panelRect.height > window.innerHeight - 8) {
+      top = Math.max(8, triggerRect.top - panelRect.height - gap);
+    }
+    panel.style.left = `${Math.round(left)}px`;
+    panel.style.top = `${Math.round(top)}px`;
+  };
+
   async function load() {
     const seq = ++state.loadSeq;
 
@@ -503,12 +560,16 @@ export async function renderCertsPage(app: HTMLElement) {
     ndtBody.innerHTML = `<div class="muted">Laster…</div>`;
 
     try {
-      const [res, standards, fmGroups, materials, ndtMethods, jointTypes] = await Promise.all([
+      const [res, standards, fmGroups, materials, weldingProcesses, ndtMethods, ndtSuppliers, ndtInspectors, jointTypes] =
+        await Promise.all([
         fetchCertData(),
         fetchStandards(),
         fetchStandardFmGroups(),
         fetchMaterials(),
+        fetchWeldingProcesses(),
         fetchNdtMethods(),
+        fetchNdtSuppliers(),
+        fetchNdtInspectors(),
         fetchWeldJointTypes(),
       ]);
 
@@ -520,7 +581,10 @@ export async function renderCertsPage(app: HTMLElement) {
       state.standards = standards;
       state.fmGroups = fmGroups;
       state.materials = materials;
+      state.weldingProcesses = weldingProcesses;
       state.ndtMethods = ndtMethods;
+      state.ndtSuppliers = ndtSuppliers;
+      state.ndtInspectors = ndtInspectors;
       state.jointTypes = jointTypes;
 
       renderFilterOptions();
@@ -549,6 +613,7 @@ export async function renderCertsPage(app: HTMLElement) {
         state.standards,
         state.fmGroups,
         state.materials,
+        state.weldingProcesses,
         state.jointTypes.map((j) => j.label),
         "new",
         null,
@@ -562,7 +627,16 @@ export async function renderCertsPage(app: HTMLElement) {
     "click",
     () => {
       if (!requireAdmin()) return;
-      openNdtCertModal(modalMount, signal, state.ndtMethods, "new", null, load);
+      openNdtCertModal(
+        modalMount,
+        signal,
+        state.ndtMethods,
+        state.ndtSuppliers,
+        state.ndtInspectors,
+        "new",
+        null,
+        load
+      );
     },
     { signal }
   );
@@ -573,6 +647,15 @@ export async function renderCertsPage(app: HTMLElement) {
     async (e) => {
       const t = e.target as HTMLElement | null;
       if (!t) return;
+
+      if (
+        !t.closest("[data-welder-row-menu]") &&
+        !t.closest("[data-welder-row-menu-panel]") &&
+        !t.closest("[data-ndt-row-menu]") &&
+        !t.closest("[data-ndt-row-menu-panel]")
+      ) {
+        closeAllRowMenus();
+      }
 
       // PDFs
       const welderPdfBtn = t.closest?.("button[data-openpdf-welder]") as HTMLButtonElement | null;
@@ -625,13 +708,36 @@ export async function renderCertsPage(app: HTMLElement) {
         return;
       }
 
-      // Edit welder cert
-      const editWelder = t.closest?.("button[data-edit-weldercert]") as HTMLButtonElement | null;
-      if (editWelder) {
+      const welderRowMenu = t.closest?.("[data-welder-row-menu]") as HTMLElement | null;
+      if (welderRowMenu) {
+        const panel = welderRowMenu.parentElement?.querySelector<HTMLElement>("[data-welder-row-menu-panel]");
+        if (panel) {
+          const willOpen = !panel.classList.contains("is-open");
+          closeAllRowMenus();
+          if (willOpen) {
+            panel.classList.add("is-open");
+            positionRowMenu(welderRowMenu, panel);
+          }
+        }
+        return;
+      }
+
+      const welderRowAction = t.closest?.("[data-welder-row-action]") as HTMLElement | null;
+      if (welderRowAction) {
         if (!requireAdmin()) return;
-        const id = editWelder.getAttribute("data-edit-weldercert") || "";
+        closeAllRowMenus();
+        const action = welderRowAction.getAttribute("data-welder-row-action") || "";
+        const rowEl = welderRowAction.closest<HTMLElement>("[data-welder-row-id]");
+        const id = rowEl?.getAttribute("data-welder-row-id") || "";
         const row = state.welderCerts.find((x: WelderCertRow) => x.id === id) ?? null;
-        if (row) {
+        if (!row) return;
+
+        if (action === "renew") {
+          openWelderCertRenewModal(modalMount, signal, row, load);
+          return;
+        }
+
+        if (action === "edit") {
           openWelderCertModal(
             modalMount,
             signal,
@@ -639,56 +745,83 @@ export async function renderCertsPage(app: HTMLElement) {
             state.standards,
             state.fmGroups,
             state.materials,
+            state.weldingProcesses,
             state.jointTypes.map((j) => j.label),
             "edit",
             row,
             load
           );
+          return;
+        }
+
+        if (action === "delete") {
+          const label = row.certificate_no || "Sertifikat";
+          await openConfirmDelete(modalMount, signal, {
+            title: "Slett sveisesertifikat",
+            messageHtml: `Er du sikker på at du vil slette <b>${label}</b>?`,
+            onConfirm: async () => handleDeleteWelderCert(row.id),
+            onDone: load,
+          });
+          return;
+        }
+      }
+
+      const ndtRowMenu = t.closest?.("[data-ndt-row-menu]") as HTMLElement | null;
+      if (ndtRowMenu) {
+        const panel = ndtRowMenu.parentElement?.querySelector<HTMLElement>("[data-ndt-row-menu-panel]");
+        if (panel) {
+          const willOpen = !panel.classList.contains("is-open");
+          closeAllRowMenus();
+          if (willOpen) {
+            panel.classList.add("is-open");
+            positionRowMenu(ndtRowMenu, panel);
+          }
         }
         return;
       }
 
-      // Edit ndt cert
-      const editNdt = t.closest?.("button[data-edit-ndtcert]") as HTMLButtonElement | null;
-      if (editNdt) {
+      const ndtRowAction = t.closest?.("[data-ndt-row-action]") as HTMLElement | null;
+      if (ndtRowAction) {
         if (!requireAdmin()) return;
-        const id = editNdt.getAttribute("data-edit-ndtcert") || "";
+        closeAllRowMenus();
+        const action = ndtRowAction.getAttribute("data-ndt-row-action") || "";
+        const rowEl = ndtRowAction.closest<HTMLElement>("[data-ndt-row-id]");
+        const id = rowEl?.getAttribute("data-ndt-row-id") || "";
         const row = state.ndtCerts.find((x: NdtCertRow) => x.id === id) ?? null;
-        if (row) openNdtCertModal(modalMount, signal, state.ndtMethods, "edit", row, load);
-        return;
+        if (!row) return;
+
+        if (action === "renew") {
+          openNdtCertRenewModal(modalMount, signal, row, load);
+          return;
+        }
+
+        if (action === "edit") {
+          openNdtCertModal(
+            modalMount,
+            signal,
+            state.ndtMethods,
+            state.ndtSuppliers,
+            state.ndtInspectors,
+            "edit",
+            row,
+            load
+          );
+          return;
+        }
+
+        if (action === "delete") {
+          const label = row.certificate_no || "Sertifikat";
+          await openConfirmDelete(modalMount, signal, {
+            title: "Slett NDT-sertifikat",
+            messageHtml: `Er du sikker på at du vil slette <b>${label}</b>?`,
+            onConfirm: async () => handleDeleteNdtCert(row.id),
+            onDone: load,
+          });
+          return;
+        }
       }
 
-      // Delete welder cert
-      const delWelder = t.closest?.("button[data-del-weldercert]") as HTMLButtonElement | null;
-      if (delWelder) {
-        if (!requireAdmin()) return;
-        const id = delWelder.getAttribute("data-del-weldercert") || "";
-        const label = delWelder.getAttribute("data-label") || "Sertifikat";
 
-        await openConfirmDelete(modalMount, signal, {
-          title: "Slett sveisesertifikat",
-          messageHtml: `Er du sikker på at du vil slette <b>${label}</b>?`,
-          onConfirm: async () => handleDeleteWelderCert(id),
-          onDone: load,
-        });
-        return;
-      }
-
-      // Delete ndt cert
-      const delNdt = t.closest?.("button[data-del-ndtcert]") as HTMLButtonElement | null;
-      if (delNdt) {
-        if (!requireAdmin()) return;
-        const id = delNdt.getAttribute("data-del-ndtcert") || "";
-        const label = delNdt.getAttribute("data-label") || "Sertifikat";
-
-        await openConfirmDelete(modalMount, signal, {
-          title: "Slett NDT-sertifikat",
-          messageHtml: `Er du sikker på at du vil slette <b>${label}</b>?`,
-          onConfirm: async () => handleDeleteNdtCert(id),
-          onDone: load,
-        });
-        return;
-      }
     },
     { signal }
   );
@@ -703,5 +836,7 @@ export async function renderCertsPage(app: HTMLElement) {
     .catch((e) => console.warn("Admin-rolle feilet", e));
 
   load();
+  window.addEventListener("resize", closeAllRowMenus, { signal });
+  document.addEventListener("scroll", closeAllRowMenus, { capture: true, passive: true, signal });
   return (app as any).__certs_unmount as () => void;
 }

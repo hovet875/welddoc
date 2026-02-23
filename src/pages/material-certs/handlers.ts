@@ -10,6 +10,7 @@ import {
   updateMaterialCertificate,
 } from "../../repo/materialCertificateRepo";
 import { createSupplier, fetchSuppliers } from "../../repo/supplierRepo";
+import { markFileInboxProcessed } from "../../repo/fileInboxRepo";
 
 import { computeFileSha256, findFileBySha256, createSignedUrlForFileRef } from "../../repo/fileRepo";
 import { qs } from "../../utils/dom";
@@ -17,7 +18,6 @@ import { validatePdfFile } from "../../utils/format";
 import { openModal, modalSaveButton, renderModal } from "../../ui/modal";
 import { openPdfPreview } from "../../ui/pdfPreview";
 import { editMaterialCertForm } from "./templates";
-import { wireAutocomplete } from "../../ui/autocomplete";
 
 function getField<T extends Element>(modalRoot: HTMLElement, key: string) {
   return qs<T>(modalRoot, `[data-f="${key}"]`);
@@ -101,7 +101,10 @@ export async function uploadBatch(
 }
 
 export type MaterialCertUploadEntry = {
-  file: File;
+  file: File | null;
+  file_id: string | null;
+  inbox_id?: string | null;
+  source_name?: string | null;
   certificate_type: MaterialCertificateType;
   cert_type: string;
   supplier: string | null;
@@ -119,47 +122,66 @@ export async function uploadBatchWithMeta(
 
   for (let i = 0; i < entries.length; i += 1) {
     const entry = entries[i];
-    const err = validatePdfFile(entry.file, 25);
-    if (err) throw new Error(err);
+    if (!entry.file && !entry.file_id) {
+      throw new Error("Manglende filreferanse for opplasting.");
+    }
+    if (entry.file) {
+      const err = validatePdfFile(entry.file, 25);
+      if (err) throw new Error(err);
+    }
     onProgress?.(i + 1, entries.length);
 
     try {
-      const sha256 = await computeFileSha256(entry.file);
-      const existing = await findFileBySha256(sha256);
       let certId: string | null = null;
 
-      if (existing) {
-        const shouldLink = onDuplicate ? await onDuplicate(entry.file, existing) : false;
-        if (shouldLink) {
-          certId = await createMaterialCertificateWithExistingFile({
+      if (entry.file) {
+        const sha256 = await computeFileSha256(entry.file);
+        const existing = await findFileBySha256(sha256);
+        if (existing) {
+          const shouldLink = onDuplicate ? await onDuplicate(entry.file, existing) : false;
+          if (shouldLink) {
+            certId = await createMaterialCertificateWithExistingFile({
+              certificate_type: entry.certificate_type,
+              cert_type: entry.cert_type,
+              supplier: entry.supplier,
+              material_id: entry.material_id,
+              filler_type: entry.filler_type,
+              file_id: existing.id,
+            });
+          } else {
+            duplicates.add(entry.file.name);
+          }
+        } else {
+          certId = await createMaterialCertificateWithFile({
             certificate_type: entry.certificate_type,
             cert_type: entry.cert_type,
             supplier: entry.supplier,
             material_id: entry.material_id,
             filler_type: entry.filler_type,
-            file_id: existing.id,
+            file: entry.file,
           });
-        } else {
-          duplicates.add(entry.file.name);
         }
       } else {
-        certId = await createMaterialCertificateWithFile({
+        certId = await createMaterialCertificateWithExistingFile({
           certificate_type: entry.certificate_type,
           cert_type: entry.cert_type,
           supplier: entry.supplier,
           material_id: entry.material_id,
           filler_type: entry.filler_type,
-          file: entry.file,
+          file_id: entry.file_id!,
         });
       }
 
       if (certId && entry.heat_numbers.length > 0) {
         await updateMaterialCertificate(certId, { heat_numbers: entry.heat_numbers });
       }
+      if (certId && entry.inbox_id) {
+        await markFileInboxProcessed(entry.inbox_id);
+      }
     } catch (e: any) {
       const msg = String(e?.message ?? e);
       if (msg.toLowerCase().includes("finnes allerede i systemet")) {
-        duplicates.add(entry.file.name);
+        duplicates.add(entry.file?.name || entry.source_name || "ukjent fil");
         continue;
       }
       throw e;
@@ -181,19 +203,22 @@ export function openEditModal(
   fillerOptions: TraceabilityOptionRow[],
   onDone: () => Promise<void>
 ) {
-  const modalHtml = renderModal("Endre materialsertifikat", editMaterialCertForm(row, suppliers, materials), "Oppdater");
+  const modalHtml = renderModal(
+    "Endre materialsertifikat",
+    editMaterialCertForm(row, suppliers, materials, fillerOptions),
+    "Oppdater"
+  );
   const h = openModal(mount, modalHtml, signal);
 
   const heatList = getField<HTMLDivElement>(h.root, "heat_list");
   const heatNew = getField<HTMLInputElement>(h.root, "heat_new");
   const heatAdd = qs<HTMLButtonElement>(h.root, "[data-heat-add]");
   const supplierSelect = getField<HTMLSelectElement>(h.root, "supplier");
-  const addSupplierBtn = qs<HTMLButtonElement>(h.root, "[data-add-supplier]");
   const typeSelect = getField<HTMLSelectElement>(h.root, "certificate_type");
   const materialSelect = getField<HTMLSelectElement>(h.root, "material_id");
   const materialField = qs<HTMLElement>(h.root, "[data-material-field]");
   const fillerField = qs<HTMLElement>(h.root, "[data-filler-field]");
-  const fillerInput = getField<HTMLInputElement>(h.root, "filler_type");
+  const fillerSelect = getField<HTMLSelectElement>(h.root, "filler_type");
 
   const normalizeHeat = (val: string) => val.trim();
 
@@ -218,8 +243,6 @@ export function openEditModal(
     refreshSupplierOptions(trimmed);
   };
 
-  wireAutocomplete(fillerInput, fillerOptions.map((o) => o.value), { signal });
-
   const syncFillerVisibility = () => {
     const type = (typeSelect.value || "material").trim();
     if (type === "filler") {
@@ -228,7 +251,7 @@ export function openEditModal(
       materialSelect.value = "";
     } else {
       fillerField.setAttribute("hidden", "");
-      fillerInput.value = "";
+      fillerSelect.value = "";
       materialField.removeAttribute("hidden");
     }
   };
@@ -283,21 +306,6 @@ export function openEditModal(
     { signal }
   );
 
-  addSupplierBtn.addEventListener(
-    "click",
-    async () => {
-      const name = window.prompt("Ny leverandør:", "");
-      if (!name) return;
-      try {
-        await addSupplier(name);
-      } catch (e: any) {
-        console.error(e);
-        alert(String(e?.message ?? e));
-      }
-    },
-    { signal }
-  );
-
   supplierSelect.addEventListener(
     "change",
     async () => {
@@ -338,7 +346,7 @@ export function openEditModal(
           throw new Error("Velg material fra listen.");
         }
 
-        const fillerValue = (fillerInput.value || "").trim();
+        const fillerValue = (fillerSelect.value || "").trim();
         let fillerType: string | null = null;
         if (type === "filler") {
           if (!fillerValue) {

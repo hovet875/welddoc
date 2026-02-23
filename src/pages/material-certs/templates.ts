@@ -1,6 +1,7 @@
 import type { MaterialCertificateRow } from "../../repo/materialCertificateRepo";
 import type { SupplierRow } from "../../repo/supplierRepo";
 import type { MaterialRow } from "../../repo/materialRepo";
+import type { TraceabilityOptionRow } from "../../repo/traceabilityRepo";
 import { esc } from "../../utils/dom";
 import { truncateLabel } from "../../utils/format";
 import { renderIconButton } from "../../ui/iconButton";
@@ -111,7 +112,12 @@ export function renderMaterialCertTable(
   `;
 }
 
-export function editMaterialCertForm(row: MaterialCertificateRow, suppliers: SupplierRow[], materials: MaterialRow[]) {
+export function editMaterialCertForm(
+  row: MaterialCertificateRow,
+  suppliers: SupplierRow[],
+  materials: MaterialRow[],
+  fillerOptions: TraceabilityOptionRow[]
+) {
   const supplierOptions = suppliers
     .map((s) => `<option value="${esc(s.name)}" ${s.name === row.supplier ? "selected" : ""}>${esc(s.name)}</option>`)
     .join("");
@@ -133,6 +139,15 @@ export function editMaterialCertForm(row: MaterialCertificateRow, suppliers: Sup
   const fillerValue = row.filler_type ?? "";
   const fillerHidden = row.certificate_type !== "filler" ? "hidden" : "";
   const materialHidden = row.certificate_type === "filler" ? "hidden" : "";
+  const fillerValues = fillerOptions.map((o) => o.value).filter(Boolean);
+  const hasCurrentFiller = fillerValue ? fillerValues.includes(fillerValue) : false;
+  const fillerSelectOptions = [
+    `<option value="">Velg type…</option>`,
+    ...fillerValues.map((value) => `<option value="${esc(value)}" ${value === fillerValue ? "selected" : ""}>${esc(value)}</option>`),
+    ...(!hasCurrentFiller && fillerValue
+      ? [`<option value="${esc(fillerValue)}" selected>${esc(fillerValue)}</option>`]
+      : []),
+  ].join("");
 
   return `
     <div class="modalgrid">
@@ -165,19 +180,18 @@ export function editMaterialCertForm(row: MaterialCertificateRow, suppliers: Sup
 
       <div class="field" data-filler-field ${fillerHidden}>
         <label>Sveisetilsett-type</label>
-        <input data-f="filler_type" class="input" placeholder="Velg type…" value="${esc(fillerValue)}" />
+        <select data-f="filler_type" class="select">
+          ${fillerSelectOptions}
+        </select>
       </div>
 
       <div class="field">
         <label>Leverandør</label>
-        <div class="inputgroup">
-          <select data-f="supplier" class="select">
-            <option value="">Velg leverandør…</option>
-            ${supplierOptions}
-            <option value="__new__">Ny leverandør…</option>
-          </select>
-          <button type="button" class="btn small" data-add-supplier>Ny</button>
-        </div>
+        <select data-f="supplier" class="select">
+          <option value="">Velg leverandør…</option>
+          ${supplierOptions}
+          <option value="__new__">Ny leverandør…</option>
+        </select>
       </div>
 
       <div class="field" style="grid-column:1 / -1;">

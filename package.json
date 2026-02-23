@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "nas:sync": "node scripts/nas-inbox-sync.mjs"
   },
   "devDependencies": {
     "typescript": "~5.9.3",

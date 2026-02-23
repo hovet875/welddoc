@@ -11,6 +11,7 @@ export type WelderCertRow = {
   profile_id: string;
   certificate_no: string;
   standard: string;
+  welding_process_code: string | null;
   base_material_id: string | null;
   coverage_joint_type: string | null;
   coverage_thickness: string | null;
@@ -27,7 +28,16 @@ export type WelderCertRow = {
 
 export type WelderCertLookupRow = Pick<
   WelderCertRow,
-  "id" | "profile_id" | "certificate_no" | "standard" | "expires_at" | "coverage_joint_type"
+  | "id"
+  | "profile_id"
+  | "certificate_no"
+  | "standard"
+  | "welding_process_code"
+  | "base_material_id"
+  | "coverage_joint_type"
+  | "fm_group"
+  | "expires_at"
+  | "created_at"
 >;
 
 export type NdtCertRow = {
@@ -63,7 +73,9 @@ export async function fetchWelders(): Promise<ProfileWelderRow[]> {
 export async function fetchWelderCerts(): Promise<WelderCertLookupRow[]> {
   const { data, error } = await supabase
     .from("welder_certificates")
-    .select("id, profile_id, certificate_no, standard, expires_at, coverage_joint_type")
+    .select(
+      "id, profile_id, certificate_no, standard, welding_process_code, base_material_id, coverage_joint_type, fm_group, expires_at, created_at"
+    )
     .order("certificate_no", { ascending: true })
     .order("expires_at", { ascending: true, nullsFirst: false });
 
@@ -75,6 +87,7 @@ export type UpsertWelderCertInput = {
   profile_id: string;
   certificate_no: string;
   standard: string;
+  welding_process_code: string | null;
   base_material_id: string | null;
   coverage_joint_type: string | null;
   coverage_thickness: string | null;
@@ -113,6 +126,7 @@ export async function fetchCertData(): Promise<CertFetchResult> {
         profile_id,
         certificate_no,
         standard,
+        welding_process_code,
         base_material_id,
         coverage_joint_type,
         coverage_thickness,
@@ -205,10 +219,16 @@ async function findFileBySha256(sha256: string) {
   return data as { id: string; label: string | null } | null;
 }
 
-async function uploadFileToIdPath(type: string, id: string, file: File) {
+async function uploadFileToIdPath(
+  type: string,
+  id: string,
+  file: File,
+  opts?: { allowExistingFileId?: string | null }
+) {
   const sha256 = await computeFileSha256(file);
   const existing = await findFileBySha256(sha256);
-  if (existing) {
+  const allowedId = opts?.allowExistingFileId ?? null;
+  if (existing && existing.id !== allowedId) {
     throw new Error("Denne filen finnes allerede i systemet.");
   }
   const path = filePath(type, id);
@@ -241,6 +261,45 @@ async function createFileRecord(input: {
     sha256: input.sha256 ?? null,
   });
   if (error) throw error;
+}
+
+async function updateFileRecordById(
+  id: string,
+  input: {
+    bucket: string;
+    path: string;
+    type: string;
+    mime_type?: string | null;
+    size_bytes?: number | null;
+    sha256?: string | null;
+  }
+) {
+  const { data, error } = await supabase
+    .from("files")
+    .update({
+      bucket: input.bucket,
+      path: input.path,
+      type: input.type,
+      mime_type: input.mime_type ?? null,
+      size_bytes: input.size_bytes ?? null,
+      sha256: input.sha256 ?? null,
+    })
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  if (data) return;
+
+  await createFileRecord({
+    id,
+    bucket: input.bucket,
+    path: input.path,
+    type: input.type,
+    mime_type: input.mime_type ?? null,
+    size_bytes: input.size_bytes ?? null,
+    sha256: input.sha256 ?? null,
+  });
 }
 
 async function getFileMeta(fileId: string) {
@@ -299,10 +358,13 @@ export async function getWelderCertPdfPath(id: string) {
 
 export async function createWelderCertWithPdf(base: UpsertWelderCertInput, pdfFile: File) {
   const fileId = crypto.randomUUID();
-  const certId = await insertWelderCert({ ...base, file_id: fileId });
+  const certId = await insertWelderCert({ ...base, file_id: null });
+  let uploadedPath: string | null = null;
+  let fileRecordCreated = false;
 
   try {
     const { bucket, path, sha256 } = await uploadFileToIdPath("welder_certificate", fileId, pdfFile);
+    uploadedPath = path;
     await createFileRecord({
       id: fileId,
       bucket,
@@ -312,10 +374,16 @@ export async function createWelderCertWithPdf(base: UpsertWelderCertInput, pdfFi
       size_bytes: pdfFile.size,
       sha256,
     });
+    fileRecordCreated = true;
+    await updateWelderCert(certId, { file_id: fileId });
     return certId;
   } catch (e) {
     try {
-      await deleteFileRecord(fileId);
+      if (fileRecordCreated) {
+        await deleteFileRecord(fileId);
+      } else if (uploadedPath) {
+        await supabase.storage.from(BUCKET_FILES).remove([uploadedPath]);
+      }
     } catch {}
     try {
       await supabase.from("welder_certificates").delete().eq("id", certId);
@@ -346,6 +414,22 @@ export async function updateWelderCertWithPdf(
   }
 
   if (opts.pdfFile) {
+    if (current.file_id) {
+      const { bucket, path, sha256 } = await uploadFileToIdPath("welder_certificate", current.file_id, opts.pdfFile, {
+        allowExistingFileId: current.file_id,
+      });
+      await updateFileRecordById(current.file_id, {
+        bucket,
+        path,
+        type: "welder_certificate",
+        mime_type: opts.pdfFile.type || "application/pdf",
+        size_bytes: opts.pdfFile.size,
+        sha256,
+      });
+      if (current.pdf_path) await deletePdfIfExists("welder", current.pdf_path);
+      return;
+    }
+
     const fileId = crypto.randomUUID();
     const { bucket, path, sha256 } = await uploadFileToIdPath("welder_certificate", fileId, opts.pdfFile);
     await createFileRecord({
@@ -405,10 +489,13 @@ export async function getNdtCertPdfPath(id: string) {
 
 export async function createNdtCertWithPdf(base: UpsertNdtCertInput, pdfFile: File) {
   const fileId = crypto.randomUUID();
-  const certId = await insertNdtCert({ ...base, file_id: fileId });
+  const certId = await insertNdtCert({ ...base, file_id: null });
+  let uploadedPath: string | null = null;
+  let fileRecordCreated = false;
 
   try {
     const { bucket, path, sha256 } = await uploadFileToIdPath("ndt_report", fileId, pdfFile);
+    uploadedPath = path;
     await createFileRecord({
       id: fileId,
       bucket,
@@ -418,10 +505,16 @@ export async function createNdtCertWithPdf(base: UpsertNdtCertInput, pdfFile: Fi
       size_bytes: pdfFile.size,
       sha256,
     });
+    fileRecordCreated = true;
+    await updateNdtCert(certId, { file_id: fileId });
     return certId;
   } catch (e) {
     try {
-      await deleteFileRecord(fileId);
+      if (fileRecordCreated) {
+        await deleteFileRecord(fileId);
+      } else if (uploadedPath) {
+        await supabase.storage.from(BUCKET_FILES).remove([uploadedPath]);
+      }
     } catch {}
     try {
       await supabase.from("ndt_certificates").delete().eq("id", certId);
@@ -452,6 +545,22 @@ export async function updateNdtCertWithPdf(
   }
 
   if (opts.pdfFile) {
+    if (current.file_id) {
+      const { bucket, path, sha256 } = await uploadFileToIdPath("ndt_report", current.file_id, opts.pdfFile, {
+        allowExistingFileId: current.file_id,
+      });
+      await updateFileRecordById(current.file_id, {
+        bucket,
+        path,
+        type: "ndt_report",
+        mime_type: opts.pdfFile.type || "application/pdf",
+        size_bytes: opts.pdfFile.size,
+        sha256,
+      });
+      if (current.pdf_path) await deletePdfIfExists("ndt", current.pdf_path);
+      return;
+    }
+
     const fileId = crypto.randomUUID();
     const { bucket, path, sha256 } = await uploadFileToIdPath("ndt_report", fileId, opts.pdfFile);
     await createFileRecord({

@@ -4,6 +4,7 @@ import type { ProjectTraceabilityRow, TraceabilityOptionRow, TraceabilityTypeRow
 
 import { esc, qs } from "../../../utils/dom";
 import { openModal, modalSaveButton, renderModal } from "../../../ui/modal";
+import { iconSvg } from "../../../ui/iconButton";
 import { toast } from "../../../ui/toast";
 import { createProjectTraceability, updateProjectTraceability } from "../../../repo/traceabilityRepo";
 
@@ -228,7 +229,6 @@ export function openTraceabilityEditModal(opts: OpenTraceabilityEditModalOpts) {
         </div>
         <div class="field" style="grid-column:1 / -1;">
           <label>Sertifikat</label>
-          <input data-f="cert_search" class="input" placeholder="Søk på filnavn, heat, material eller tilsett…" />
           <input data-f="material_certificate_id" type="hidden" value="${esc(row?.material_certificate_id ?? "")}" />
           <input data-f="heat_number" type="hidden" value="${esc(row?.heat_number ?? "")}" />
           <div class="trace-cert-meta" data-cert-meta></div>
@@ -244,57 +244,102 @@ export function openTraceabilityEditModal(opts: OpenTraceabilityEditModalOpts) {
   const save = modalSaveButton(h.root);
   const typeSelect = qs<HTMLSelectElement>(h.root, "[data-f=type_code]");
   const dynamicField = qs<HTMLDivElement>(h.root, "[data-dynamic-fields]");
-  const certSearch = qs<HTMLInputElement>(h.root, "[data-f=cert_search]");
   const certIdInput = qs<HTMLInputElement>(h.root, "[data-f=material_certificate_id]");
   const heatInput = qs<HTMLInputElement>(h.root, "[data-f=heat_number]");
   const certList = qs<HTMLDivElement>(h.root, "[data-cert-list]");
   const certMeta = qs<HTMLDivElement>(h.root, "[data-cert-meta]");
   const heatRow = qs<HTMLDivElement>(h.root, "[data-heat-row]");
 
+  const currentHeatValue = () => (heatInput.value || "").trim();
+
   const renderCertMeta = (id: string | null) => {
     if (!id) {
-      certMeta.textContent = "Ikke valgt";
+      certMeta.textContent = currentHeatValue()
+        ? "Manuell heat registrert. Ikke koblet til sertifikat."
+        : "Ikke koblet til sertifikat.";
       return;
     }
     const cert = certs.find((c) => c.id === id);
     if (!cert) {
-      certMeta.textContent = "Ikke valgt";
+      certMeta.textContent = "Ikke koblet til sertifikat.";
       return;
     }
     certMeta.textContent = `Valgt: ${certLabel(cert)}`;
   };
 
   const renderHeatOptions = (id: string | null) => {
-    if (!id) {
-      heatRow.innerHTML = "";
-      heatInput.value = "";
-      return;
-    }
-    const cert = certs.find((c) => c.id === id) ?? null;
-    const heatList = (cert?.heat_numbers ?? []).filter(Boolean);
-    if (heatList.length === 0) {
-      heatRow.innerHTML = `<div class="muted" style="font-size:12px;">Ingen heat nr i sertifikatet.</div>`;
-      heatInput.value = "";
-      return;
-    }
-
-    if (!heatList.includes(heatInput.value)) {
+    const cert = id ? certs.find((c) => c.id === id) ?? null : null;
+    const heatList = (cert?.heat_numbers ?? []).map((h) => String(h ?? "").trim()).filter(Boolean);
+    if (id && heatList.length > 0 && !heatList.includes(currentHeatValue())) {
       heatInput.value = heatList[0] ?? "";
     }
-
+    const hint = !id
+      ? "Du kan registrere sveisen nå og koble til sertifikat senere."
+      : heatList.length > 1
+        ? `Sertifikatet har ${heatList.length} heat. Velg under eller skriv manuelt.`
+        : heatList.length === 1
+          ? "Sertifikatet har ett heat."
+        : "Sertifikatet mangler heat nr. Fyll inn manuelt hvis kjent.";
+    const clearDisabled = id ? "" : " disabled";
+    const currentHeat = currentHeatValue();
+    const picksHtml = heatList.length > 1
+      ? `
+        <div class="trace-heat-picks">
+          ${heatList
+            .map(
+              (heat) =>
+                `<button type="button" class="trace-heat-pick${heat === currentHeat ? " is-selected" : ""}" data-heat-pick="${esc(heat)}">${esc(heat)}</button>`
+            )
+            .join("")}
+        </div>
+      `
+      : "";
     heatRow.innerHTML = `
-      <label>Heat nr</label>
-      <select class="select" data-heat-select>
-        ${heatList.map((h) => `<option value="${esc(h)}">${esc(h)}</option>`).join("")}
-      </select>
+      <div class="trace-heat-head">
+        <label>Heat nr (manuell)</label>
+        <button type="button" class="iconbtn small trace-heat-clear" data-clear-cert title="Koble fra sertifikat" aria-label="Koble fra sertifikat"${clearDisabled}>
+          ${iconSvg("x")}
+        </button>
+      </div>
+      <input class="input" data-heat-manual value="${esc(heatInput.value || "")}" placeholder="Skriv heat nr..." />
+      ${picksHtml}
+      <div class="muted" style="font-size:12px;">${esc(hint)}</div>
     `;
 
-    const select = qs<HTMLSelectElement>(heatRow, "[data-heat-select]");
-    select.value = heatInput.value || "";
-    select.addEventListener(
-      "change",
+    const input = qs<HTMLInputElement>(heatRow, "[data-heat-manual]");
+    input.addEventListener(
+      "input",
       () => {
-        heatInput.value = select.value;
+        heatInput.value = input.value;
+        renderCertMeta(certIdInput.value || null);
+        renderCertList();
+      },
+      { signal }
+    );
+    const pickButtons = heatRow.querySelectorAll<HTMLButtonElement>("[data-heat-pick]");
+    pickButtons.forEach((btn) => {
+      btn.addEventListener(
+        "click",
+        () => {
+          const heat = (btn.getAttribute("data-heat-pick") || "").trim();
+          heatInput.value = heat;
+          renderCertMeta(certIdInput.value || null);
+          renderHeatOptions(certIdInput.value || null);
+          renderCertList();
+        },
+        { signal }
+      );
+    });
+
+    const clearBtn = qs<HTMLButtonElement>(heatRow, "[data-clear-cert]");
+    clearBtn.addEventListener(
+      "click",
+      () => {
+        certIdInput.value = "";
+        renderCertMeta(null);
+        renderHeatOptions(null);
+        renderCertList();
+        heatRow.querySelector<HTMLInputElement>("[data-heat-manual]")?.focus();
       },
       { signal }
     );
@@ -313,7 +358,7 @@ export function openTraceabilityEditModal(opts: OpenTraceabilityEditModalOpts) {
 
   const renderCertList = () => {
     const type = types.find((t) => t.code === typeSelect.value) ?? initialType;
-    const { list, reason } = getFilteredCerts(type, certs, readSelectedMaterialId(), readSelectedFillerType(), certSearch.value || "");
+    const { list, reason } = getFilteredCerts(type, certs, readSelectedMaterialId(), readSelectedFillerType(), heatInput.value || "");
 
     if (list.length === 0) {
       certList.innerHTML = `<div class="muted">${esc(reason)}</div>`;
@@ -336,7 +381,7 @@ export function openTraceabilityEditModal(opts: OpenTraceabilityEditModalOpts) {
       .join("");
   };
 
-  const wireDynamicFields = (currentType: TraceabilityTypeRow) => {
+  const wireDynamicFields = () => {
     const materialSelect = h.root.querySelector<HTMLSelectElement>("[data-f=material_id]");
     if (materialSelect) {
       if (row?.material_id) materialSelect.value = row.material_id;
@@ -347,23 +392,16 @@ export function openTraceabilityEditModal(opts: OpenTraceabilityEditModalOpts) {
     if (fillerSelect) {
       fillerSelect.addEventListener("change", renderCertList, { signal });
     }
-
-    if (currentType.use_filler_type && certSearch.value && !row) {
-      certSearch.value = "";
-    }
   };
 
   const updateDynamic = () => {
     const currentType = types.find((t) => t.code === typeSelect.value) ?? initialType;
     dynamicField.innerHTML = renderDynamicFields(currentType, row ?? {}, { optionsDn, optionsSch, optionsPn, optionsFiller, materials });
-    wireDynamicFields(currentType);
+    wireDynamicFields();
     renderCertList();
   };
 
   typeSelect.addEventListener("change", updateDynamic, { signal });
-
-  certSearch.addEventListener("input", renderCertList, { signal });
-  certSearch.addEventListener("focus", renderCertList, { signal });
   certList.addEventListener(
     "click",
     (e) => {
@@ -373,7 +411,6 @@ export function openTraceabilityEditModal(opts: OpenTraceabilityEditModalOpts) {
       const id = btn.getAttribute("data-cert-id");
       if (!id) return;
       certIdInput.value = id;
-      heatInput.value = "";
       renderCertMeta(id);
       renderHeatOptions(id);
       renderCertList();
@@ -383,7 +420,7 @@ export function openTraceabilityEditModal(opts: OpenTraceabilityEditModalOpts) {
 
   renderCertMeta(certIdInput.value || null);
   renderHeatOptions(certIdInput.value || null);
-  wireDynamicFields(initialType);
+  wireDynamicFields();
   renderCertList();
 
   save.addEventListener(
@@ -429,13 +466,15 @@ export function openTraceabilityEditModal(opts: OpenTraceabilityEditModalOpts) {
             return toast("Sertifikatet må matche valgt material.");
           }
         }
+      } else if (!heatNumber) {
+        return toast("Skriv heat nr manuelt eller velg sertifikat.");
       }
 
       if (type.use_dn && !dn) return toast("Velg DN.");
       if (type.use_dn2 && !dn2) return toast("Velg DN2.");
       if (type.use_sch && !sch) return toast("Velg SCH.");
-      if (type.use_pressure && !pressure) return toast("Velg trykklasse.");
       if (type.use_thickness && !thickness) return toast("Fyll inn tykkelse.");
+      if (type.use_pressure && !pressure) return toast("Velg trykklasse.");
       if (type.use_filler_type && !fillerType) return toast("Velg sveisetilsett type.");
 
       save.disabled = true;
@@ -470,8 +509,8 @@ export function openTraceabilityEditModal(opts: OpenTraceabilityEditModalOpts) {
           });
         }
 
-        if (!certId) {
-          toast("Mangler sertifikat på denne linjen.");
+        if (!certId && heatNumber) {
+          toast("Lagret med manuell heat. Koble til sertifikat senere.");
         }
 
         h.close();

@@ -7,6 +7,7 @@ export type WeldListRow = {
   komponent_b: string | null;
   komponent_b_id: string | null;
   sveiser_id: string | null;
+  welder_cert_id: string | null;
   wps: string | null;
   wps_id: string | null;
   dato: string | null;
@@ -80,9 +81,33 @@ export type TraceabilitySelectOption = {
 export type WpsSelectOption = {
   id: string;
   doc_no: string;
+  process: string | null;
+  standard_label: string | null;
   material_id: string | null;
   fuge: string;
   label: string;
+};
+
+export type WelderCertScopeOption = {
+  id: string;
+  profile_id: string;
+  certificate_no: string;
+  standard: string;
+  welding_process_code: string | null;
+  base_material_id: string | null;
+  coverage_joint_type: string | null;
+  fm_group: string | null;
+  expires_at: string | null;
+  created_at: string;
+};
+
+export type WelderMatchScopeRule = {
+  id: string;
+  standard_label: string | null;
+  fm_group_label: string | null;
+  material_id: string | null;
+  welding_process_code: string | null;
+  joint_type: string | null;
 };
 
 export type RowWpsStatus = {

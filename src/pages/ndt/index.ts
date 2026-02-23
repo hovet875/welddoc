@@ -10,6 +10,13 @@ import { fetchWelders } from "../../repo/certRepo";
 import { fetchCustomers } from "../../repo/customerRepo";
 import { fetchProjects } from "../../repo/projectRepo";
 import { fetchNdtMethods, fetchNdtReports } from "../../repo/ndtReportRepo";
+import { fetchNdtSuppliers, fetchNdtInspectors } from "../../repo/ndtSupplierRepo";
+import {
+  countNewFileInboxByTarget,
+  deleteFileInboxEntryAndMaybeFile,
+  fetchNewFileInboxByTarget,
+  type FileInboxRow,
+} from "../../repo/fileInboxRepo";
 import { createState } from "./state";
 import { renderReportTable } from "./templates";
 import { buildTypePillMap, typePillClass } from "../../ui/typePill";
@@ -121,8 +128,13 @@ export async function renderNdtPage(app: HTMLElement) {
             </select>
           </div>
           <div class="field">
-            <label>Søk</label>
-            <input data-filter-text class="input" placeholder="Filnavn, prosjektnr eller kunde…" />
+            <label>Vis pr side</label>
+            <select data-page-size class="select">
+              <option value="10">10 per side</option>
+              <option value="25">25 per side</option>
+              <option value="50">50 per side</option>
+              <option value="100">100 per side</option>
+            </select>
           </div>
         </section>
 
@@ -181,15 +193,22 @@ export async function renderNdtPage(app: HTMLElement) {
   const filterProject = qs<HTMLSelectElement>(app, "[data-filter-project]");
   const filterYear = qs<HTMLSelectElement>(app, "[data-filter-year]");
   const filterWelder = qs<HTMLSelectElement>(app, "[data-filter-welder]");
-  const filterText = qs<HTMLInputElement>(app, "[data-filter-text]");
+  const pageSizeSelect = qs<HTMLSelectElement>(app, "[data-page-size]");
+
+  type UploadEntrySource =
+    | { kind: "local"; file: File }
+    | { kind: "inbox"; inboxId: string; fileId: string; fileName: string };
 
   type UploadEntry = {
     id: string;
-    file: File;
+    source: UploadEntrySource;
+    sourceName: string;
     title: string;
     customer: string;
     reportDate: string;
     methodId: string;
+    supplierId: string;
+    inspectorId: string;
     welderIds: string[];
     welderStats: Map<string, { weld_count: number | null; defect_count: number | null }>;
   };
@@ -201,13 +220,12 @@ export async function renderNdtPage(app: HTMLElement) {
   let uploadPreviewId: string | null = null;
   let uploadingIds = new Set<string>();
 
-  let uploadProject: HTMLSelectElement | null = null;
-  let uploadCustomer: HTMLSelectElement | null = null;
-  let uploadDate: HTMLInputElement | null = null;
-  let uploadMethod: HTMLSelectElement | null = null;
   let uploadInput: HTMLInputElement | null = null;
   let uploadList: HTMLDivElement | null = null;
   let uploadDropzone: HTMLDivElement | null = null;
+  let inboxNewCount = 0;
+
+  const openUploadBtnBaseLabel = (openUploadBtn.textContent || "Legg til filer").trim();
 
   const formatWelderLabel = (w: { welder_no: string | null; display_name: string | null }) => {
     const no = w.welder_no ? String(w.welder_no).padStart(3, "0") : "—";
@@ -248,6 +266,29 @@ export async function renderNdtPage(app: HTMLElement) {
     return base;
   };
 
+  const buildSupplierOptions = (selected: string) => {
+    const base = state.ndtSuppliers
+      .map((supplier) => `<option value="${esc(supplier.id)}" ${supplier.id === selected ? "selected" : ""}>${esc(supplier.name)}</option>`)
+      .join("");
+    if (selected && !state.ndtSuppliers.some((supplier) => supplier.id === selected)) {
+      return `<option value="${esc(selected)}" selected>${esc(selected)}</option>${base}`;
+    }
+    return base;
+  };
+
+  const buildInspectorOptions = (supplierId: string, selected: string) => {
+    const filtered = supplierId
+      ? state.ndtInspectors.filter((inspector) => inspector.supplier_id === supplierId)
+      : [];
+    const base = filtered
+      .map((inspector) => `<option value="${esc(inspector.id)}" ${inspector.id === selected ? "selected" : ""}>${esc(inspector.name)}</option>`)
+      .join("");
+    if (selected && !filtered.some((inspector) => inspector.id === selected)) {
+      return `<option value="${esc(selected)}" selected>${esc(selected)}</option>${base}`;
+    }
+    return base;
+  };
+
   const getMethodById = (id: string) => state.methods.find((m) => m.id === id);
 
   const syncCustomerForProject = (projectNo: string, fallback: string) => {
@@ -255,41 +296,115 @@ export async function renderNdtPage(app: HTMLElement) {
     return projectMap.get(projectNo)?.customer ?? fallback;
   };
 
-  function renderUploadPanelBody() {
-    const today = new Date().toISOString().slice(0, 10);
-    return `
-      <div class="upload-grid">
-        <div class="field">
-          <label>Prosjektnr (for alle)</label>
-          <select data-upload-project class="select">
-            <option value="">Velg prosjekt…</option>
-            ${buildProjectOptions("")}
-          </select>
-        </div>
-        <div class="field">
-          <label>Kunde (for alle)</label>
-          <select data-upload-customer class="select">
-            <option value="">Velg kunde…</option>
-            ${buildCustomerOptions("")}
-          </select>
-        </div>
-        <div class="field">
-          <label>Rapportdato (for alle)</label>
-          ${renderDatePickerInput({
-            value: today,
-            inputAttrs: `data-upload-date class="input"`,
-            openLabel: "Velg rapportdato",
-          })}
-        </div>
-        <div class="field">
-          <label>NDT-metode (for alle)</label>
-          <select data-upload-method class="select">
-            <option value="">Velg metode…</option>
-            ${buildMethodOptions("")}
-          </select>
-        </div>
-      </div>
+  const getUploadEntryName = (entry: UploadEntry) => {
+    return entry.source.kind === "local" ? entry.source.file.name : entry.source.fileName;
+  };
 
+  const stripPdfExt = (value: string | null | undefined) => String(value || "").replace(/\.pdf$/i, "").trim();
+
+  const inferSourceNameFromFileName = (fileName: string) => {
+    const base = stripPdfExt(fileName);
+    if (!base) return "";
+    const compact = base.replace(/_/g, "-").replace(/\s+/g, "-");
+    const match = compact.match(/\b([A-Za-z]{2,4})-?(\d{2,4})-?(\d{1,6})(?:-?rev\.?\d+)?\b/i);
+    if (!match) return base;
+    return `${match[1].toUpperCase()}-${match[2]}-${match[3]}`;
+  };
+
+  const normalizeSourceName = (value: string | null | undefined) => stripPdfExt(value).replace(/\s+/g, " ").trim();
+
+  const canonicalReportNo = (value: string | null | undefined) =>
+    normalizeSourceName(value)
+      .toLowerCase()
+      .replace(/[_\s.]+/g, "-")
+      .replace(/[^a-z0-9-]+/g, "")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+
+  const looksWeakSourceName = (value: string) => {
+    const v = normalizeSourceName(value).toLowerCase();
+    if (!v) return true;
+    if (!/\d/.test(v)) return true;
+    if (v.length < 5) return true;
+    if (/^(ndt|rapport|report|dokument|document)([-_\s].*)?$/i.test(v)) return true;
+    return false;
+  };
+
+  const findPotentialDuplicateReport = (sourceName: string) => {
+    const wanted = canonicalReportNo(sourceName);
+    if (!wanted) return null;
+    return (
+      state.reports.find((row) => {
+        const existing = canonicalReportNo(row.file?.label || "");
+        return !!existing && existing === wanted;
+      }) ?? null
+    );
+  };
+
+  const inferFileNameFromPath = (input: string) => {
+    const normalized = input.replace(/\\/g, "/");
+    const parts = normalized.split("/");
+    return parts[parts.length - 1] || input;
+  };
+
+  const toStringOrEmpty = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+
+  const updateOpenUploadButtonLabel = () => {
+    if (!state.isAdmin) return;
+    openUploadBtn.textContent = inboxNewCount > 0 ? `${openUploadBtnBaseLabel} (${inboxNewCount} nye)` : openUploadBtnBaseLabel;
+  };
+
+  const syncInboxUploadEntries = (rows: FileInboxRow[]) => {
+    const existingInbox = new Map<string, UploadEntry>();
+    uploadEntries.forEach((entry) => {
+      if (entry.source.kind !== "inbox") return;
+      existingInbox.set(entry.source.inboxId, entry);
+    });
+
+    const localEntries = uploadEntries.filter((entry) => entry.source.kind === "local");
+    const nextInboxEntries: UploadEntry[] = rows.map((row) => {
+      const current = existingInbox.get(row.id);
+      const meta = row.suggested_meta && typeof row.suggested_meta === "object"
+        ? (row.suggested_meta as Record<string, unknown>)
+        : {};
+
+      const defaultDate = new Date().toISOString().slice(0, 10);
+      const nextDate = toStringOrEmpty(meta.report_date) || defaultDate;
+
+      return {
+        id: current?.id ?? `inbox:${row.id}`,
+        source: {
+          kind: "inbox",
+          inboxId: row.id,
+          fileId: row.file_id,
+          fileName: row.file?.label || inferFileNameFromPath(row.source_path),
+        },
+        sourceName: current?.sourceName ?? inferSourceNameFromFileName(row.file?.label || inferFileNameFromPath(row.source_path)),
+        title: current?.title ?? toStringOrEmpty(meta.title),
+        customer: current?.customer ?? toStringOrEmpty(meta.customer),
+        reportDate: current?.reportDate ?? nextDate,
+        methodId: current?.methodId ?? toStringOrEmpty(meta.method_id),
+        supplierId: current?.supplierId ?? toStringOrEmpty(meta.ndt_supplier_id),
+        inspectorId: current?.inspectorId ?? toStringOrEmpty(meta.ndt_inspector_id),
+        welderIds: current?.welderIds ?? [],
+        welderStats: current?.welderStats ?? new Map(),
+      };
+    });
+
+    uploadEntries = [...localEntries, ...nextInboxEntries];
+    if (uploadPreviewId && !uploadEntries.some((entry) => entry.id === uploadPreviewId)) {
+      uploadPreviewId = null;
+      uploadPreviewName = null;
+      if (uploadPreviewUrl) {
+        URL.revokeObjectURL(uploadPreviewUrl);
+        uploadPreviewUrl = null;
+      }
+    }
+    renderUploadList();
+  };
+
+  function renderUploadPanelBody() {
+    return `
       <div class="field" style="grid-column:1 / -1;">
         <label>PDF-filer</label>
         <div class="dropzone" data-upload-dropzone>
@@ -347,6 +462,9 @@ export async function renderNdtPage(app: HTMLElement) {
               const method = getMethodById(entry.methodId);
               const isRt = method?.code === "RT";
               const isUploading = uploadingIds.has(entry.id);
+              const sourceNameWarning = looksWeakSourceName(entry.sourceName);
+              const duplicateReport = findPotentialDuplicateReport(entry.sourceName);
+              const duplicateLabel = duplicateReport?.file?.label || "";
 
               const welderOptions = state.welders
                 .map((w) => {
@@ -395,8 +513,8 @@ export async function renderNdtPage(app: HTMLElement) {
                 <div class="upload-file-card" data-file-id="${esc(entry.id)}">
                   <div class="upload-file-head">
                     <div>
-                      <div class="upload-file-name">${esc(entry.file.name)}</div>
-                      <div class="upload-file-meta">Klar</div>
+                      <div class="upload-file-name">${esc(getUploadEntryName(entry))}</div>
+                      <div class="upload-file-meta">${entry.source.kind === "inbox" ? "Ny i innboks" : "Klar"}</div>
                     </div>
                     <div class="upload-file-actions">
                       ${renderIconButton({
@@ -422,6 +540,12 @@ export async function renderNdtPage(app: HTMLElement) {
                   <div class="upload-file-body">
                     <div class="upload-file-fields">
                       <div class="upload-col">
+                        <div class="field">
+                          <label>Rapportnr</label>
+                          <input class="input" data-file-source-name data-file-id="${esc(entry.id)}" value="${esc(entry.sourceName)}" placeholder="f.eks. MT-25-1754" />
+                          ${sourceNameWarning ? `<div class="muted" style="font-size:12px;">Sjekk rapportnr. Denne ser ut som et generisk filnavn.</div>` : ""}
+                          ${duplicateReport ? `<div class="muted" style="font-size:12px;color:#a14d00;">Mulig duplikat: rapport med samme nr finnes fra før${duplicateLabel ? ` (${esc(stripPdfExt(duplicateLabel))})` : ""}.</div>` : ""}
+                        </div>
                         <div class="field">
                           <label>Prosjektnr</label>
                           <select class="select" data-file-project data-file-id="${esc(entry.id)}">
@@ -451,11 +575,24 @@ export async function renderNdtPage(app: HTMLElement) {
                             ${buildMethodOptions(entry.methodId)}
                           </select>
                         </div>
+                        <div class="field">
+                          <label>NDT-firma</label>
+                          <select class="select" data-file-supplier data-file-id="${esc(entry.id)}">
+                            <option value="">Velg firma...</option>
+                            ${buildSupplierOptions(entry.supplierId)}
+                          </select>
+                        </div>
+                        <div class="field">
+                          <label>NDT-kontrollør</label>
+                          <select class="select" data-file-inspector data-file-id="${esc(entry.id)}">
+                            <option value="">${entry.supplierId ? "Velg kontrollør..." : "Velg firma først..."}</option>
+                            ${buildInspectorOptions(entry.supplierId, entry.inspectorId)}
+                          </select>
+                        </div>
                       </div>
                       <div class="upload-col">
                         <div class="field">
                           <label>Sveisere</label>
-                          <input class="input" data-file-welder-search data-file-id="${esc(entry.id)}" placeholder="Søk sveiser…" />
                           <div class="welder-list" data-file-welder-list data-file-id="${esc(entry.id)}">
                             ${welderOptions || `<div class=\"muted\">Ingen sveisere funnet.</div>`}
                           </div>
@@ -473,7 +610,13 @@ export async function renderNdtPage(app: HTMLElement) {
     `;
 
     if (uploadStatus) {
-      uploadStatus.textContent = `${uploadEntries.length} filer`;
+      const duplicateCount = uploadEntries.reduce((sum, entry) => {
+        return sum + (findPotentialDuplicateReport(entry.sourceName) ? 1 : 0);
+      }, 0);
+      uploadStatus.textContent =
+        duplicateCount > 0
+          ? `${uploadEntries.length} filer (${duplicateCount} mulig duplikat)`
+          : `${uploadEntries.length} filer`;
     }
     if (uploadSave) uploadSave.disabled = uploadEntries.length === 0;
   };
@@ -489,22 +632,42 @@ export async function renderNdtPage(app: HTMLElement) {
       renderUploadList();
       return;
     }
-    uploadPreviewUrl = URL.createObjectURL(entry.file);
-    uploadPreviewName = entry.file.name;
+    if (entry.source.kind !== "local") {
+      renderUploadList();
+      return;
+    }
+    uploadPreviewUrl = URL.createObjectURL(entry.source.file);
+    uploadPreviewName = entry.source.file.name;
     uploadPreviewId = entry.id;
     renderUploadList();
   };
 
   const buildUploadPayload = (entry: UploadEntry): NdtUploadEntry => {
+    const source_name = normalizeSourceName(entry.sourceName);
     const title = (entry.title || "").trim();
     const customer = (entry.customer || "").trim();
     const report_date = (entry.reportDate || "").trim();
     const method_id = (entry.methodId || "").trim();
+    const ndt_supplier_id = (entry.supplierId || "").trim() || null;
+    const ndt_inspector_id = (entry.inspectorId || "").trim() || null;
 
+    if (!source_name) throw new Error("Oppgi rapportnr.");
+    if (looksWeakSourceName(source_name)) {
+      throw new Error("Rapportnr ser ugyldig ut. Oppgi korrekt rapportnr (f.eks. MT-25-1754).");
+    }
     if (!title || !customer || !report_date) {
       throw new Error("Velg prosjektnr, kunde og dato.");
     }
     if (!method_id) throw new Error("Velg NDT-metode.");
+    if (!!ndt_supplier_id !== !!ndt_inspector_id) {
+      throw new Error("Velg både NDT-firma og kontrollør, eller la begge stå tomme.");
+    }
+    if (ndt_supplier_id && ndt_inspector_id) {
+      const inspector = state.ndtInspectors.find((row) => row.id === ndt_inspector_id);
+      if (!inspector || inspector.supplier_id !== ndt_supplier_id) {
+        throw new Error("Valgt kontrollør tilhører ikke valgt firma.");
+      }
+    }
 
     const method = getMethodById(method_id);
     const isRt = method?.code === "RT";
@@ -529,8 +692,13 @@ export async function renderNdtPage(app: HTMLElement) {
     const defect_count = isRt ? totalDefects : null;
 
     return {
-      file: entry.file,
+      file: entry.source.kind === "local" ? entry.source.file : null,
+      file_id: entry.source.kind === "inbox" ? entry.source.fileId : null,
+      inbox_id: entry.source.kind === "inbox" ? entry.source.inboxId : null,
+      source_name,
       method_id,
+      ndt_supplier_id,
+      ndt_inspector_id,
       weld_count,
       defect_count,
       title,
@@ -561,16 +729,14 @@ export async function renderNdtPage(app: HTMLElement) {
   };
 
   const addUploadFiles = (files: File[]) => {
-    const existingKeys = new Set(uploadEntries.map((e) => `${e.file.name}:${e.file.size}`));
+    const existingKeys = new Set(
+      uploadEntries.map((e) => (e.source.kind === "local" ? `local:${e.source.file.name}:${e.source.file.size}` : `inbox:${e.source.fileId}`))
+    );
     const nextEntries: UploadEntry[] = [];
-
-    const globalProject = (uploadProject?.value || "").trim();
-    const globalCustomer = (uploadCustomer?.value || "").trim();
-    const globalDate = (uploadDate?.value || "").trim();
-    const globalMethod = (uploadMethod?.value || "").trim();
+    const defaultDate = new Date().toISOString().slice(0, 10);
 
     files.forEach((file) => {
-      const key = `${file.name}:${file.size}`;
+      const key = `local:${file.name}:${file.size}`;
       const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
       if (!isPdf) {
         toast(`Hopper over ${file.name}: ikke en PDF.`);
@@ -578,15 +744,16 @@ export async function renderNdtPage(app: HTMLElement) {
       }
       if (existingKeys.has(key)) return;
 
-      const syncedCustomer = globalProject ? syncCustomerForProject(globalProject, globalCustomer) : globalCustomer;
-
       nextEntries.push({
         id: crypto.randomUUID(),
-        file,
-        title: globalProject,
-        customer: syncedCustomer,
-        reportDate: globalDate,
-        methodId: globalMethod,
+        source: { kind: "local", file },
+        sourceName: inferSourceNameFromFileName(file.name),
+        title: "",
+        customer: "",
+        reportDate: defaultDate,
+        methodId: "",
+        supplierId: "",
+        inspectorId: "",
         welderIds: [],
         welderStats: new Map(),
       });
@@ -600,60 +767,10 @@ export async function renderNdtPage(app: HTMLElement) {
 
   const initUploadPanel = () => {
     uploadBody.innerHTML = renderUploadPanelBody();
-    uploadProject = qs<HTMLSelectElement>(uploadBody, "[data-upload-project]");
-    uploadCustomer = qs<HTMLSelectElement>(uploadBody, "[data-upload-customer]");
-    uploadDate = qs<HTMLInputElement>(uploadBody, "[data-upload-date]");
-    uploadMethod = qs<HTMLSelectElement>(uploadBody, "[data-upload-method]");
     uploadInput = qs<HTMLInputElement>(uploadBody, "[data-upload-files]");
     uploadList = qs<HTMLDivElement>(uploadBody, "[data-upload-list]");
     uploadDropzone = qs<HTMLDivElement>(uploadBody, "[data-upload-dropzone]");
     wireDatePickers(uploadBody, signal);
-
-    uploadProject.addEventListener(
-      "change",
-      () => {
-        const nextProject = (uploadProject?.value || "").trim();
-        const nextCustomer = nextProject ? syncCustomerForProject(nextProject, uploadCustomer?.value || "") : (uploadCustomer?.value || "");
-        if (uploadCustomer) uploadCustomer.value = nextCustomer;
-        uploadEntries = uploadEntries.map((entry) => ({
-          ...entry,
-          title: nextProject,
-          customer: nextCustomer,
-        }));
-        renderUploadList();
-      },
-      { signal }
-    );
-
-    uploadCustomer.addEventListener(
-      "change",
-      () => {
-        const nextCustomer = (uploadCustomer?.value || "").trim();
-        uploadEntries = uploadEntries.map((entry) => ({ ...entry, customer: nextCustomer }));
-        renderUploadList();
-      },
-      { signal }
-    );
-
-    uploadDate.addEventListener(
-      "change",
-      () => {
-        const nextDate = (uploadDate?.value || "").trim();
-        uploadEntries = uploadEntries.map((entry) => ({ ...entry, reportDate: nextDate }));
-        renderUploadList();
-      },
-      { signal }
-    );
-
-    uploadMethod.addEventListener(
-      "change",
-      () => {
-        const nextMethod = (uploadMethod?.value || "").trim();
-        uploadEntries = uploadEntries.map((entry) => ({ ...entry, methodId: nextMethod }));
-        renderUploadList();
-      },
-      { signal }
-    );
 
     uploadInput.addEventListener(
       "change",
@@ -695,11 +812,18 @@ export async function renderNdtPage(app: HTMLElement) {
 
     uploadList.addEventListener(
       "click",
-      (e) => {
+      async (e) => {
         const target = e.target as HTMLElement;
         const previewId = target.closest("[data-file-preview]")?.getAttribute("data-file-preview");
         if (previewId) {
           const entry = uploadEntries.find((f) => f.id === previewId) || null;
+          if (entry?.source.kind === "inbox") {
+            void openPdf(entry.source.fileId).catch((err) => {
+              console.error(err);
+              alert("Klarte ikke å åpne PDF.");
+            });
+            return;
+          }
           setUploadPreview(entry);
           return;
         }
@@ -712,7 +836,25 @@ export async function renderNdtPage(app: HTMLElement) {
 
         const removeId = target.closest("[data-file-remove]")?.getAttribute("data-file-remove");
         if (removeId) {
-          uploadEntries = uploadEntries.filter((entry) => entry.id !== removeId);
+          const entry = uploadEntries.find((item) => item.id === removeId);
+          if (!entry) return;
+
+          if (entry.source.kind === "inbox") {
+            const ok = window.confirm("Slette filen fra innboks og lagring? Dette kan ikke angres.");
+            if (!ok) return;
+            try {
+              await deleteFileInboxEntryAndMaybeFile(entry.source.inboxId);
+              toast("Fil fjernet fra innboks.");
+            } catch (err: any) {
+              console.error(err);
+              alert(String(err?.message ?? err));
+            } finally {
+              await load();
+            }
+            return;
+          }
+
+          uploadEntries = uploadEntries.filter((item) => item.id !== removeId);
           if (uploadPreviewId === removeId) setUploadPreview(null);
           renderUploadList();
           return;
@@ -734,6 +876,12 @@ export async function renderNdtPage(app: HTMLElement) {
         const fileId = target.closest("[data-file-id]")?.getAttribute("data-file-id") || "";
         const entry = uploadEntries.find((f) => f.id === fileId);
         if (!entry) return;
+
+        if (target.matches("[data-file-source-name]")) {
+          entry.sourceName = (target as HTMLInputElement).value || "";
+          renderUploadList();
+          return;
+        }
 
         if (target.matches("[data-file-project]")) {
           const nextProject = (target as HTMLSelectElement).value || "";
@@ -762,6 +910,22 @@ export async function renderNdtPage(app: HTMLElement) {
           return;
         }
 
+        if (target.matches("[data-file-supplier]")) {
+          entry.supplierId = (target as HTMLSelectElement).value || "";
+          const inspectorStillValid = state.ndtInspectors.some(
+            (inspector) => inspector.id === entry.inspectorId && inspector.supplier_id === entry.supplierId
+          );
+          if (!inspectorStillValid) entry.inspectorId = "";
+          renderUploadList();
+          return;
+        }
+
+        if (target.matches("[data-file-inspector]")) {
+          entry.inspectorId = (target as HTMLSelectElement).value || "";
+          renderUploadList();
+          return;
+        }
+
         if (target.matches("[data-file-welder]")) {
           const input = target as HTMLInputElement;
           const welderId = input.value;
@@ -781,19 +945,6 @@ export async function renderNdtPage(app: HTMLElement) {
       "input",
       (e) => {
         const target = e.target as HTMLElement;
-        if (target.matches("[data-file-welder-search]")) {
-          const field = target as HTMLInputElement;
-          const q = (field.value || "").trim().toLowerCase();
-          const container = target.closest("[data-file-id]")?.querySelector<HTMLElement>("[data-file-welder-list]");
-          if (!container) return;
-          container.querySelectorAll<HTMLElement>(".welder-pill").forEach((pill) => {
-            const label = (pill.dataset.welderLabel || "").toLowerCase();
-            const match = !q || label.includes(q);
-            pill.style.display = match ? "" : "none";
-          });
-          return;
-        }
-
         if (target.matches("[data-file-weld-count], [data-file-defect-count]")) {
           const input = target as HTMLInputElement;
           const fileId = input.getAttribute("data-file-id") || "";
@@ -824,18 +975,7 @@ export async function renderNdtPage(app: HTMLElement) {
   };
 
   const refreshUploadSelects = () => {
-    if (!uploadInitialized || !uploadProject || !uploadCustomer || !uploadMethod) return;
-    const projectValue = uploadProject.value || "";
-    const customerValue = uploadCustomer.value || "";
-    const methodValue = uploadMethod.value || "";
-
-    uploadProject.innerHTML = `<option value="">Velg prosjekt…</option>${buildProjectOptions(projectValue)}`;
-    uploadCustomer.innerHTML = `<option value="">Velg kunde…</option>${buildCustomerOptions(customerValue)}`;
-    uploadMethod.innerHTML = `<option value="">Velg metode…</option>${buildMethodOptions(methodValue)}`;
-
-    uploadProject.value = projectValue;
-    uploadCustomer.value = customerValue;
-    uploadMethod.value = methodValue;
+    if (!uploadInitialized) return;
     renderUploadList();
   };
 
@@ -894,8 +1034,6 @@ export async function renderNdtPage(app: HTMLElement) {
     const projectNo = (filterProject.value || "").trim();
     const year = (filterYear.value || "").trim();
     const welderId = (filterWelder.value || "").trim();
-    const text = (filterText.value || "").trim().toLowerCase();
-    const projectMap = new Map(state.projects.map((p) => [String(p.project_no), p]));
 
     return state.reports.filter((r) => {
       if (methodId && r.method_id !== methodId) return false;
@@ -907,15 +1045,6 @@ export async function renderNdtPage(app: HTMLElement) {
       if (welderId) {
         const hasWelder = (r.report_welders || []).some((rw) => rw.welder_id === welderId);
         if (!hasWelder) return false;
-      }
-      if (text) {
-        const fileLabel = r.file?.label?.toLowerCase() ?? "";
-        const projectNo = r.title?.toLowerCase() ?? "";
-        const customer = r.customer?.toLowerCase() ?? "";
-        const projectName = projectNo ? projectMap.get(projectNo)?.name?.toLowerCase() ?? "" : "";
-        if (!fileLabel.includes(text) && !projectNo.includes(text) && !customer.includes(text) && !projectName.includes(text)) {
-          return false;
-        }
       }
       return true;
     });
@@ -1056,14 +1185,14 @@ export async function renderNdtPage(app: HTMLElement) {
                 const y = yFor(s.rate);
                 const h = Math.max(0, viewH - padB - y);
                 const color = colorForRate(s.rate);
-                const valueY = Math.max(padT + 10, y - 6);
+                const valueY = h >= 22 ? y + 14 : Math.max(padT + 12, y - 6);
                 return `
                   <g class="rt-bar-group">
                     <rect class="rt-bar" x="${x}" y="${y}" width="${barW}" height="${h}" rx="6" ry="6" fill="${color}">
                       <title>${s.year}: ${formatPercent(s.rate)}% (${s.defects} feil / ${s.welds} sveis)</title>
                     </rect>
-                    ${showBarLabels ? `<text class="rt-bar-value" x="${x + barW / 2}" y="${valueY}" text-anchor="middle">${formatPercent(s.rate)}%</text>` : ""}
-                    <text x="${x + barW / 2}" y="${viewH - 10}" text-anchor="middle">${s.year}</text>
+                    ${showBarLabels ? `<text class="rt-bar-value" x="${x + barW / 2}" y="${valueY}" text-anchor="middle" dominant-baseline="middle">${formatPercent(s.rate)}%</text>` : ""}
+                    <text class="rt-year-label" x="${x + barW / 2}" y="${viewH - 10}" text-anchor="middle">${s.year}</text>
                   </g>
                 `;
               })
@@ -1124,6 +1253,11 @@ export async function renderNdtPage(app: HTMLElement) {
 
   function updateAdminUi() {
     openUploadBtn.style.display = state.isAdmin ? "" : "none";
+    if (!state.isAdmin) {
+      openUploadBtn.textContent = openUploadBtnBaseLabel;
+      return;
+    }
+    updateOpenUploadButtonLabel();
   }
 
   async function load() {
@@ -1133,12 +1267,16 @@ export async function renderNdtPage(app: HTMLElement) {
     reportBody.innerHTML = `<div class="muted">Laster…</div>`;
 
     try {
-      const [methods, reports, welders, projects, customers] = await Promise.all([
+      const [methods, reports, welders, projects, customers, ndtSuppliers, ndtInspectors, inboxRows, inboxCount] = await Promise.all([
         fetchNdtMethods(),
         fetchNdtReports(),
         fetchWelders(),
         fetchProjects(),
         fetchCustomers(),
+        fetchNdtSuppliers({ includeInactive: true }),
+        fetchNdtInspectors({ includeInactive: true }),
+        state.isAdmin ? fetchNewFileInboxByTarget("ndt_report") : Promise.resolve([] as FileInboxRow[]),
+        state.isAdmin ? countNewFileInboxByTarget("ndt_report") : Promise.resolve(0),
       ]);
 
       if (seq !== state.loadSeq) return;
@@ -1148,10 +1286,15 @@ export async function renderNdtPage(app: HTMLElement) {
       state.welders = welders;
       state.projects = projects;
       state.customers = customers;
+      state.ndtSuppliers = ndtSuppliers;
+      state.ndtInspectors = ndtInspectors;
+      inboxNewCount = inboxCount;
 
       renderFilters();
       renderLists();
+      syncInboxUploadEntries(inboxRows);
       refreshUploadSelects();
+      updateOpenUploadButtonLabel();
     } catch (e: any) {
       console.error(e);
       reportBody.innerHTML = `<div class="err">Feil: ${String(e?.message ?? e)}</div>`;
@@ -1183,7 +1326,7 @@ export async function renderNdtPage(app: HTMLElement) {
   uploadClear.addEventListener(
     "click",
     () => {
-      uploadEntries = [];
+      uploadEntries = uploadEntries.filter((entry) => entry.source.kind === "inbox");
       uploadingIds = new Set();
       setUploadPreview(null);
       renderUploadList();
@@ -1240,7 +1383,17 @@ export async function renderNdtPage(app: HTMLElement) {
   filterProject.addEventListener("change", onFilterChange, { signal });
   filterYear.addEventListener("change", onFilterChange, { signal });
   filterWelder.addEventListener("change", onFilterChange, { signal });
-  filterText.addEventListener("input", onFilterChange, { signal });
+  pageSizeSelect.addEventListener(
+    "change",
+    () => {
+      const next = Number(pageSizeSelect.value || "10");
+      if (!Number.isFinite(next) || next < 1) return;
+      state.pageSize = next;
+      state.page = 1;
+      renderLists();
+    },
+    { signal }
+  );
 
   pager.addEventListener(
     "click",
@@ -1312,6 +1465,8 @@ export async function renderNdtPage(app: HTMLElement) {
           state.welders,
           state.projects,
           state.customers,
+          state.ndtSuppliers,
+          state.ndtInspectors,
           "edit",
           row,
           load
@@ -1326,7 +1481,11 @@ export async function renderNdtPage(app: HTMLElement) {
   } catch {}
 
   updateAdminUi();
+  pageSizeSelect.value = String(state.pageSize);
 
   await load();
   setLoading(false);
 }
+
+
+

@@ -21,13 +21,16 @@ const renderStatus = (row: ProjectTraceabilityRow) => {
   if (row.material_certificate_id && row.cert?.file_id) {
     return `<button type="button" class="status-pill ok" style="cursor:pointer" data-open-cert="${esc(row.cert.file_id)}">Klar</button>`;
   }
+  if (!row.material_certificate_id && String(row.heat_number ?? "").trim()) {
+    return `<span class="status-pill manual" title="Manuell heat. Ikke koblet til sertifikat.">Manuell</span>`;
+  }
   return `<span class="status-pill warn">Mangel</span>`;
 };
 
 const renderCert = (row: ProjectTraceabilityRow) => {
-  if (!row.cert) return `<span class="muted">Ikke valgt</span>`;
   const selected = (row.heat_number || "").trim();
   if (selected) return esc(selected);
+  if (!row.cert) return `<span class="muted">Ikke valgt</span>`;
   const heat = (row.cert.heat_numbers ?? []).filter(Boolean).join(", ");
   return heat ? esc(heat) : `<span class="muted">—</span>`;
 };

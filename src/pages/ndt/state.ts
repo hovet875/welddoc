@@ -2,10 +2,13 @@ import type { ProfileWelderRow } from "../../repo/certRepo";
 import type { ProjectRow } from "../../repo/projectRepo";
 import type { CustomerRow } from "../../repo/customerRepo";
 import type { NdtMethodRow, NdtReportRow } from "../../repo/ndtReportRepo";
+import type { NdtSupplierRow, NdtInspectorRow } from "../../repo/ndtSupplierRepo";
 
 export type NdtPageState = {
   reports: NdtReportRow[];
   methods: NdtMethodRow[];
+  ndtSuppliers: NdtSupplierRow[];
+  ndtInspectors: NdtInspectorRow[];
   welders: ProfileWelderRow[];
   projects: ProjectRow[];
   customers: CustomerRow[];
@@ -20,6 +23,8 @@ export function createState(): NdtPageState {
   return {
     reports: [],
     methods: [],
+    ndtSuppliers: [],
+    ndtInspectors: [],
     welders: [],
     projects: [],
     customers: [],

@@ -425,6 +425,20 @@
   font-size: 11px;
 }
 
+.rt-axis text.rt-bar-value{
+  fill: #f8fbff;
+  font-size: 12px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: rgba(7,18,35,0.72);
+  stroke-width: 2px;
+}
+
+.rt-axis text.rt-year-label{
+  fill: var(--muted);
+  font-size: 11px;
+}
+
 .rt-axis-text{
   fill: var(--muted);
   font-size: 11px;

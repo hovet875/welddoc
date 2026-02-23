@@ -169,6 +169,78 @@
   font-weight: 600;
 }
 
+.page-projects .project-linked-summary{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.page-projects .project-linked-pill{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
+  background: rgba(255,255,255,0.03);
+}
+
+.page-projects .project-linked-pill span{
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.page-projects .project-linked-pill strong{
+  font-size: 14px;
+}
+
+.page-projects .project-linked-grid{
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+}
+
+.page-projects .project-linked-card{
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-lg);
+  background: rgba(255,255,255,0.03);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.page-projects .project-linked-card-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.page-projects .project-linked-card-head h3{
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.page-projects .project-linked-card .data-table{
+  width: 100%;
+}
+
+.page-projects .project-linked-card .data-table th,
+.page-projects .project-linked-card .data-table td{
+  white-space: nowrap;
+}
+
+.page-projects .project-linked-doccell{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 180px;
+}
+
 .page-projects .docpack-builder{
   display: grid;
   gap: 14px;
@@ -233,32 +305,63 @@
   font-size: 12.5px;
 }
 
-.page-projects .pressure-test-panel .panel-body{
+.page-projects .pressure-test-log .panel-body{
   display: grid;
   gap: 14px;
 }
 
-.page-projects .pressure-test-grid{
-  display: grid;
-  gap: 10px 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.page-projects .pressure-test-actions{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.page-projects .pressure-test-grid .field{
+.page-projects .pressure-test-summary{
   display: grid;
-  gap: 6px;
+  gap: 10px;
 }
 
-.page-projects .pressure-test-grid .field-span-2{
+.page-projects .pressure-test-cards{
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.page-projects .pressure-test-card{
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.page-projects .pressure-test-card.is-wide{
   grid-column: 1 / -1;
 }
 
-.page-projects .pressure-test-comment{
-  min-height: 88px;
-  resize: vertical;
+.page-projects .pressure-test-card-label{
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.62);
+  font-weight: 700;
 }
 
-.page-projects .pressure-test-cert{
+.page-projects .pressure-test-card-value{
+  font-size: 17px;
+  line-height: 1.2;
+  font-weight: 650;
+  color: rgba(255,255,255,0.93);
+}
+
+.page-projects .pressure-test-card-sub{
+  color: rgba(255,255,255,0.74);
+  font-size: 13px;
+}
+
+.page-projects .pressure-test-cert-row{
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -285,40 +388,37 @@
   flex-wrap: wrap;
 }
 
-.page-projects .pressure-test-actions{
-  display: flex;
-  justify-content: flex-end;
+.page-projects .pressure-test-toolbar{
+  margin-bottom: 0;
 }
 
-.page-projects .pressure-test-table-head{
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+.page-projects .pressure-test-filters{
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(260px, 1.3fr);
+  width: min(980px, 100%);
 }
 
-.page-projects .pressure-test-table-head-actions{
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+.page-projects .pressure-test-filters .field{
+  display: grid;
+  gap: 6px;
+}
+
+.page-projects .pressure-test-filters .field.is-wide{
+  min-width: 0;
 }
 
 .page-projects .pressure-test-table-wrap{
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: var(--radius-lg);
-  background: rgba(255,255,255,0.02);
+  background: linear-gradient(180deg, rgba(10, 20, 34, 0.5), rgba(8, 17, 30, 0.4));
 }
 
 .page-projects .pressure-test-table{
   width: 100%;
-  min-width: 1120px;
+  min-width: 1040px;
+  table-layout: fixed;
 }
 
 .page-projects .pressure-test-table th:nth-child(1),
 .page-projects .pressure-test-table td:nth-child(1){
-  width: 56px;
+  width: 70px;
 }
 
 .page-projects .pressure-test-table th:nth-child(2),
@@ -333,7 +433,7 @@
 
 .page-projects .pressure-test-table th:nth-child(4),
 .page-projects .pressure-test-table td:nth-child(4){
-  width: 160px;
+  width: 150px;
 }
 
 .page-projects .pressure-test-table th:nth-child(5),
@@ -344,14 +444,11 @@
 .page-projects .pressure-test-table td:nth-child(7),
 .page-projects .pressure-test-table th:nth-child(8),
 .page-projects .pressure-test-table td:nth-child(8){
-  width: 140px;
+  width: 130px;
 }
 
-.page-projects .pressure-test-row-actions{
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
+.page-projects .pressure-test-table td{
+  white-space: nowrap;
 }
 
 .page-projects .drawing-upload{
@@ -923,6 +1020,8 @@
   vertical-align: middle;
 }
 
+.page-projects .weld-log-table th.cert-col,
+.page-projects .weld-log-table td.cert-col,
 .page-projects .weld-log-table th.wps-col,
 .page-projects .weld-log-table td.wps-col{
   width: 72px;
@@ -930,6 +1029,7 @@
   text-align: center;
 }
 
+.page-projects .weld-log-table td.cert-col,
 .page-projects .weld-log-table td.wps-col{
   vertical-align: middle;
   padding-top: 8px;
@@ -1250,6 +1350,14 @@
   .page-projects .weld-log-filters .field.is-wide{
     grid-column: 1 / -1;
   }
+
+  .page-projects .pressure-test-filters{
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+
+  .page-projects .pressure-test-filters .field.is-wide{
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 980px){
@@ -1277,13 +1385,20 @@
   .page-projects .drawer-grid{ grid-template-columns: 1fr; }
   .page-projects .ndt-grid{ grid-template-columns: 1fr; }
   .page-projects .docpack-options{ grid-template-columns: 1fr; }
-  .page-projects .pressure-test-grid{ grid-template-columns: 1fr; }
-  .page-projects .pressure-test-cert{
+  .page-projects .pressure-test-cards{ grid-template-columns: 1fr; }
+  .page-projects .pressure-test-cert-row{
     flex-direction: column;
     align-items: flex-start;
   }
+  .page-projects .pressure-test-filters{
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+  .page-projects .pressure-test-filters .field.is-wide{
+    grid-column: auto;
+  }
   .page-projects .pressure-test-table{
-    min-width: 980px;
+    min-width: 920px;
   }
   .page-projects .drawer-grid .date-picker{
     grid-template-columns: minmax(0, 1fr) 44px;
@@ -1307,7 +1422,7 @@
   }
 
   .page-projects .weld-log-table{
-    min-width: 920px;
+    min-width: 980px;
   }
 }
 
@@ -1391,6 +1506,56 @@
   margin-top: 6px;
   font-size: 12px;
   color: var(--muted);
+}
+
+.trace-heat-head{
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.trace-heat-head label{
+  margin: 0;
+}
+
+.trace-heat-clear{
+  flex: 0 0 auto;
+}
+
+.trace-heat .input{
+  margin-top: 6px;
+}
+
+.trace-heat-picks{
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.trace-heat-pick{
+  appearance: none;
+  border: 1px solid rgba(255,255,255,0.22);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.9);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.trace-heat-pick:hover{
+  border-color: rgba(56,151,255,0.5);
+  background: rgba(56,151,255,0.12);
+}
+
+.trace-heat-pick.is-selected{
+  border-color: rgba(88,211,140,0.6);
+  background: rgba(88,211,140,0.16);
+  color: #c9f5dd;
 }
 
 .trace-cert-list{

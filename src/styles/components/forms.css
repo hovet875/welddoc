@@ -12,68 +12,6 @@
 }
 .input::placeholder{ color: rgba(255,255,255,0.45); }
 
-.has-autocomplete{
-  position: relative;
-}
-
-.autocomplete-menu{
-  position: absolute;
-  z-index: 20;
-  left: 0;
-  right: 0;
-  margin-top: 6px;
-  background: #0b0f17;
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 12px;
-  box-shadow: 0 12px 30px rgba(0,0,0,0.35);
-  max-height: 240px;
-  overflow: auto;
-  display: none;
-}
-
-.autocomplete-menu.is-floating{
-  position: fixed;
-  left: 0;
-  right: auto;
-  max-height: none;
-  overflow: hidden;
-  z-index: 40;
-}
-
-.autocomplete-menu.is-floating .autocomplete-item{
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.autocomplete-item{
-  padding: 10px 12px;
-  cursor: pointer;
-  color: rgba(255,255,255,0.9);
-}
-
-.autocomplete-sub{
-  margin-top: 2px;
-  font-size: 11px;
-  color: rgba(255,255,255,0.55);
-}
-
-.autocomplete-muted{
-  color: rgba(255,255,255,0.55);
-  font-size: 12px;
-}
-
-.autocomplete-sub{
-  margin-top: 2px;
-  font-size: 11px;
-  color: rgba(255,255,255,0.55);
-}
-
-.autocomplete-item:hover,
-.autocomplete-item.is-active{
-  background: rgba(255,255,255,0.06);
-}
-
 .input:focus, .select:focus{
   border-color: rgba(120,170,255,0.55);
   box-shadow: 0 0 0 3px rgba(120,170,255,0.15);

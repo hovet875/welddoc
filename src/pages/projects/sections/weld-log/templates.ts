@@ -18,6 +18,8 @@ import type {
 
 const dash = "—";
 
+export const VT_NO_REPORT_VALUE = "__VT_NO_REPORT__";
+
 const renderValue = (value: string | number | null | undefined) => {
   if (value == null || value === "") return dash;
   return esc(String(value));
@@ -222,7 +224,7 @@ export function renderLayout(
               <tr class="weld-group-row">
                 <th class="select-col group-empty"></th>
                 <th colspan="3" class="group-label">Grunninfo</th>
-                <th colspan="3" class="group-label">Produksjon</th>
+                <th colspan="4" class="group-label">Produksjon</th>
                 <th colspan="2" class="group-label">NDT</th>
                 <th class="group-empty"></th>
               </tr>
@@ -232,6 +234,7 @@ export function renderLayout(
                 <th>Fuge</th>
                 <th>Komponent</th>
                 <th>Sveiser</th>
+                <th class="cert-col">Sertifikat</th>
                 <th class="wps-col">WPS</th>
                 <th>Dato</th>
                 <th>NDT</th>
@@ -251,11 +254,21 @@ export function renderLayout(
   `;
 }
 
-export function renderRows(rows: WeldListRow[], selected: Set<string>, wpsStatusByRow: Map<string, RowWpsStatus>) {
+const certStatusBadge = (status: RowWpsStatus | undefined) => {
+  if (!status) return `<span class="wps-indicator danger" title="Mangler sertifikat" aria-label="Mangler sertifikat">&#10005;</span>`;
+  return `<span class="wps-indicator ${status.tone}" title="${esc(status.title)}" aria-label="${esc(status.title)}">${status.symbol}</span>`;
+};
+
+export function renderRows(
+  rows: WeldListRow[],
+  selected: Set<string>,
+  certStatusByRow: Map<string, RowWpsStatus>,
+  wpsStatusByRow: Map<string, RowWpsStatus>
+) {
   if (!rows.length) {
     return `
       <tr>
-        <td colspan="10" class="empty">Ingen rader.</td>
+        <td colspan="11" class="empty">Ingen rader.</td>
       </tr>
     `;
   }
@@ -286,6 +299,7 @@ export function renderRows(rows: WeldListRow[], selected: Set<string>, wpsStatus
           <td>${renderValue(row.fuge)}</td>
           <td>${component}</td>
           <td>${esc(welderLabel)}</td>
+          <td class="cert-col">${certStatusBadge(certStatusByRow.get(row.id))}</td>
           <td class="wps-col">${wpsStatusBadge(wpsStatusByRow.get(row.id))}</td>
           <td>${formatDate(row.dato)}</td>
           <td class="ndt-cell"><div class="ndt-pills">${ndt}</div></td>
@@ -315,11 +329,50 @@ export function renderBulkReportOptions(reports: NdtReportRow[]) {
     .join("");
 }
 
-const reportOptions = (reports: NdtReportRow[], methods: string[]) => {
-  return reports
-    .filter((r) => methods.includes((r.method || "").toLowerCase()))
-    .map((r) => `<option value="${esc(r.report_no ?? "")}"></option>`)
-    .join("");
+const reportSelectOptions = (
+  reports: NdtReportRow[],
+  methods: string[],
+  selectedId: string | null | undefined,
+  placeholder = "Velg rapport..."
+) => {
+  const selected = (selectedId || "").trim();
+  const filtered = reports.filter((r) => methods.includes((r.method || "").toLowerCase()));
+  const rows = [
+    `<option value="">${esc(placeholder)}</option>`,
+    ...filtered.map((report) => {
+      const reportNo = String(report.report_no ?? "").trim() || dash;
+      const date = String(report.date ?? "").trim();
+      const label = date ? `${reportNo} - ${date}` : reportNo;
+      return `<option value="${esc(report.id)}"${report.id === selected ? " selected" : ""}>${esc(label)}</option>`;
+    }),
+  ];
+  if (selected && !filtered.some((report) => report.id === selected)) {
+    const fallback = reports.find((report) => report.id === selected);
+    const fallbackLabel = String(fallback?.report_no ?? selected).trim() || selected;
+    rows.push(`<option value="${esc(selected)}" selected>${esc(fallbackLabel)}</option>`);
+  }
+  return rows.join("");
+};
+
+const vtReportSelectOptions = (reports: NdtReportRow[], selectedId: string | null | undefined, noReportSelected: boolean) => {
+  const selected = (selectedId || "").trim();
+  const filtered = reports.filter((r) => (r.method || "").toLowerCase() === "vt");
+  const rows = [
+    `<option value="">Velg rapport...</option>`,
+    `<option value="${esc(VT_NO_REPORT_VALUE)}"${!selected && noReportSelected ? " selected" : ""}>Ingen rapport</option>`,
+    ...filtered.map((report) => {
+      const reportNo = String(report.report_no ?? "").trim() || dash;
+      const date = String(report.date ?? "").trim();
+      const label = date ? `${reportNo} - ${date}` : reportNo;
+      return `<option value="${esc(report.id)}"${report.id === selected ? " selected" : ""}>${esc(label)}</option>`;
+    }),
+  ];
+  if (selected && !filtered.some((report) => report.id === selected)) {
+    const fallback = reports.find((report) => report.id === selected);
+    const fallbackLabel = String(fallback?.report_no ?? selected).trim() || selected;
+    rows.push(`<option value="${esc(selected)}" selected>${esc(fallbackLabel)}</option>`);
+  }
+  return rows.join("");
 };
 
 const renderRecentReports = (reports: NdtReportRow[], methods: string[]) => {
@@ -340,20 +393,22 @@ const renderRecentReports = (reports: NdtReportRow[], methods: string[]) => {
   `;
 };
 
-const reportLabel = (reports: NdtReportRow[], reportId: string | null | undefined) => {
-  if (!reportId) return "";
-  const report = reports.find((r) => r.id === reportId);
-  return report?.report_no ?? "";
-};
-
-const welderOptions = (welders: WelderOption[]) => {
-  return welders
-    .map((w) => {
-      const no = w.welder_no ?? "";
-      const label = `${no} ${w.display_name ?? ""}`.trim();
-      return `<option value="${esc(no)}">${esc(label)}</option>`;
-    })
-    .join("");
+const welderSelectOptions = (welders: WelderOption[], selectedId: string | null | undefined) => {
+  const selected = (selectedId || "").trim();
+  const rows = [
+    `<option value="">Velg sveiser...</option>`,
+    ...welders.map((welder) => {
+      const no = String(welder.welder_no ?? "").trim();
+      const name = String(welder.display_name ?? "").trim();
+      const label = [no, name].filter(Boolean).join(" - ") || String(welder.id ?? "").trim() || dash;
+      const id = String(welder.id ?? "").trim();
+      return `<option value="${esc(id)}"${id === selected ? " selected" : ""}>${esc(label)}</option>`;
+    }),
+  ];
+  if (selected && !welders.some((welder) => welder.id === selected)) {
+    rows.push(`<option value="${esc(selected)}" selected>${esc(selected)}</option>`);
+  }
+  return rows.join("");
 };
 
 const employeeOptions = (
@@ -369,8 +424,8 @@ const employeeOptions = (
       const isWelder = Boolean(welder && emp.id === welder);
       const selectedAttr = emp.id === selected ? " selected" : "";
       const disabledAttr = isWelder ? " disabled" : "";
-      const suffix = isWelder ? " (sveiser)" : "";
-      return `<option value="${esc(emp.id)}"${selectedAttr}${disabledAttr}>${esc(`${emp.label}${suffix}`)}</option>`;
+      const label = String(emp.display_name ?? "").trim() || String(emp.id ?? "").trim();
+      return `<option value="${esc(emp.id)}"${selectedAttr}${disabledAttr}>${esc(label)}</option>`;
     }),
   ];
   if (selected && !employees.some((emp) => emp.id === selected)) {
@@ -441,13 +496,14 @@ export function renderDrawer(
   wpsSelect: WpsSelectOption[],
   wpsPlaceholder: string,
   wpsDisabled: boolean,
+  vtNoReportSelected: boolean,
   open: boolean,
   errors: Record<string, string>,
   loading: boolean
 ) {
   const hiddenClass = open ? "" : "is-hidden";
   const title = data?.sveis_id ? `Sveis ${data.sveis_id}` : "Ny sveis";
-  const welderValue = data?.sveiser?.welder_no ?? data?.sveiser_id ?? "";
+  const welderValue = data?.sveiser_id ?? data?.sveiser?.id ?? "";
 
   return `
     <div class="weld-drawer-backdrop ${hiddenClass}" data-drawer-backdrop></div>
@@ -495,8 +551,9 @@ export function renderDrawer(
           <div class="drawer-grid">
             <label class="field">
               <span>Sveiser</span>
-              <input class="input" data-f="sveiser_id" value="${esc(welderValue)}" placeholder="Sveiser nr" list="welder-list" />
-              <datalist id="welder-list">${welderOptions(welders)}</datalist>
+              <select class="select" data-f="sveiser_id">
+                ${welderSelectOptions(welders, welderValue)}
+              </select>
               ${errors.sveiser_id ? `<div class="field-error">${esc(errors.sveiser_id)}</div>` : ""}
             </label>
             <label class="field">
@@ -534,11 +591,15 @@ export function renderDrawer(
               <label class="field">
                 <span>Rapport</span>
                 <div class="ndt-report-row">
-                  <input class="input" list="vt-report-list" data-f="vt_report_no" value="${esc(reportLabel(reports, data?.vt_report_id))}" placeholder="Velg rapport" />
+                  <select class="select" data-f="vt_report_id">
+                    ${vtReportSelectOptions(reports, data?.vt_report_id, vtNoReportSelected)}
+                  </select>
                   <button class="btn ghost small" type="button" data-clear-report="vt"${data?.vt_report_id ? "" : " disabled"}>Fjern</button>
                 </div>
-                <datalist id="vt-report-list">${reportOptions(reports, ["vt"])}</datalist>
               </label>
+              ${
+                vtNoReportSelected
+                  ? `
               <label class="field">
                 <span>Visuelt godkjent av</span>
                 <select class="select" data-f="kontrollert_av">
@@ -547,6 +608,9 @@ export function renderDrawer(
                 ${errors.kontrollert_av ? `<div class="field-error">${esc(errors.kontrollert_av)}</div>` : ""}
               </label>
               <div class="muted ndt-hint">Må være en annen person enn sveiser.</div>
+              `
+                  : ""
+              }
               ${renderRecentReports(reports, ["vt"])}
             </div>
 
@@ -558,10 +622,11 @@ export function renderDrawer(
               <label class="field">
                 <span>Rapport</span>
                 <div class="ndt-report-row">
-                  <input class="input" list="pt-report-list" data-f="pt_report_no" value="${esc(reportLabel(reports, data?.pt_report_id))}" placeholder="Velg rapport" />
+                  <select class="select" data-f="pt_report_id">
+                    ${reportSelectOptions(reports, ["pt", "mt"], data?.pt_report_id)}
+                  </select>
                   <button class="btn ghost small" type="button" data-clear-report="pt"${data?.pt_report_id ? "" : " disabled"}>Fjern</button>
                 </div>
-                <datalist id="pt-report-list">${reportOptions(reports, ["pt", "mt"])}</datalist>
               </label>
               ${renderRecentReports(reports, ["pt", "mt"])}
             </div>
@@ -574,10 +639,11 @@ export function renderDrawer(
               <label class="field">
                 <span>Rapport</span>
                 <div class="ndt-report-row">
-                  <input class="input" list="vol-report-list" data-f="vol_report_no" value="${esc(reportLabel(reports, data?.vol_report_id))}" placeholder="Velg rapport" />
+                  <select class="select" data-f="vol_report_id">
+                    ${reportSelectOptions(reports, ["rt", "ut"], data?.vol_report_id)}
+                  </select>
                   <button class="btn ghost small" type="button" data-clear-report="vol"${data?.vol_report_id ? "" : " disabled"}>Fjern</button>
                 </div>
-                <datalist id="vol-report-list">${reportOptions(reports, ["rt", "ut"])}</datalist>
               </label>
               ${renderRecentReports(reports, ["rt", "ut"])}
             </div>

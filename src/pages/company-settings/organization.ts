@@ -27,6 +27,18 @@ import {
   updateSupplier,
   type SupplierRow,
 } from "../../repo/supplierRepo";
+import {
+  fetchNdtSuppliers,
+  createNdtSupplier,
+  deleteNdtSupplier,
+  updateNdtSupplier,
+  fetchNdtInspectors,
+  createNdtInspector,
+  deleteNdtInspector,
+  updateNdtInspector,
+  type NdtSupplierRow,
+  type NdtInspectorRow,
+} from "../../repo/ndtSupplierRepo";
 
 import "../../styles/pages/company-settings.css";
 
@@ -92,11 +104,12 @@ export async function renderCompanySettingsOrganization(app: HTMLElement) {
         <section class="section-header">
           <div>
             <h1 class="section-title">App-parametere – Organisasjon</h1>
-            <p class="section-subtitle">Stillinger, kunder og leverandører.</p>
+            <p class="section-subtitle">Stillinger, kunder, leverandører og NDT-kontrollører.</p>
           </div>
           <div class="section-actions">
             <a class="btn small" href="#/company-settings">← App-parametere</a>
           </div>
+
         </section>
 
         <section class="section-grid">
@@ -151,6 +164,31 @@ export async function renderCompanySettingsOrganization(app: HTMLElement) {
               </div>
             </div>
           </div>
+          <div class="panel panel-collapsible is-collapsed">
+            <div class="panel-head">
+              <div class="panel-title">NDT-leverandører og kontrollører</div>
+              <div class="panel-meta">Admin</div>
+              <button class="panel-toggle" type="button" data-panel-toggle aria-expanded="false">Vis</button>
+            </div>
+            <div class="panel-body">
+              <div class="settings-form">
+                <div class="settings-row inline">
+                  <input id="ndtSupplierInput" class="input" type="text" placeholder="Ny NDT-leverandør..." />
+                  <button data-add-ndt-supplier class="btn primary small">Legg til leverandør</button>
+                </div>
+                <div class="settings-row inline">
+                  <div class="settings-inputs" style="grid-template-columns: 1fr 1fr;">
+                    <select id="ndtInspectorSupplierSelect" class="select">
+                      <option value="">Velg leverandør...</option>
+                    </select>
+                    <input id="ndtInspectorInput" class="input" type="text" placeholder="Ny kontrollør..." />
+                  </div>
+                  <button data-add-ndt-inspector class="btn primary small">Legg til kontrollør</button>
+                </div>
+                <div data-ndt-supplier-list class="settings-list"><div class="muted">Laster...</div></div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <div data-modal-mount></div>
@@ -191,8 +229,16 @@ export async function renderCompanySettingsOrganization(app: HTMLElement) {
   const supplierList = qs<HTMLDivElement>(app, "[data-supplier-list]");
   const addSupplierBtn = app.querySelector<HTMLButtonElement>("[data-add-supplier]");
   const supplierInput = app.querySelector<HTMLInputElement>("#supplierInput");
+  const ndtSupplierList = qs<HTMLDivElement>(app, "[data-ndt-supplier-list]");
+  const addNdtSupplierBtn = app.querySelector<HTMLButtonElement>("[data-add-ndt-supplier]");
+  const ndtSupplierInput = app.querySelector<HTMLInputElement>("#ndtSupplierInput");
+  const ndtInspectorSupplierSelect = app.querySelector<HTMLSelectElement>("#ndtInspectorSupplierSelect");
+  const addNdtInspectorBtn = app.querySelector<HTMLButtonElement>("[data-add-ndt-inspector]");
+  const ndtInspectorInput = app.querySelector<HTMLInputElement>("#ndtInspectorInput");
   const modalMount = qs<HTMLDivElement>(app, "[data-modal-mount]");
   const modalSignal = new AbortController();
+  let ndtSuppliersCache: NdtSupplierRow[] = [];
+  let ndtInspectorsCache: NdtInspectorRow[] = [];
 
   const renderJobTitles = (rows: JobTitleRow[]) => {
     if (rows.length === 0) {
@@ -260,6 +306,107 @@ export async function renderCompanySettingsOrganization(app: HTMLElement) {
       .join("");
   };
 
+  const renderNdtSupplierSelectOptions = (selectedSupplierId = "") => {
+    if (!ndtInspectorSupplierSelect) return;
+    const rows = ndtSuppliersCache
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((row) => `<option value="${esc(row.id)}">${esc(row.name)}</option>`)
+      .join("");
+    ndtInspectorSupplierSelect.innerHTML = `<option value="">Velg leverandør...</option>${rows}`;
+    if (selectedSupplierId && ndtSuppliersCache.some((row) => row.id === selectedSupplierId)) {
+      ndtInspectorSupplierSelect.value = selectedSupplierId;
+    } else {
+      ndtInspectorSupplierSelect.value = "";
+    }
+  };
+
+  const renderNdtSuppliersAndInspectors = () => {
+    if (ndtSuppliersCache.length === 0) {
+      ndtSupplierList.innerHTML = `<div class="muted">Ingen NDT-leverandører.</div>`;
+      renderNdtSupplierSelectOptions();
+      return;
+    }
+
+    const inspectorsBySupplier = new Map<string, NdtInspectorRow[]>();
+    for (const supplier of ndtSuppliersCache) inspectorsBySupplier.set(supplier.id, []);
+    for (const inspector of ndtInspectorsCache) {
+      if (!inspectorsBySupplier.has(inspector.supplier_id)) continue;
+      inspectorsBySupplier.get(inspector.supplier_id)!.push(inspector);
+    }
+    for (const rows of inspectorsBySupplier.values()) {
+      rows.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    ndtSupplierList.innerHTML = ndtSuppliersCache
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((supplier) => {
+        const inspectors = inspectorsBySupplier.get(supplier.id) ?? [];
+        const inspectorsHtml =
+          inspectors.length === 0
+            ? `<div class="muted" style="font-size:12px;">Ingen kontrollører.</div>`
+            : inspectors
+                .map((inspector) => {
+                  return `
+                    <div class="settings-item settings-item--sub" data-ndt-inspector-id="${esc(inspector.id)}">
+                      <div class="settings-item__title">${esc(inspector.name)}</div>
+                      <div class="settings-item__meta">Kontrollør</div>
+                      <div class="settings-item__actions">
+                        ${renderIconButton({
+                          dataKey: "ndt-inspector-edit",
+                          id: inspector.id,
+                          title: "Endre",
+                          icon: icon("pencil"),
+                          extraClass: "small",
+                        })}
+                        ${renderIconButton({
+                          dataKey: "ndt-inspector-delete",
+                          id: inspector.id,
+                          title: "Slett",
+                          icon: icon("trash"),
+                          danger: true,
+                          extraClass: "small",
+                        })}
+                      </div>
+                    </div>
+                  `;
+                })
+                .join("");
+
+        return `
+          <div class="settings-subgroup" data-ndt-supplier-id="${esc(supplier.id)}">
+            <div class="settings-item">
+              <div class="settings-item__title">${esc(supplier.name)}</div>
+              <div class="settings-item__meta">${inspectors.length} kontrollører</div>
+              <div class="settings-item__actions">
+                ${renderIconButton({
+                  dataKey: "ndt-supplier-edit",
+                  id: supplier.id,
+                  title: "Endre",
+                  icon: icon("pencil"),
+                  extraClass: "small",
+                })}
+                ${renderIconButton({
+                  dataKey: "ndt-supplier-delete",
+                  id: supplier.id,
+                  title: "Slett",
+                  icon: icon("trash"),
+                  danger: true,
+                  extraClass: "small",
+                })}
+              </div>
+            </div>
+            <div class="settings-sublist">${inspectorsHtml}</div>
+          </div>
+        `;
+      })
+      .join("");
+
+    const current = ndtInspectorSupplierSelect?.value ?? "";
+    renderNdtSupplierSelectOptions(current);
+  };
+
   async function loadJobs() {
     jobList.innerHTML = `<div class="muted">Laster…</div>`;
     try {
@@ -290,6 +437,23 @@ export async function renderCompanySettingsOrganization(app: HTMLElement) {
     } catch (err: any) {
       console.error(err);
       supplierList.innerHTML = `<div class="err">Feil: ${esc(err?.message ?? err)}</div>`;
+    }
+  }
+
+  async function loadNdtSuppliersAndInspectors() {
+    ndtSupplierList.innerHTML = `<div class="muted">Laster...</div>`;
+    try {
+      const [suppliers, inspectors] = await Promise.all([
+        fetchNdtSuppliers({ includeInactive: true }),
+        fetchNdtInspectors({ includeInactive: true }),
+      ]);
+      ndtSuppliersCache = suppliers;
+      ndtInspectorsCache = inspectors;
+      renderNdtSuppliersAndInspectors();
+    } catch (err: any) {
+      console.error(err);
+      ndtSupplierList.innerHTML = `<div class="err">Feil: ${esc(err?.message ?? err)}</div>`;
+      renderNdtSupplierSelectOptions();
     }
   }
 
@@ -332,6 +496,37 @@ export async function renderCompanySettingsOrganization(app: HTMLElement) {
     } catch (err: any) {
       console.error(err);
       toast("Kunne ikke legge til.");
+    }
+  });
+
+  addNdtSupplierBtn?.addEventListener("click", async () => {
+    if (!isAdmin) return toast("Kun admin kan endre.");
+    const name = (ndtSupplierInput?.value ?? "").trim();
+    if (!name) return toast("Skriv inn NDT-leverandør.");
+    try {
+      await createNdtSupplier(name);
+      if (ndtSupplierInput) ndtSupplierInput.value = "";
+      await loadNdtSuppliersAndInspectors();
+    } catch (err: any) {
+      console.error(err);
+      toast(String(err?.message ?? err));
+    }
+  });
+
+  addNdtInspectorBtn?.addEventListener("click", async () => {
+    if (!isAdmin) return toast("Kun admin kan endre.");
+    const supplierId = (ndtInspectorSupplierSelect?.value ?? "").trim();
+    const name = (ndtInspectorInput?.value ?? "").trim();
+    if (!supplierId) return toast("Velg NDT-leverandør.");
+    if (!name) return toast("Skriv inn kontrollør.");
+    try {
+      await createNdtInspector({ supplier_id: supplierId, name });
+      if (ndtInspectorInput) ndtInspectorInput.value = "";
+      if (ndtInspectorSupplierSelect) ndtInspectorSupplierSelect.value = supplierId;
+      await loadNdtSuppliersAndInspectors();
+    } catch (err: any) {
+      console.error(err);
+      toast(String(err?.message ?? err));
     }
   });
 
@@ -509,7 +704,141 @@ export async function renderCompanySettingsOrganization(app: HTMLElement) {
     }
   });
 
+  ndtSupplierList.addEventListener("click", async (e) => {
+    if (!isAdmin) return;
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    const supplierItem = target.closest<HTMLElement>("[data-ndt-supplier-id]");
+    const inspectorItem = target.closest<HTMLElement>("[data-ndt-inspector-id]");
+
+    if (supplierItem && target.closest("[data-ndt-supplier-delete]")) {
+      const id = supplierItem.getAttribute("data-ndt-supplier-id") || "";
+      if (!id) return;
+      const label = supplierItem.querySelector(".settings-item__title")?.textContent?.trim() || "leverandøren";
+      await openConfirmDelete(modalMount, modalSignal.signal, {
+        title: "Slett NDT-leverandør",
+        messageHtml: `Er du sikker på at du vil slette <b>${esc(label)}</b>? kontrollører blir også slettet.`,
+        onConfirm: async () => {
+          await deleteNdtSupplier(id);
+        },
+        onDone: async () => {
+          await loadNdtSuppliersAndInspectors();
+        },
+      });
+      return;
+    }
+
+    if (supplierItem && target.closest("[data-ndt-supplier-edit]")) {
+      const id = supplierItem.getAttribute("data-ndt-supplier-id") || "";
+      if (!id) return;
+      const current = supplierItem.querySelector(".settings-item__title")?.textContent?.trim() ?? "";
+      const modalHtml = renderModal(
+        "Endre NDT-leverandør",
+        `
+          <div class="modalgrid">
+            <div class="field" style="grid-column:1 / -1;">
+              <label>NDT-leverandør</label>
+              <input data-f="name" class="input" type="text" value="${esc(current)}" />
+            </div>
+          </div>
+        `,
+        "Lagre"
+      );
+
+      const h = openModal(modalMount, modalHtml, modalSignal.signal);
+      const save = modalSaveButton(h.root);
+
+      save.addEventListener("click", async () => {
+        const name = (h.root.querySelector<HTMLInputElement>("[data-f=name]")?.value ?? "").trim();
+        if (!name) return toast("Skriv inn NDT-leverandør.");
+        try {
+          await updateNdtSupplier(id, name);
+          h.close();
+          await loadNdtSuppliersAndInspectors();
+          toast("Oppdatert.");
+        } catch (err: any) {
+          console.error(err);
+          toast(String(err?.message ?? err));
+        }
+      });
+      return;
+    }
+
+    if (inspectorItem && target.closest("[data-ndt-inspector-delete]")) {
+      const id = inspectorItem.getAttribute("data-ndt-inspector-id") || "";
+      if (!id) return;
+      const label = inspectorItem.querySelector(".settings-item__title")?.textContent?.trim() || "kontrolløren";
+      await openConfirmDelete(modalMount, modalSignal.signal, {
+        title: "Slett kontrollør",
+        messageHtml: `Er du sikker på at du vil slette <b>${esc(label)}</b>?`,
+        onConfirm: async () => {
+          await deleteNdtInspector(id);
+        },
+        onDone: async () => {
+          await loadNdtSuppliersAndInspectors();
+        },
+      });
+      return;
+    }
+
+    if (inspectorItem && target.closest("[data-ndt-inspector-edit]")) {
+      const id = inspectorItem.getAttribute("data-ndt-inspector-id") || "";
+      if (!id) return;
+      const current = ndtInspectorsCache.find((row) => row.id === id);
+      if (!current) return;
+
+      const supplierOptions = ndtSuppliersCache
+        .map((row) => {
+          const selected = row.id === current.supplier_id ? "selected" : "";
+          return `<option value="${esc(row.id)}" ${selected}>${esc(row.name)}</option>`;
+        })
+        .join("");
+
+      const modalHtml = renderModal(
+        "Endre kontrollør",
+        `
+          <div class="modalgrid">
+            <div class="field" style="grid-column:1 / -1;">
+              <label>Leverandør</label>
+              <select data-f="supplier_id" class="select">
+                <option value="">Velg leverandør...</option>
+                ${supplierOptions}
+              </select>
+            </div>
+            <div class="field" style="grid-column:1 / -1;">
+              <label>Kontrollør</label>
+              <input data-f="name" class="input" type="text" value="${esc(current.name)}" />
+            </div>
+          </div>
+        `,
+        "Lagre"
+      );
+
+      const h = openModal(modalMount, modalHtml, modalSignal.signal);
+      const save = modalSaveButton(h.root);
+
+      save.addEventListener("click", async () => {
+        const supplier_id = (h.root.querySelector<HTMLSelectElement>("[data-f=supplier_id]")?.value ?? "").trim();
+        const name = (h.root.querySelector<HTMLInputElement>("[data-f=name]")?.value ?? "").trim();
+        if (!supplier_id) return toast("Velg leverandør.");
+        if (!name) return toast("Skriv inn kontrollør.");
+        try {
+          await updateNdtInspector(id, { supplier_id, name });
+          h.close();
+          if (ndtInspectorSupplierSelect) ndtInspectorSupplierSelect.value = supplier_id;
+          await loadNdtSuppliersAndInspectors();
+          toast("Oppdatert.");
+        } catch (err: any) {
+          console.error(err);
+          toast(String(err?.message ?? err));
+        }
+      });
+    }
+  });
+
   await loadJobs();
   await loadCustomers();
   await loadSuppliers();
+  await loadNdtSuppliersAndInspectors();
 }

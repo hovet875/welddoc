@@ -6,10 +6,10 @@ import { esc, qs } from "../../utils/dom";
 import { renderProjectDrawingsSection } from "./sections/drawings";
 import { renderProjectWorkOrderSection } from "./sections/work-order";
 import { renderProjectTraceabilitySection } from "./sections/traceability";
-import { renderProjectNdtSection } from "./sections/ndt";
 import { renderProjectWeldLogSection } from "./sections/weld-log";
 import { renderProjectDocumentationPackageSection } from "./sections/documentation-pack";
 import { renderProjectPressureTestSection } from "./sections/pressure-test";
+import { renderProjectLinkedDocumentsSection } from "./sections/linked-documents";
 
 import "../../styles/pages/projects.css";
 
@@ -18,9 +18,7 @@ const sections = [
   { key: "tegninger", label: "Tegninger" },
   { key: "sporbarhet", label: "Materialsporbarhet" },
   { key: "sveiselogg", label: "Sveiselogg" },
-  { key: "wps", label: "WPS" },
-  { key: "sveisesertifikat", label: "Sveisesertifikat" },
-  { key: "ndt", label: "NDT" },
+  { key: "dokumenter", label: "Koblede dokumenter" },
   { key: "trykktest", label: "Trykktest" },
   { key: "dokumentasjonspakke", label: "Generer dokumentasjonspakke" },
 ];
@@ -71,7 +69,11 @@ export async function renderProjectDetail(app: HTMLElement, projectId: string, s
     return;
   }
 
-  const currentSection = section || "";
+  const requestedSection = section || "";
+  const currentSection =
+    requestedSection === "wps" || requestedSection === "sveisesertifikat" || requestedSection === "ndt"
+      ? "dokumenter"
+      : requestedSection;
 
   app.innerHTML = `
     <div class="shell page-projects">
@@ -143,8 +145,8 @@ export async function renderProjectDetail(app: HTMLElement, projectId: string, s
     return;
   }
 
-  if (currentSection === "ndt") {
-    await renderProjectNdtSection({ mount: sectionMount, project, signal });
+  if (currentSection === "dokumenter") {
+    await renderProjectLinkedDocumentsSection({ mount: sectionMount, project, signal });
     return;
   }
 

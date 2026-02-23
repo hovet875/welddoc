@@ -6,6 +6,7 @@ import { toast } from "../../../../ui/toast";
 import { createPlaceholderProjectDrawing, fetchProjectDrawings } from "../../../../repo/projectDrawingRepo";
 import { ensureProjectWeldLog } from "../../../../repo/weldLogRepo";
 import { fetchWelderCerts, fetchWelders } from "../../../../repo/certRepo";
+import { fetchWelderCertScopes } from "../../../../repo/welderCertScopeRepo";
 import { fetchProjectTraceability, type ProjectTraceabilityRow } from "../../../../repo/traceabilityRepo";
 import { fetchWpsData } from "../../../../repo/wpsRepo";
 import { wireDatePickers } from "../../../../ui/datePicker";
@@ -19,12 +20,14 @@ import type {
   NdtReportRow,
   RowWpsStatus,
   TraceabilitySelectOption,
+  WelderCertScopeOption,
+  WelderMatchScopeRule,
   WpsSelectOption,
   WelderOption,
   WeldDetailRow,
   WeldListRow,
 } from "./types";
-import { renderBulkReportOptions, renderDrawer, renderLayout, renderPagination, renderRows } from "./templates";
+import { VT_NO_REPORT_VALUE, renderBulkReportOptions, renderDrawer, renderLayout, renderPagination, renderRows } from "./templates";
 import { printWeldLogTable } from "./printView";
 
 const PAGE_SIZE = 25;
@@ -45,6 +48,7 @@ const emptyDetail = (): WeldDetailRow => ({
   komponent_b: "",
   komponent_b_id: null,
   sveiser_id: "",
+  welder_cert_id: null,
   wps: "",
   wps_id: null,
   dato: "",
@@ -81,12 +85,15 @@ export async function renderProjectWeldLogSection(opts: {
     drawerErrors: {} as Record<string, string>,
     drawerDirty: false,
     drawerData: null as WeldDetailRow | null,
+    drawerVtNoReportSelected: false,
     drawerFocusReturn: null as HTMLElement | null,
     reports: [] as NdtReportRow[],
     drawings: [] as DrawingOption[],
     currentDrawingId: null as string | null,
     currentLogId: null as string | null,
     welders: [] as WelderOption[],
+    welderCerts: [] as WelderCertScopeOption[],
+    welderMatchScopes: [] as WelderMatchScopeRule[],
     employees: [] as EmployeeOption[],
     ndtMethods: [] as NdtMethodOption[],
     bulkMethodCode: "",
@@ -100,6 +107,180 @@ export async function renderProjectWeldLogSection(opts: {
   };
 
   const normalizeText = (value: string | null | undefined) => String(value ?? "").trim().toLowerCase();
+  const normalizeJointType = (value: string | null | undefined) => String(value ?? "").trim().toUpperCase().replace(/\s+/g, "");
+  const normalizeFmGroup = (value: string | null | undefined) =>
+    String(value ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/[\s._-]+/g, "");
+  const normalizeStandard = (value: string | null | undefined) =>
+    String(value ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/\((?:19|20)\d{2}\)\s*$/, "")
+      .replace(/[:/-]\s*(?:19|20)\d{2}\s*$/, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  const extractStandardCore = (value: string | null | undefined) => {
+    const normalized = normalizeStandard(value);
+    if (!normalized) return "";
+    const match = normalized.match(/\b(\d{3,5}\s*-\s*\d{1,3})\b/);
+    if (!match) return "";
+    return match[1].replace(/\s+/g, "");
+  };
+  const standardsMatch = (a: string | null | undefined, b: string | null | undefined) => {
+    const leftCore = extractStandardCore(a);
+    const rightCore = extractStandardCore(b);
+    if (leftCore && rightCore) return leftCore === rightCore;
+    const left = normalizeStandard(a);
+    const right = normalizeStandard(b);
+    if (!left || !right) return false;
+    if (left === right) return true;
+    return left.replace(/\s+/g, "") === right.replace(/\s+/g, "");
+  };
+  const normalizeProcessCode = (value: string | null | undefined) => {
+    const raw = String(value ?? "").trim();
+    if (!raw) return "";
+    const stripLeadingZeros = (code: string) => code.replace(/^0+(?=\d)/, "");
+    const direct = raw.match(/^([0-9]{2,4})(?:\s*-\s*.*)?$/);
+    if (direct) return stripLeadingZeros(direct[1]);
+    const embedded = raw.match(/\b([0-9]{2,4})\b/);
+    if (embedded) return stripLeadingZeros(embedded[1]);
+    return raw.toUpperCase();
+  };
+
+  const parseDateOnly = (value: string | null | undefined) => {
+    const raw = String(value ?? "").trim();
+    if (!raw) return null;
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/);
+    if (!match) return null;
+    const [, yyyy, mm, dd] = match;
+    const date = new Date(Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd), 12, 0, 0));
+    if (Number.isNaN(date.getTime())) return null;
+    return date;
+  };
+
+  const componentMaterialIds = (komponentAId: string | null | undefined, komponentBId: string | null | undefined) =>
+    new Set(
+      [komponentAId, komponentBId]
+        .map((id) => state.componentOptions.find((row) => row.id === id)?.material_id ?? null)
+        .filter((id): id is string => Boolean(id))
+    );
+
+  const certJointTypes = (coverageJointType: string | null | undefined) =>
+    new Set(
+      String(coverageJointType ?? "")
+        .split(/[;,/]+/)
+        .map((value) => normalizeJointType(value))
+        .filter(Boolean)
+    );
+
+  const isCertExpiredAt = (expiresAt: string | null | undefined, referenceDate: Date) => {
+    const expires = parseDateOnly(expiresAt);
+    if (!expires) return false;
+    return expires.getTime() < referenceDate.getTime();
+  };
+
+  const resolveWelderCertForScope = (input: {
+    welderId: string;
+    wpsId: string | null | undefined;
+    fuge: string | null | undefined;
+    komponentAId: string | null | undefined;
+    komponentBId: string | null | undefined;
+    weldDate: string | null | undefined;
+  }) => {
+    const welderId = String(input.welderId ?? "").trim();
+    if (!welderId) return null;
+
+    const wpsId = String(input.wpsId ?? "").trim();
+    if (!wpsId) return null;
+    const selectedWps = state.wpsOptions.find((row) => row.id === wpsId);
+    if (!selectedWps) return null;
+
+    const processCode = normalizeProcessCode(selectedWps.process);
+    const jointType = normalizeJointType(input.fuge);
+    const materialIds = componentMaterialIds(input.komponentAId, input.komponentBId);
+    if (!processCode || !jointType || !materialIds.size) return null;
+
+    const hasScopeConfig = state.welderMatchScopes.length > 0;
+    const matchingScopes = state.welderMatchScopes.filter((scope) => {
+      if (normalizeProcessCode(scope.welding_process_code) && normalizeProcessCode(scope.welding_process_code) !== processCode) return false;
+      if (normalizeJointType(scope.joint_type) && normalizeJointType(scope.joint_type) !== jointType) return false;
+      const scopeMaterialId = String(scope.material_id ?? "").trim();
+      if (scopeMaterialId && !materialIds.has(scopeMaterialId)) return false;
+      return true;
+    });
+
+    const certMatchesScope = (cert: WelderCertScopeOption, scope: WelderMatchScopeRule) => {
+      if (normalizeText(scope.standard_label) && !standardsMatch(cert.standard, scope.standard_label)) return false;
+      if (
+        normalizeProcessCode(scope.welding_process_code) &&
+        normalizeProcessCode(cert.welding_process_code) !== normalizeProcessCode(scope.welding_process_code)
+      ) {
+        return false;
+      }
+      const scopeMaterialId = String(scope.material_id ?? "").trim();
+      if (scopeMaterialId && String(cert.base_material_id ?? "").trim() !== scopeMaterialId) return false;
+      const scopeJoint = normalizeJointType(scope.joint_type);
+      if (scopeJoint) {
+        const joints = certJointTypes(cert.coverage_joint_type);
+        if (!joints.has(scopeJoint)) return false;
+      }
+      const scopeFmGroup = normalizeText(scope.fm_group_label);
+      if (scopeFmGroup && normalizeFmGroup(cert.fm_group) !== normalizeFmGroup(scope.fm_group_label)) return false;
+      return true;
+    };
+
+    const certMatchesDirectContext = (cert: WelderCertScopeOption) => {
+      if (!standardsMatch(cert.standard, selectedWps.standard_label)) return false;
+      if (normalizeProcessCode(cert.welding_process_code) !== processCode) return false;
+      const certMaterialId = String(cert.base_material_id ?? "").trim();
+      if (certMaterialId && !materialIds.has(certMaterialId)) return false;
+      const joints = certJointTypes(cert.coverage_joint_type);
+      if (joints.size > 0 && !joints.has(jointType)) return false;
+      return true;
+    };
+
+    const referenceDate = parseDateOnly(input.weldDate) ?? parseDateOnly(new Date().toISOString()) ?? new Date();
+    const candidates = state.welderCerts
+      .filter((cert) => String(cert.profile_id ?? "").trim() === welderId)
+      .filter((cert) => !isCertExpiredAt(cert.expires_at, referenceDate))
+      .map((cert) => {
+        const matchesScope = matchingScopes.length ? matchingScopes.filter((scope) => certMatchesScope(cert, scope)) : [];
+        if (matchingScopes.length > 0 && matchesScope.length === 0) return null;
+        if (matchingScopes.length === 0 && hasScopeConfig) return null;
+        if (matchingScopes.length === 0 && !certMatchesDirectContext(cert)) return null;
+
+        const joints = certJointTypes(cert.coverage_joint_type);
+        const fmGroup = normalizeText(cert.fm_group);
+        const expiresAtTs = parseDateOnly(cert.expires_at)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+        const createdAtTs = Number(new Date(cert.created_at).getTime()) || 0;
+        const bestScopeSpecificity = matchesScope.reduce((best, scope) => {
+          let score = 0;
+          if (normalizeText(scope.standard_label)) score += 4;
+          if (normalizeProcessCode(scope.welding_process_code)) score += 3;
+          if (String(scope.material_id ?? "").trim()) score += 3;
+          if (normalizeJointType(scope.joint_type)) score += 2;
+          if (normalizeText(scope.fm_group_label)) score += 2;
+          return Math.max(best, score);
+        }, 0);
+        let score = 0;
+        score += bestScopeSpecificity;
+        if (String(cert.base_material_id ?? "").trim()) score += 3;
+        if (joints.size > 0) score += 2;
+        if (fmGroup && fmGroup !== "n/a") score += 1;
+        return { cert, score, expiresAtTs, createdAtTs };
+      })
+      .filter((entry): entry is { cert: WelderCertScopeOption; score: number; expiresAtTs: number; createdAtTs: number } => Boolean(entry))
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (b.expiresAtTs !== a.expiresAtTs) return b.expiresAtTs - a.expiresAtTs;
+        if (b.createdAtTs !== a.createdAtTs) return b.createdAtTs - a.createdAtTs;
+        return String(a.cert.certificate_no ?? "").localeCompare(String(b.cert.certificate_no ?? ""), "nb", { sensitivity: "base" });
+      });
+
+    return candidates[0]?.cert.id ?? null;
+  };
 
   const wpsOptionsForSelection = (
     fugeValue: string | null | undefined,
@@ -107,11 +288,7 @@ export async function renderProjectWeldLogSection(opts: {
     komponentBId: string | null | undefined
   ) => {
     const fuge = String(fugeValue ?? "").trim();
-    const materialIds = new Set(
-      [komponentAId, komponentBId]
-        .map((id) => state.componentOptions.find((row) => row.id === id)?.material_id ?? null)
-        .filter((id): id is string => Boolean(id))
-    );
+    const materialIds = componentMaterialIds(komponentAId, komponentBId);
 
     if (!fuge || !materialIds.size) {
       return { fuge, materialIds, options: [] as WpsSelectOption[] };
@@ -154,6 +331,53 @@ export async function renderProjectWeldLogSection(opts: {
     const only = options[0];
     if (state.drawerData.wps_id === only.id) return;
     state.drawerData = { ...state.drawerData, wps_id: only.id, wps: only.doc_no };
+  };
+
+  const certStatusForRow = (row: WeldListRow): RowWpsStatus => {
+    const selectedCertId = String(row.welder_cert_id ?? "").trim();
+    if (selectedCertId) {
+      const selectedCertNo = String(state.welderCerts.find((cert) => cert.id === selectedCertId)?.certificate_no ?? "").trim();
+      return {
+        tone: "ok",
+        symbol: "&#10003;",
+        title: selectedCertNo ? `Sertifikat valgt: ${selectedCertNo}` : "Sertifikat valgt",
+      };
+    }
+
+    const welderId = String(row.sveiser_id ?? "").trim();
+    if (!welderId) {
+      return {
+        tone: "danger",
+        symbol: "&#10005;",
+        title: "Ingen sveiser valgt. Mangler sertifikat.",
+      };
+    }
+
+    const candidateCertId = resolveWelderCertForScope({
+      welderId,
+      wpsId: row.wps_id,
+      fuge: row.fuge,
+      komponentAId: row.komponent_a_id,
+      komponentBId: row.komponent_b_id,
+      weldDate: row.dato,
+    });
+
+    if (candidateCertId) {
+      const candidateCertNo = String(state.welderCerts.find((cert) => cert.id === candidateCertId)?.certificate_no ?? "").trim();
+      return {
+        tone: "warn",
+        symbol: "!",
+        title: candidateCertNo
+          ? `Sertifikatmatch funnet (${candidateCertNo}). Lagre raden for å knytte sertifikat.`
+          : "Sertifikatmatch funnet. Lagre raden for å knytte sertifikat.",
+      };
+    }
+
+    return {
+      tone: "danger",
+      symbol: "&#10005;",
+      title: "Ingen sertifikatmatch funnet.",
+    };
   };
 
   const wpsStatusForRow = (row: WeldListRow): RowWpsStatus => {
@@ -208,9 +432,11 @@ export async function renderProjectWeldLogSection(opts: {
       state.bulkFugeValue
     );
     const body = qs<HTMLElement>(mount, "[data-weld-body]");
+    const certStatusByRow = new Map<string, RowWpsStatus>();
     const wpsStatusByRow = new Map<string, RowWpsStatus>();
+    state.rows.forEach((row) => certStatusByRow.set(row.id, certStatusForRow(row)));
     state.rows.forEach((row) => wpsStatusByRow.set(row.id, wpsStatusForRow(row)));
-    body.innerHTML = renderRows(state.rows, state.selected, wpsStatusByRow);
+    body.innerHTML = renderRows(state.rows, state.selected, certStatusByRow, wpsStatusByRow);
     const pagination = qs<HTMLElement>(mount, "[data-weld-pagination]");
     pagination.innerHTML = renderPagination(state.page, PAGE_SIZE, state.total);
     const drawerRoot = qs<HTMLElement>(mount, "[data-weld-drawer-root]");
@@ -226,6 +452,7 @@ export async function renderProjectWeldLogSection(opts: {
       wpsState.options,
       wpsState.placeholder,
       wpsState.disabled,
+      state.drawerVtNoReportSelected,
       state.drawerOpen,
       state.drawerErrors,
       state.drawerLoading
@@ -472,6 +699,7 @@ export async function renderProjectWeldLogSection(opts: {
             <div class="weld-info-list weld-info-list-tech">
               ${infoRowHtml("rad_id", detail.id)}
               ${infoRowHtml("sveiser_id", detail.sveiser_id)}
+              ${infoRowHtml("welder_cert_id", detail.welder_cert_id)}
               ${infoRowHtml("komponent_a_id", detail.komponent_a_id)}
               ${infoRowHtml("komponent_b_id", detail.komponent_b_id)}
               ${infoRowHtml("wps_id", detail.wps_id)}
@@ -516,6 +744,7 @@ export async function renderProjectWeldLogSection(opts: {
     state.drawerLoading = true;
     state.drawerErrors = {};
     state.drawerDirty = false;
+    state.drawerVtNoReportSelected = false;
     state.drawerFocusReturn = focusReturn ?? null;
     state.drawerData = emptyDetail();
     render();
@@ -523,6 +752,7 @@ export async function renderProjectWeldLogSection(opts: {
     try {
       const detail = await getWeldDetail(id);
       state.drawerData = detail;
+      state.drawerVtNoReportSelected = !detail.vt_report_id && Boolean(String(detail.kontrollert_av ?? "").trim());
       ensureDrawerWpsSelectionMatches();
       autoSelectDrawerWpsIfSingle();
       state.drawerLoading = false;
@@ -540,6 +770,7 @@ export async function renderProjectWeldLogSection(opts: {
   const closeDrawer = () => {
     state.drawerOpen = false;
     state.drawerErrors = {};
+    state.drawerVtNoReportSelected = false;
     render();
     state.drawerFocusReturn?.focus();
   };
@@ -664,18 +895,6 @@ export async function renderProjectWeldLogSection(opts: {
     return report?.id ?? null;
   };
 
-  const mapReportNoToId = (methodCode: string, reportNo: string) => {
-    const normalized = reportNo.trim();
-    if (!normalized) return null;
-    const selectedCode = normalizeMethodCode(methodCode);
-    const report = state.reports.find((r) => {
-      const m = normalizeMethodCode(r.method);
-      const matchesMethod = methodMatchesCode(selectedCode, m);
-      return matchesMethod && (r.report_no || "").trim() === normalized;
-    });
-    return report?.id ?? null;
-  };
-
   const traceCodeById = (list: TraceabilitySelectOption[], id: string | null | undefined) => {
     if (!id) return null;
     return list.find((row) => row.id === id)?.trace_code ?? null;
@@ -703,6 +922,14 @@ export async function renderProjectWeldLogSection(opts: {
       return;
     }
     patch.sveiser_id = resolvedWelderId;
+    patch.welder_cert_id = resolveWelderCertForScope({
+      welderId: resolvedWelderId,
+      wpsId: patch.wps_id,
+      fuge: patch.fuge,
+      komponentAId: patch.komponent_a_id,
+      komponentBId: patch.komponent_b_id,
+      weldDate: patch.dato,
+    });
     const visualInspectorId = String(patch.kontrollert_av ?? "").trim();
     if (visualInspectorId) {
       if (!state.employees.some((emp) => emp.id === visualInspectorId)) {
@@ -843,8 +1070,8 @@ export async function renderProjectWeldLogSection(opts: {
     }
 
     try {
-      await bulkUpdate(ids, { sveiser_id: resolvedWelderId });
-      toast("Sveiser knyttet til valgte rader.");
+      await bulkUpdate(ids, { sveiser_id: resolvedWelderId, welder_cert_id: null });
+      toast("Sveiser knyttet til valgte rader. Sertifikatmatch oppdateres ved lagring per rad.");
       fetchList();
     } catch (e: any) {
       toast(String(e?.message ?? e));
@@ -883,7 +1110,7 @@ export async function renderProjectWeldLogSection(opts: {
     }
 
     try {
-      await bulkUpdate(ids, { fuge: nextFuge });
+      await bulkUpdate(ids, { fuge: nextFuge, welder_cert_id: null });
       toast("Fugetype satt for valgte rader.");
       fetchList();
     } catch (e: any) {
@@ -895,7 +1122,7 @@ export async function renderProjectWeldLogSection(opts: {
     const ids = Array.from(state.selected);
     if (!ids.length) return;
     try {
-      await bulkUpdate(ids, { fuge: null });
+      await bulkUpdate(ids, { fuge: null, welder_cert_id: null });
       toast("Fugetype fjernet fra valgte rader.");
       fetchList();
     } catch (e: any) {
@@ -907,7 +1134,7 @@ export async function renderProjectWeldLogSection(opts: {
     const ids = Array.from(state.selected);
     if (!ids.length) return;
     try {
-      await bulkUpdate(ids, { sveiser_id: null });
+      await bulkUpdate(ids, { sveiser_id: null, welder_cert_id: null });
       toast("Sveiser kobling fjernet fra valgte rader.");
       fetchList();
     } catch (e: any) {
@@ -988,6 +1215,7 @@ export async function renderProjectWeldLogSection(opts: {
     state.drawerLoading = false;
     state.drawerErrors = {};
     state.drawerDirty = false;
+    state.drawerVtNoReportSelected = false;
     state.drawerFocusReturn = focusReturn ?? null;
     state.drawerData = emptyDetail();
     render();
@@ -1134,6 +1362,8 @@ export async function renderProjectWeldLogSection(opts: {
         .map((row) => ({
           id: row.id,
           doc_no: row.doc_no,
+          process: row.process ?? null,
+          standard_label: row.standard?.label ?? null,
           material_id: row.material_id ?? row.material?.id ?? null,
           fuge: row.fuge ?? "",
           label: row.doc_no,
@@ -1146,17 +1376,46 @@ export async function renderProjectWeldLogSection(opts: {
   };
 
   const loadWelders = async () => {
-    const [rows, certs] = await Promise.all([fetchWelders(), fetchWelderCerts()]);
-    state.welders = rows.map((w) => ({ id: w.id, welder_no: w.welder_no, display_name: w.display_name }));
-    const jointTypeSet = new Set<string>();
-    certs.forEach((cert) => {
-      (cert.coverage_joint_type || "")
-        .split(",")
-        .map((v) => v.trim())
-        .filter(Boolean)
-        .forEach((v) => jointTypeSet.add(v));
-    });
-    state.jointTypes = Array.from(jointTypeSet).sort((a, b) => a.localeCompare(b, "nb", { sensitivity: "base" }));
+    try {
+      const scopePromise = fetchWelderCertScopes().catch(() => [] as Awaited<ReturnType<typeof fetchWelderCertScopes>>);
+      const [rows, certs, scopes] = await Promise.all([fetchWelders(), fetchWelderCerts(), scopePromise]);
+      state.welders = rows.map((w) => ({ id: w.id, welder_no: w.welder_no, display_name: w.display_name }));
+      state.welderCerts = certs.map((cert) => ({
+        id: cert.id,
+        profile_id: cert.profile_id,
+        certificate_no: cert.certificate_no,
+        standard: cert.standard,
+        welding_process_code: cert.welding_process_code ?? null,
+        base_material_id: cert.base_material_id ?? null,
+        coverage_joint_type: cert.coverage_joint_type ?? null,
+        fm_group: cert.fm_group ?? null,
+        expires_at: cert.expires_at ?? null,
+        created_at: cert.created_at,
+      }));
+      state.welderMatchScopes = scopes.map((scope) => ({
+        id: scope.id,
+        standard_label: scope.standard?.label ?? null,
+        fm_group_label: scope.fm_group?.label ?? null,
+        material_id: scope.material_id ?? null,
+        welding_process_code: scope.welding_process_code ?? null,
+        joint_type: scope.joint_type ?? null,
+      }));
+      const jointTypeSet = new Set<string>();
+      certs.forEach((cert) => {
+        (cert.coverage_joint_type || "")
+          .split(",")
+          .map((v) => v.trim())
+          .filter(Boolean)
+          .forEach((v) => jointTypeSet.add(v));
+      });
+      state.jointTypes = Array.from(jointTypeSet).sort((a, b) => a.localeCompare(b, "nb", { sensitivity: "base" }));
+    } catch (e: any) {
+      state.welders = [];
+      state.welderCerts = [];
+      state.welderMatchScopes = [];
+      state.jointTypes = [];
+      toast(String(e?.message ?? e));
+    }
   };
 
   const loadEmployees = async () => {
@@ -1292,7 +1551,11 @@ export async function renderProjectWeldLogSection(opts: {
       const clearReport = target.closest<HTMLElement>("[data-clear-report]");
       if (clearReport && state.drawerOpen) {
         const method = (clearReport.getAttribute("data-clear-report") || "").trim();
-        if (method === "vt" || method === "pt" || method === "vol") {
+        if (method === "vt") {
+          state.drawerVtNoReportSelected = true;
+          applyDrawerPatch("vt_report_id", null);
+          render();
+        } else if (method === "pt" || method === "vol") {
           applyDrawerPatch(`${method}_report_id`, null);
           render();
         }
@@ -1448,8 +1711,8 @@ export async function renderProjectWeldLogSection(opts: {
       if (!state.drawerOpen || !state.drawerData) return;
       const field = target.getAttribute("data-f") || "";
       if (!field) return;
+      if (field === "vt_report_id" || field === "pt_report_id" || field === "vol_report_id") return;
       const input = target as HTMLInputElement;
-      if (field.endsWith("_report_no")) return;
       applyDrawerPatch(field, input.type === "checkbox" ? input.checked : input.value);
     },
     { signal }
@@ -1499,20 +1762,29 @@ export async function renderProjectWeldLogSection(opts: {
       const field = target.getAttribute("data-f") || "";
       if (!field) return;
       const input = target as HTMLInputElement;
-      if (field.endsWith("_report_no")) {
-        const method = field.startsWith("vt") ? "vt" : field.startsWith("pt") ? "pt" : "vol";
-        const methodCode = method === "vt" ? "VT" : method === "pt" ? "CRACK" : "VOL";
-        const id = mapReportNoToId(methodCode, input.value);
-        if (!id) {
-          toast("Fant ikke rapport.");
+      if (field === "vt_report_id") {
+        const nextValue = String(input.value || "").trim();
+        if (nextValue === VT_NO_REPORT_VALUE) {
+          state.drawerVtNoReportSelected = true;
+          applyDrawerPatch("vt_report_id", null);
+          render();
           return;
         }
-        if (method === "vt") applyDrawerPatch("kontrollert_av", "");
-        applyDrawerPatch(`${method}_report_id`, id);
+        state.drawerVtNoReportSelected = false;
+        applyDrawerPatch("vt_report_id", nextValue || null);
+        applyDrawerPatch("kontrollert_av", "");
+        render();
+        return;
+      }
+      if (field === "pt_report_id" || field === "vol_report_id") {
+        applyDrawerPatch(field, String(input.value || "").trim() || null);
         render();
         return;
       }
       applyDrawerPatch(field, input.type === "checkbox" ? input.checked : input.value);
+      if (field === "kontrollert_av") {
+        state.drawerVtNoReportSelected = true;
+      }
       if (field === "kontrollert_av" && String(input.value || "").trim()) {
         applyDrawerPatch("vt_report_id", null);
         render();
@@ -1557,6 +1829,7 @@ export async function renderProjectWeldLogSection(opts: {
         if (!report) return;
         const method = (report.method || "").toLowerCase();
         if (method === "vt") {
+          state.drawerVtNoReportSelected = false;
           applyDrawerPatch("kontrollert_av", "");
           applyDrawerPatch("vt_report_id", report.id);
         }

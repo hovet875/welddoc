@@ -10,7 +10,7 @@ import { fetchStandards } from "../../repo/standardRepo";
 import { fetchWeldingProcesses } from "../../repo/weldingProcessRepo";
 import { fetchWeldJointTypes } from "../../repo/weldJointTypeRepo";
 import { createState } from "./state";
-import { renderMethodPill, renderWpqrTable, renderWpsTable } from "./templates";
+import { processCode, processDisplay, renderWpqrTable, renderWpsTable, resolveProcessValue } from "./templates";
 import { buildTypePillMap, typePillClass } from "../../ui/typePill";
 import { openPdf, openWpqrModal, openWpsModal, handleDeleteWpqr, handleDeleteWps } from "./handlers";
 import { openConfirmDelete } from "../../ui/confirm";
@@ -93,7 +93,6 @@ export async function renderWpsPage(app: HTMLElement) {
           <div class="panel">
             <div class="panel-head">
               <div class="panel-title">WPS</div>
-              <div class="panel-head-center" data-method-pills-wps></div>
               <div data-wps-count class="panel-meta">—</div>
             </div>
             <div class="panel-body">
@@ -104,7 +103,6 @@ export async function renderWpsPage(app: HTMLElement) {
           <div class="panel">
             <div class="panel-head">
               <div class="panel-title">WPQR</div>
-              <div class="panel-head-center" data-method-pills-wpqr></div>
               <div data-wpqr-count class="panel-meta">—</div>
             </div>
             <div class="panel-body">
@@ -128,8 +126,6 @@ export async function renderWpsPage(app: HTMLElement) {
   const wpsBody = qs<HTMLDivElement>(app, "[data-wps-body]");
   const wpqrCount = qs<HTMLDivElement>(app, "[data-wpqr-count]");
   const wpsCount = qs<HTMLDivElement>(app, "[data-wps-count]");
-  const methodPillsWps = qs<HTMLDivElement>(app, "[data-method-pills-wps]");
-  const methodPillsWpqr = qs<HTMLDivElement>(app, "[data-method-pills-wpqr]");
   const modalMount = qs<HTMLDivElement>(app, "[data-modal-mount]");
 
   const refreshBtn = qs<HTMLButtonElement>(app, "[data-refresh]");
@@ -161,14 +157,36 @@ export async function renderWpsPage(app: HTMLElement) {
     return normalize(target).includes(term);
   }
 
-  function buildMethodList() {
-    const fromRows = new Set<string>();
-    [...state.wpsAll, ...state.wpqrAll].forEach((r: any) => {
-      const p = (r.process || "").trim();
-      if (p) fromRows.add(p);
-    });
-    const base = fromRows.size > 0 ? Array.from(fromRows) : state.processes.map((p) => p.label);
-    return base.filter(Boolean).sort((a, b) => a.localeCompare(b, "nb", { sensitivity: "base" }));
+  type ProcessFilterItem = { value: string; label: string };
+
+  function processValue(raw: string | null | undefined) {
+    return resolveProcessValue(raw, state.processes);
+  }
+
+  function processKey(raw: string | null | undefined) {
+    return processCode(processValue(raw));
+  }
+
+  function processText(raw: string | null | undefined) {
+    return processDisplay(raw, state.processes);
+  }
+
+  function buildMethodList(): ProcessFilterItem[] {
+    const map = new Map<string, string>();
+    const addProcess = (raw: string | null | undefined) => {
+      const value = processValue(raw);
+      if (!value) return;
+      if (!map.has(value)) {
+        map.set(value, processText(raw || value));
+      }
+    };
+
+    state.processes.forEach((p) => addProcess((p.code || "").trim() || (p.label || "").trim()));
+    [...state.wpsAll, ...state.wpqrAll].forEach((r: any) => addProcess(r.process));
+
+    return Array.from(map.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.value.localeCompare(b.value, "nb", { numeric: true, sensitivity: "base" }));
   }
 
   function buildFugeList() {
@@ -191,6 +209,18 @@ export async function renderWpsPage(app: HTMLElement) {
     return r.materiale ?? "";
   }
 
+  function rowDateMs(row: Pick<WPQRRow | WPSRow, "doc_date" | "created_at">) {
+    const docDate = String(row.doc_date ?? "").trim();
+    if (docDate) {
+      const ms = Date.parse(`${docDate}T00:00:00.000Z`);
+      if (Number.isFinite(ms)) return ms;
+      const alt = Date.parse(docDate);
+      if (Number.isFinite(alt)) return alt;
+    }
+    const created = Date.parse(row.created_at);
+    return Number.isFinite(created) ? created : 0;
+  }
+
   function buildMaterialList() {
     const set = new Set<string>();
     [...state.wpsAll, ...state.wpqrAll].forEach((r: any) => {
@@ -210,18 +240,20 @@ export async function renderWpsPage(app: HTMLElement) {
     const term = normalize(activeText);
     return rows
       .filter((r) => {
-        if (activeProcess && normalize(r.process) !== normalize(activeProcess)) return false;
+        if (activeProcess && processKey(r.process) !== processKey(activeProcess)) return false;
         if (activeMaterial && normalize(materialLabelFromRow(r)) !== normalize(activeMaterial)) return false;
         if (activeFuge && normalize(r.fuge) !== normalize(activeFuge)) return false;
         if (!term) return true;
         const standardLabel = r.standard ? `${r.standard.label}${r.standard.revision ? `:${r.standard.revision}` : ""}` : "";
         const materialLabel = materialLabelFromRow(r);
-        const hay = [r.doc_no, r.process, r.fuge, standardLabel, materialLabel].filter(Boolean).join(" ");
+        const hay = [r.doc_no, processText(r.process), r.fuge, standardLabel, materialLabel].filter(Boolean).join(" ");
         return matchesText(hay, term);
       })
       .sort((a, b) => {
-        const pa = normalize(a.process);
-        const pb = normalize(b.process);
+        const dateDiff = rowDateMs(b) - rowDateMs(a);
+        if (dateDiff !== 0) return dateDiff;
+        const pa = normalize(processKey(a.process));
+        const pb = normalize(processKey(b.process));
         if (pa !== pb) return pa.localeCompare(pb, "nb", { sensitivity: "base" });
         const fa = normalize(a.fuge);
         const fb = normalize(b.fuge);
@@ -234,18 +266,22 @@ export async function renderWpsPage(app: HTMLElement) {
     const term = normalize(activeText);
     return rows
       .filter((r) => {
-        if (activeProcess && normalize(r.process) !== normalize(activeProcess)) return false;
+        if (activeProcess && processKey(r.process) !== processKey(activeProcess)) return false;
         if (activeMaterial && normalize(materialLabelFromRow(r)) !== normalize(activeMaterial)) return false;
         if (activeFuge && normalize(r.fuge) !== normalize(activeFuge)) return false;
         if (!term) return true;
         const standardLabel = r.standard ? `${r.standard.label}${r.standard.revision ? `:${r.standard.revision}` : ""}` : "";
         const materialLabel = materialLabelFromRow(r);
-        const hay = [r.doc_no, r.process, r.fuge, standardLabel, materialLabel, r.wpqr?.doc_no ?? ""].filter(Boolean).join(" ");
+        const hay = [r.doc_no, processText(r.process), r.fuge, standardLabel, materialLabel, r.wpqr?.doc_no ?? ""]
+          .filter(Boolean)
+          .join(" ");
         return matchesText(hay, term);
       })
       .sort((a, b) => {
-        const pa = normalize(a.process);
-        const pb = normalize(b.process);
+        const dateDiff = rowDateMs(b) - rowDateMs(a);
+        if (dateDiff !== 0) return dateDiff;
+        const pa = normalize(processKey(a.process));
+        const pb = normalize(processKey(b.process));
         if (pa !== pb) return pa.localeCompare(pb, "nb", { sensitivity: "base" });
         const fa = normalize(a.fuge);
         const fb = normalize(b.fuge);
@@ -254,20 +290,44 @@ export async function renderWpsPage(app: HTMLElement) {
       });
   }
 
-  function renderMethodPills(target: HTMLElement, methods: string[]) {
-    const items = methods.length ? methods : ["Ukjent"];
-    const pillMap = buildTypePillMap(items);
-    target.innerHTML = items
-      .map((m) => {
-        const isActive = !activeProcess || normalize(activeProcess) === normalize(m);
-        const cls = isActive ? "is-active" : "is-muted";
-        return `
-          <button class="method-pill-btn" data-method-pill="${esc(m)}" type="button">
-            ${renderMethodPill(m, typePillClass(m, pillMap), cls)}
-          </button>
-        `;
+  function groupWpsByProcess(rows: WPSRow[]) {
+    const groups = new Map<string, { title: string; rows: WPSRow[] }>();
+    for (const row of rows) {
+      const value = processValue(row.process) || "Ukjent";
+      const title = processText(row.process || value);
+      if (!groups.has(value)) {
+        groups.set(value, { title, rows: [] });
+      }
+      groups.get(value)!.rows.push(row);
+    }
+    return Array.from(groups.entries())
+      .sort((a, b) => {
+        const newestA = Math.max(...a[1].rows.map((row) => rowDateMs(row)));
+        const newestB = Math.max(...b[1].rows.map((row) => rowDateMs(row)));
+        if (newestA !== newestB) return newestB - newestA;
+        return a[0].localeCompare(b[0], "nb", { numeric: true, sensitivity: "base" });
       })
-      .join("");
+      .map(([value, group]) => ({ value, title: group.title, rows: group.rows }));
+  }
+
+  function groupWpqrByProcess(rows: WPQRRow[]) {
+    const groups = new Map<string, { title: string; rows: WPQRRow[] }>();
+    for (const row of rows) {
+      const value = processValue(row.process) || "Ukjent";
+      const title = processText(row.process || value);
+      if (!groups.has(value)) {
+        groups.set(value, { title, rows: [] });
+      }
+      groups.get(value)!.rows.push(row);
+    }
+    return Array.from(groups.entries())
+      .sort((a, b) => {
+        const newestA = Math.max(...a[1].rows.map((row) => rowDateMs(row)));
+        const newestB = Math.max(...b[1].rows.map((row) => rowDateMs(row)));
+        if (newestA !== newestB) return newestB - newestA;
+        return a[0].localeCompare(b[0], "nb", { numeric: true, sensitivity: "base" });
+      })
+      .map(([value, group]) => ({ value, title: group.title, rows: group.rows }));
   }
 
   function renderLists() {
@@ -278,20 +338,46 @@ export async function renderWpsPage(app: HTMLElement) {
     wpsCount.textContent = `${filteredWps.length} stk`;
 
     const methodList = buildMethodList();
-    const pillMap = buildTypePillMap(methodList);
-    const getPillClass = (value: string) => typePillClass(value, pillMap);
-    renderMethodPills(methodPillsWps, methodList);
-    renderMethodPills(methodPillsWpqr, methodList);
+    const pillMap = buildTypePillMap(methodList.map((item) => item.value));
+    const getPillClass = (value: string) => typePillClass(processValue(value), pillMap);
 
-    wpqrBody.innerHTML =
-      filteredWpqr.length === 0
-        ? `<div class="muted">Ingen data.</div>`
-        : renderWpqrTable(filteredWpqr, getPillClass, state.isAdmin);
+    if (filteredWpqr.length === 0) {
+      wpqrBody.innerHTML = `<div class="muted">Ingen data.</div>`;
+    } else {
+      const groups = groupWpqrByProcess(filteredWpqr);
+      wpqrBody.innerHTML = groups
+        .map(
+          (group) => `
+            <div class="wps-process-group">
+              <div class="wps-process-head">
+                <div class="wps-process-title">${esc(group.title)}</div>
+                <div class="wps-process-meta">${group.rows.length} stk</div>
+              </div>
+              ${renderWpqrTable(group.rows, getPillClass, state.isAdmin)}
+            </div>
+          `
+        )
+        .join("");
+    }
 
-    wpsBody.innerHTML =
-      filteredWps.length === 0
-        ? `<div class="muted">Ingen data.</div>`
-        : renderWpsTable(filteredWps, getPillClass, state.isAdmin);
+    if (filteredWps.length === 0) {
+      wpsBody.innerHTML = `<div class="muted">Ingen data.</div>`;
+    } else {
+      const groups = groupWpsByProcess(filteredWps);
+      wpsBody.innerHTML = groups
+        .map(
+          (group) => `
+            <div class="wps-process-group">
+              <div class="wps-process-head">
+                <div class="wps-process-title">${esc(group.title)}</div>
+                <div class="wps-process-meta">${group.rows.length} stk</div>
+              </div>
+              ${renderWpsTable(group.rows, getPillClass, state.isAdmin)}
+            </div>
+          `
+        )
+        .join("");
+    }
   }
 
   function requireAdmin() {
@@ -335,8 +421,13 @@ export async function renderWpsPage(app: HTMLElement) {
       const methodList = buildMethodList();
       filterProcess.innerHTML = [
         `<option value="">Alle metoder</option>`,
-        ...methodList.map((m) => `<option value="${esc(m)}">${esc(m)}</option>`),
+        ...methodList.map((m) => `<option value="${esc(m.value)}">${esc(m.label)}</option>`),
       ].join("");
+
+      if (activeProcess && !methodList.some((m) => m.value === activeProcess)) {
+        activeProcess = "";
+      }
+      filterProcess.value = activeProcess;
 
       const fugeList = buildFugeList();
       filterFuge.innerHTML = [
@@ -433,15 +524,6 @@ export async function renderWpsPage(app: HTMLElement) {
     async (e) => {
       const t = e.target as HTMLElement | null;
       if (!t) return;
-
-      const pill = t.closest?.("[data-method-pill]") as HTMLElement | null;
-      if (pill) {
-        const method = pill.getAttribute("data-method-pill") || "";
-        activeProcess = normalize(activeProcess) === normalize(method) ? "" : method;
-        filterProcess.value = activeProcess;
-        renderLists();
-        return;
-      }
 
       const pdfBtn = t.closest?.("button[data-openpdf]") as HTMLButtonElement | null;
       if (pdfBtn) {

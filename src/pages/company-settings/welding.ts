@@ -58,6 +58,13 @@ import {
   setDefaultTraceabilityOption,
   type TraceabilityTypeRow,
 } from "../../repo/traceabilityRepo";
+import {
+  fetchWelderCertScopes,
+  createWelderCertScope,
+  updateWelderCertScope,
+  deleteWelderCertScope,
+  type WelderCertScopeRow,
+} from "../../repo/welderCertScopeRepo";
 
 import "../../styles/pages/company-settings.css";
 
@@ -245,7 +252,10 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
             <div class="panel-body">
               <div class="settings-form">
                 <div class="settings-row inline">
-                  <input id="processInput" class="input" type="text" placeholder="Ny prosess… (f.eks 141 - TIG)" />
+                  <div class="settings-inputs" style="grid-template-columns: 120px 1fr;">
+                    <input id="processCodeInput" class="input" type="text" placeholder="Kode... (f.eks 141)" />
+                    <input id="processLabelInput" class="input" type="text" placeholder="Beskrivelse... (f.eks TIG-sveis)" />
+                  </div>
                   <button data-add-process class="btn primary small">Legg til</button>
                 </div>
                 <div data-process-list class="settings-list"><div class="muted">Laster…</div></div>
@@ -267,6 +277,42 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
                 </div>
                 <div class="muted" style="font-size:12px;">Brukes i dropdown for fugetype i WPS/WPQR.</div>
                 <div data-joint-type-list class="settings-list"><div class="muted">Laster…</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel panel-collapsible is-collapsed">
+            <div class="panel-head">
+              <div class="panel-title">Sveisesertifikat-scope</div>
+              <div class="panel-meta">Admin</div>
+              <button class="panel-toggle" type="button" data-panel-toggle aria-expanded="false">Vis</button>
+            </div>
+            <div class="panel-body">
+              <div class="settings-form">
+                <div class="settings-row inline">
+                  <div class="settings-inputs">
+                    <select id="certScopeStandard" class="select">
+                      <option value="">Standard...</option>
+                    </select>
+                    <select id="certScopeFmGroup" class="select" disabled>
+                      <option value="">Velg standard først...</option>
+                    </select>
+                    <select id="certScopeMaterial" class="select">
+                      <option value="">Materiale (valgfritt)...</option>
+                    </select>
+                    <select id="certScopeProcess" class="select">
+                      <option value="">Sveiseprosess...</option>
+                    </select>
+                    <select id="certScopeJoint" class="select">
+                      <option value="">Fugetype (valgfritt)...</option>
+                    </select>
+                  </div>
+                  <button data-add-cert-scope class="btn primary small">Legg til</button>
+                </div>
+                <div class="muted" style="font-size:12px;">
+                  Definerer hvilke kombinasjoner som brukes for automatisk kobling av sveisesertifikat i weld-log.
+                </div>
+                <div data-cert-scope-list class="settings-list"><div class="muted">Laster...</div></div>
               </div>
             </div>
           </div>
@@ -383,10 +429,18 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
 
   const processList = qs<HTMLDivElement>(app, "[data-process-list]");
   const addProcessBtn = app.querySelector<HTMLButtonElement>("[data-add-process]");
-  const processInput = app.querySelector<HTMLInputElement>("#processInput");
+  const processCodeInput = app.querySelector<HTMLInputElement>("#processCodeInput");
+  const processLabelInput = app.querySelector<HTMLInputElement>("#processLabelInput");
   const jointTypeList = qs<HTMLDivElement>(app, "[data-joint-type-list]");
   const addJointTypeBtn = app.querySelector<HTMLButtonElement>("[data-add-joint-type]");
   const jointTypeInput = app.querySelector<HTMLInputElement>("#jointTypeInput");
+  const certScopeList = qs<HTMLDivElement>(app, "[data-cert-scope-list]");
+  const addCertScopeBtn = app.querySelector<HTMLButtonElement>("[data-add-cert-scope]");
+  const certScopeStandard = app.querySelector<HTMLSelectElement>("#certScopeStandard");
+  const certScopeFmGroup = app.querySelector<HTMLSelectElement>("#certScopeFmGroup");
+  const certScopeMaterial = app.querySelector<HTMLSelectElement>("#certScopeMaterial");
+  const certScopeProcess = app.querySelector<HTMLSelectElement>("#certScopeProcess");
+  const certScopeJoint = app.querySelector<HTMLSelectElement>("#certScopeJoint");
 
   const traceTypeList = qs<HTMLDivElement>(app, "[data-trace-type-list]");
   const traceTypeCode = app.querySelector<HTMLInputElement>("#traceTypeCode");
@@ -423,8 +477,19 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
   const standardLabelText = (s: StandardRow) => (s.revision ? `${s.label} (${s.revision})` : s.label);
   const standardRefLabel = (s?: { label: string; revision: number | null } | null) =>
     s ? (s.revision ? `${s.label} (${s.revision})` : s.label) : "";
+  const processLabelText = (p?: { code: string | null; label: string | null } | null) => {
+    const code = String(p?.code ?? "").trim();
+    const label = String(p?.label ?? "").trim();
+    if (code && label) return `${code} - ${label}`;
+    return code || label;
+  };
 
   let cachedStandards: StandardRow[] = [];
+  let cachedFmGroups: StandardFmGroupRow[] = [];
+  let cachedMaterials: MaterialRow[] = [];
+  let cachedProcesses: WeldingProcessRow[] = [];
+  let cachedJointTypes: WeldJointTypeRow[] = [];
+  let cachedWelderScopes: WelderCertScopeRow[] = [];
 
   const renderNdtStandardOptions = (selected?: string | null) => {
     const rows = [`<option value="">Standard (valgfritt)…</option>`];
@@ -451,6 +516,170 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
       rows.push(`<option value="${esc(String(selected))}" selected>${esc(String(selected))}</option>`);
     }
     return rows.join("");
+  };
+
+  const renderScopeStandardOptions = (selected?: string | null) => {
+    const rows = [`<option value="">Standard...</option>`];
+    for (const s of cachedStandards) {
+      rows.push(
+        `<option value="${esc(s.id)}" ${selected === s.id ? "selected" : ""}>${esc(standardLabelText(s))}</option>`
+      );
+    }
+    if (selected && !cachedStandards.some((s) => s.id === selected)) {
+      rows.push(`<option value="${esc(selected)}" selected>${esc(selected)}</option>`);
+    }
+    return rows.join("");
+  };
+
+  const renderScopeMaterialOptions = (selected?: string | null) => {
+    const rows = [`<option value="">Materiale (valgfritt)...</option>`];
+    for (const material of cachedMaterials) {
+      rows.push(
+        `<option value="${esc(material.id)}" ${selected === material.id ? "selected" : ""}>${esc(materialLabel(material))}</option>`
+      );
+    }
+    if (selected && !cachedMaterials.some((m) => m.id === selected)) {
+      rows.push(`<option value="${esc(selected)}" selected>${esc(selected)}</option>`);
+    }
+    return rows.join("");
+  };
+
+  const renderScopeProcessOptions = (selected?: string | null) => {
+    const rows = [`<option value="">Sveiseprosess...</option>`];
+    for (const process of cachedProcesses) {
+      const code = String(process.code ?? "").trim();
+      if (!code) continue;
+      rows.push(
+        `<option value="${esc(code)}" ${selected === code ? "selected" : ""}>${esc(processLabelText(process))}</option>`
+      );
+    }
+    if (selected && !cachedProcesses.some((p) => String(p.code ?? "").trim() === selected)) {
+      rows.push(`<option value="${esc(selected)}" selected>${esc(selected)}</option>`);
+    }
+    return rows.join("");
+  };
+
+  const renderScopeJointOptions = (selected?: string | null) => {
+    const rows = [`<option value="">Fugetype (valgfritt)...</option>`];
+    for (const joint of cachedJointTypes) {
+      rows.push(
+        `<option value="${esc(joint.label)}" ${selected === joint.label ? "selected" : ""}>${esc(joint.label)}</option>`
+      );
+    }
+    if (selected && !cachedJointTypes.some((j) => j.label === selected)) {
+      rows.push(`<option value="${esc(selected)}" selected>${esc(selected)}</option>`);
+    }
+    return rows.join("");
+  };
+
+  const renderScopeFmGroupOptions = (standardId: string | null | undefined, selected?: string | null) => {
+    const sid = String(standardId ?? "").trim();
+    if (!sid) return `<option value="">Velg standard først...</option>`;
+
+    const standard = cachedStandards.find((row) => row.id === sid) ?? null;
+    if (!standard?.has_fm_group) {
+      return `<option value="">FM ikke brukt for valgt standard</option>`;
+    }
+
+    const rows = [`<option value="">FM-gruppe (valgfritt)...</option>`];
+    for (const group of cachedFmGroups.filter((row) => row.standard_id === sid)) {
+      rows.push(`<option value="${esc(group.id)}" ${selected === group.id ? "selected" : ""}>${esc(group.label)}</option>`);
+    }
+    if (selected && !cachedFmGroups.some((g) => g.id === selected)) {
+      rows.push(`<option value="${esc(selected)}" selected>${esc(selected)}</option>`);
+    }
+    return rows.join("");
+  };
+
+  const refreshScopeFmGroupSelect = (selected?: string | null) => {
+    if (!certScopeFmGroup || !certScopeStandard) return;
+    const standardId = certScopeStandard.value || "";
+    certScopeFmGroup.innerHTML = renderScopeFmGroupOptions(standardId, selected ?? certScopeFmGroup.value);
+    const standard = cachedStandards.find((row) => row.id === standardId) ?? null;
+    const hasFm = Boolean(standard?.has_fm_group && cachedFmGroups.some((row) => row.standard_id === standardId));
+    certScopeFmGroup.disabled = !hasFm;
+    if (!hasFm) certScopeFmGroup.value = "";
+  };
+
+  const refreshScopeFormOptions = () => {
+    if (certScopeStandard) {
+      const selected = certScopeStandard.value || "";
+      certScopeStandard.innerHTML = renderScopeStandardOptions(selected);
+      certScopeStandard.value = selected;
+    }
+    if (certScopeMaterial) {
+      const selected = certScopeMaterial.value || "";
+      certScopeMaterial.innerHTML = renderScopeMaterialOptions(selected);
+      certScopeMaterial.value = selected;
+    }
+    if (certScopeProcess) {
+      const selected = certScopeProcess.value || "";
+      certScopeProcess.innerHTML = renderScopeProcessOptions(selected);
+      certScopeProcess.value = selected;
+    }
+    if (certScopeJoint) {
+      const selected = certScopeJoint.value || "";
+      certScopeJoint.innerHTML = renderScopeJointOptions(selected);
+      certScopeJoint.value = selected;
+    }
+    refreshScopeFmGroupSelect(certScopeFmGroup?.value || "");
+    if (cachedWelderScopes.length > 0) {
+      renderWelderScopes(cachedWelderScopes);
+    }
+  };
+
+  const scopeStandardLabel = (scope: WelderCertScopeRow) => {
+    const standard = cachedStandards.find((row) => row.id === scope.standard_id) ?? null;
+    if (standard) return standardLabelText(standard);
+    return scope.standard?.label ?? "Alle standarder";
+  };
+
+  const scopeFmLabel = (scope: WelderCertScopeRow) => {
+    if (!scope.fm_group_id) return "Alle FM";
+    const group = cachedFmGroups.find((row) => row.id === scope.fm_group_id) ?? null;
+    return group?.label ?? scope.fm_group?.label ?? scope.fm_group_id;
+  };
+
+  const scopeMaterialLabel = (scope: WelderCertScopeRow) => {
+    if (!scope.material_id) return "Alle materialer";
+    const material = cachedMaterials.find((row) => row.id === scope.material_id) ?? null;
+    return material ? materialLabel(material) : scope.material_id;
+  };
+
+  const scopeProcessLabel = (scope: WelderCertScopeRow) => {
+    const code = String(scope.welding_process_code ?? "").trim();
+    if (!code) return "Alle prosesser";
+    const process = cachedProcesses.find((row) => String(row.code ?? "").trim() === code) ?? null;
+    return process ? processLabelText(process) : code;
+  };
+
+  const scopeJointLabel = (scope: WelderCertScopeRow) => {
+    const joint = String(scope.joint_type ?? "").trim();
+    return joint || "Alle fuger";
+  };
+
+  const renderWelderScopes = (rows: WelderCertScopeRow[]) => {
+    if (rows.length === 0) {
+      certScopeList.innerHTML = `<div class="muted">Ingen scope definert.</div>`;
+      return;
+    }
+
+    certScopeList.innerHTML = rows
+      .map((row) => {
+        const title = `${scopeStandardLabel(row)} · ${scopeProcessLabel(row)}`;
+        const meta = [scopeFmLabel(row), scopeMaterialLabel(row), scopeJointLabel(row)].join(" • ");
+        return `
+          <div class="settings-item" data-cert-scope-id="${esc(row.id)}">
+            <div class="settings-item__title">${esc(title)}</div>
+            <div class="settings-item__meta">${esc(meta)}</div>
+            <div class="settings-item__actions">
+              ${renderIconButton({ dataKey: "cert-scope-edit", id: row.id, title: "Endre", icon: icon("pencil"), extraClass: "small" })}
+              ${renderIconButton({ dataKey: "cert-scope-delete", id: row.id, title: "Slett", icon: icon("trash"), danger: true, extraClass: "small" })}
+            </div>
+          </div>
+        `;
+      })
+      .join("");
   };
 
   const renderMaterials = (rows: MaterialRow[]) => {
@@ -531,9 +760,12 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
 
     processList.innerHTML = rows
       .map((r) => {
+        const code = (r.code || "").trim();
+        const label = (r.label || "").trim();
+        const title = code && label ? `${code} - ${label}` : code || label;
         return `
-          <div class="settings-item" data-process-id="${esc(r.id)}">
-            <div class="settings-item__title">${esc(r.label)}</div>
+          <div class="settings-item" data-process-id="${esc(r.id)}" data-process-code="${esc(code)}" data-process-label="${esc(label)}">
+            <div class="settings-item__title">${esc(title)}</div>
             <div class="settings-item__meta"></div>
             <div class="settings-item__actions">
               ${renderIconButton({ dataKey: "process-edit", id: r.id, title: "Endre", icon: icon("pencil"), extraClass: "small" })}
@@ -630,7 +862,9 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
     materialList.innerHTML = `<div class="muted">Laster…</div>`;
     try {
       const rows = await fetchMaterials({ includeInactive: true });
+      cachedMaterials = rows;
       renderMaterials(rows);
+      refreshScopeFormOptions();
     } catch (err: any) {
       console.error(err);
       materialList.innerHTML = `<div class="err">Feil: ${esc(err?.message ?? err)}</div>`;
@@ -640,10 +874,12 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
   async function loadStandards() {
     standardList.innerHTML = `<div class="muted">Laster…</div>`;
     try {
-      const rows = await fetchStandards();
+      const [rows, fmRows] = await Promise.all([fetchStandards(), fetchStandardFmGroups()]);
       cachedStandards = rows;
+      cachedFmGroups = fmRows;
       renderStandards(rows);
       if (ndtMethodStandard) ndtMethodStandard.innerHTML = renderNdtStandardOptions(null);
+      refreshScopeFormOptions();
     } catch (err: any) {
       console.error(err);
       standardList.innerHTML = `<div class="err">Feil: ${esc(err?.message ?? err)}</div>`;
@@ -665,7 +901,9 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
     processList.innerHTML = `<div class="muted">Laster…</div>`;
     try {
       const rows = await fetchWeldingProcesses({ includeInactive: true });
+      cachedProcesses = rows;
       renderProcesses(rows);
+      refreshScopeFormOptions();
     } catch (err: any) {
       console.error(err);
       processList.innerHTML = `<div class="err">Feil: ${esc(err?.message ?? err)}</div>`;
@@ -676,10 +914,25 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
     jointTypeList.innerHTML = `<div class="muted">Lasterâ€¦</div>`;
     try {
       const rows = await fetchWeldJointTypes({ includeInactive: true });
+      cachedJointTypes = rows;
       renderJointTypes(rows);
+      refreshScopeFormOptions();
     } catch (err: any) {
       console.error(err);
       jointTypeList.innerHTML = `<div class="err">Feil: ${esc(err?.message ?? err)}</div>`;
+    }
+  }
+
+  async function loadWelderScopes() {
+    certScopeList.innerHTML = `<div class="muted">Laster...</div>`;
+    try {
+      const rows = await fetchWelderCertScopes({ includeInactive: true });
+      cachedWelderScopes = rows;
+      renderWelderScopes(rows);
+      refreshScopeFormOptions();
+    } catch (err: any) {
+      console.error(err);
+      certScopeList.innerHTML = `<div class="err">Feil: ${esc(err?.message ?? err)}</div>`;
     }
   }
 
@@ -778,11 +1031,14 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
   });
 
   addProcessBtn?.addEventListener("click", async () => {
-    const label = (processInput?.value ?? "").trim();
-    if (!label) return toast("Skriv inn prosess.");
+    const code = (processCodeInput?.value ?? "").trim();
+    const label = (processLabelInput?.value ?? "").trim();
+    if (!code || !label) return toast("Fyll inn kode og beskrivelse.");
+    if (!/^\d{2,4}$/.test(code)) return toast("Kode må være 2-4 siffer.");
     try {
-      await createWeldingProcess(label);
-      if (processInput) processInput.value = "";
+      await createWeldingProcess({ code, label });
+      if (processCodeInput) processCodeInput.value = "";
+      if (processLabelInput) processLabelInput.value = "";
       await loadProcesses();
       toast("Sveiseprosess lagt til.");
     } catch (err: any) {
@@ -799,6 +1055,41 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
       if (jointTypeInput) jointTypeInput.value = "";
       await loadJointTypes();
       toast("Sveisefuge lagt til.");
+    } catch (err: any) {
+      console.error(err);
+      toast(String(err?.message ?? err));
+    }
+  });
+
+  certScopeStandard?.addEventListener("change", () => {
+    refreshScopeFmGroupSelect("");
+  });
+
+  addCertScopeBtn?.addEventListener("click", async () => {
+    const standard_id = (certScopeStandard?.value ?? "").trim() || null;
+    const fm_group_id = (certScopeFmGroup?.value ?? "").trim() || null;
+    const material_id = (certScopeMaterial?.value ?? "").trim() || null;
+    const welding_process_code = (certScopeProcess?.value ?? "").trim() || null;
+    const joint_type = (certScopeJoint?.value ?? "").trim() || null;
+
+    if (!standard_id || !welding_process_code) {
+      return toast("Velg minst standard og sveiseprosess.");
+    }
+
+    try {
+      await createWelderCertScope({
+        standard_id,
+        fm_group_id,
+        material_id,
+        welding_process_code,
+        joint_type,
+      });
+      if (certScopeFmGroup) certScopeFmGroup.value = "";
+      if (certScopeMaterial) certScopeMaterial.value = "";
+      if (certScopeProcess) certScopeProcess.value = "";
+      if (certScopeJoint) certScopeJoint.value = "";
+      await loadWelderScopes();
+      toast("Scope lagt til.");
     } catch (err: any) {
       console.error(err);
       toast(String(err?.message ?? err));
@@ -1299,6 +1590,8 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
       const current = rows.find((r) => r.id === id);
       if (!current) return;
       await openFmGroupsModal(current);
+      await loadStandards();
+      await loadWelderScopes();
       return;
     }
   });
@@ -1424,14 +1717,19 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
     }
 
     if (target.closest("[data-process-edit]")) {
-      const current = item.querySelector(".settings-item__title")?.textContent?.trim() ?? "";
+      const currentCode = (item.getAttribute("data-process-code") || "").trim();
+      const currentLabel = (item.getAttribute("data-process-label") || "").trim();
       const modalHtml = renderModal(
         "Endre sveiseprosess",
         `
           <div class="modalgrid">
-            <div class="field" style="grid-column:1 / -1;">
-              <label>Prosess</label>
-              <input data-f="label" class="input" type="text" value="${esc(current)}" />
+            <div class="field">
+              <label>Kode</label>
+              <input data-f="code" class="input" type="text" value="${esc(currentCode)}" />
+            </div>
+            <div class="field">
+              <label>Beskrivelse</label>
+              <input data-f="label" class="input" type="text" value="${esc(currentLabel)}" />
             </div>
           </div>
         `,
@@ -1442,10 +1740,12 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
       const save = modalSaveButton(h.root);
 
       save.addEventListener("click", async () => {
+        const code = (h.root.querySelector<HTMLInputElement>("[data-f=code]")?.value ?? "").trim();
         const label = (h.root.querySelector<HTMLInputElement>("[data-f=label]")?.value ?? "").trim();
-        if (!label) return toast("Skriv inn prosess.");
+        if (!code || !label) return toast("Fyll inn kode og beskrivelse.");
+        if (!/^\d{2,4}$/.test(code)) return toast("Kode må være 2-4 siffer.");
         try {
-          await updateWeldingProcess(id, label);
+          await updateWeldingProcess(id, { code, label });
           h.close();
           await loadProcesses();
           toast("Oppdatert.");
@@ -1527,10 +1827,126 @@ export async function renderCompanySettingsWelding(app: HTMLElement) {
     }
   });
 
+  certScopeList.addEventListener("click", async (e) => {
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    const item = target.closest<HTMLElement>("[data-cert-scope-id]");
+    if (!item) return;
+    const id = item.getAttribute("data-cert-scope-id") || "";
+    if (!id) return;
+    const current = cachedWelderScopes.find((row) => row.id === id);
+    if (!current) return;
+
+    if (target.closest("[data-cert-scope-delete]")) {
+      await openConfirmDelete(modalMount, modalSignal.signal, {
+        title: "Slett sertifikat-scope",
+        messageHtml: `Slett scope <b>${esc(scopeStandardLabel(current))}</b>?`,
+        onConfirm: async () => {
+          await deleteWelderCertScope(id);
+        },
+        onDone: async () => {
+          await loadWelderScopes();
+          toast("Scope slettet.");
+        },
+      });
+      return;
+    }
+
+    if (target.closest("[data-cert-scope-edit]")) {
+      const modalHtml = renderModal(
+        "Endre sertifikat-scope",
+        `
+          <div class="modalgrid">
+            <div class="field">
+              <label>Standard</label>
+              <select data-f="standard_id" class="select">
+                ${renderScopeStandardOptions(current.standard_id)}
+              </select>
+            </div>
+            <div class="field">
+              <label>FM-gruppe</label>
+              <select data-f="fm_group_id" class="select">
+                ${renderScopeFmGroupOptions(current.standard_id, current.fm_group_id)}
+              </select>
+            </div>
+            <div class="field">
+              <label>Materiale</label>
+              <select data-f="material_id" class="select">
+                ${renderScopeMaterialOptions(current.material_id)}
+              </select>
+            </div>
+            <div class="field">
+              <label>Sveiseprosess</label>
+              <select data-f="welding_process_code" class="select">
+                ${renderScopeProcessOptions(current.welding_process_code)}
+              </select>
+            </div>
+            <div class="field">
+              <label>Fugetype</label>
+              <select data-f="joint_type" class="select">
+                ${renderScopeJointOptions(current.joint_type)}
+              </select>
+            </div>
+          </div>
+        `,
+        "Lagre"
+      );
+
+      const h = openModal(modalMount, modalHtml, modalSignal.signal);
+      const save = modalSaveButton(h.root);
+      const standardSel = qs<HTMLSelectElement>(h.root, "[data-f=standard_id]");
+      const fmSel = qs<HTMLSelectElement>(h.root, "[data-f=fm_group_id]");
+
+      const refreshModalFm = () => {
+        fmSel.innerHTML = renderScopeFmGroupOptions(standardSel.value || "", fmSel.value || "");
+        const standard = cachedStandards.find((row) => row.id === (standardSel.value || "")) ?? null;
+        const hasFm = Boolean(
+          standard?.has_fm_group && cachedFmGroups.some((row) => row.standard_id === (standardSel.value || ""))
+        );
+        fmSel.disabled = !hasFm;
+        if (!hasFm) fmSel.value = "";
+      };
+
+      standardSel.addEventListener("change", refreshModalFm, { signal: modalSignal.signal });
+      refreshModalFm();
+
+      save.addEventListener("click", async () => {
+        const standard_id = (standardSel.value || "").trim() || null;
+        const fm_group_id = (fmSel.value || "").trim() || null;
+        const material_id = (qs<HTMLSelectElement>(h.root, "[data-f=material_id]").value || "").trim() || null;
+        const welding_process_code =
+          (qs<HTMLSelectElement>(h.root, "[data-f=welding_process_code]").value || "").trim() || null;
+        const joint_type = (qs<HTMLSelectElement>(h.root, "[data-f=joint_type]").value || "").trim() || null;
+
+        if (!standard_id || !welding_process_code) {
+          return toast("Velg minst standard og sveiseprosess.");
+        }
+
+        try {
+          await updateWelderCertScope(id, {
+            standard_id,
+            fm_group_id,
+            material_id,
+            welding_process_code,
+            joint_type,
+          });
+          h.close();
+          await loadWelderScopes();
+          toast("Scope oppdatert.");
+        } catch (err: any) {
+          console.error(err);
+          toast(String(err?.message ?? err));
+        }
+      });
+    }
+  });
+
   await loadMaterials();
   await loadStandards();
   await loadNdtMethods();
   await loadProcesses();
   await loadJointTypes();
+  await loadWelderScopes();
   await loadTraceability();
 }

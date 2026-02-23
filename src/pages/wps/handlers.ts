@@ -16,7 +16,16 @@ import { esc, qs } from "../../utils/dom";
 import { normalizeDocNo, validatePdfFile } from "../../utils/format";
 import { openModal, modalSaveButton, renderModal } from "../../ui/modal";
 import { openPdfPreview } from "../../ui/pdfPreview";
-import { currentPdfMeta, wpqrFormBody, wpsFormBody, toThicknessInput, formatMaterialLabel } from "./templates";
+import { wireDatePickers } from "../../ui/datePicker";
+import {
+  currentPdfMeta,
+  wpqrFormBody,
+  wpsFormBody,
+  toThicknessInput,
+  formatMaterialLabel,
+  processCode,
+  resolveProcessValue,
+} from "./templates";
 
 export async function openPdf(path: string) {
   const url = await createPdfSignedUrl(path, 120);
@@ -36,8 +45,172 @@ function enableSave(btn: HTMLButtonElement, text: string) {
   btn.textContent = text;
 }
 
+function currentDateInputValue() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function toDateInputValue(value: string | null | undefined, fallback?: string | null | undefined) {
+  const primary = String(value ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(primary)) return primary;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(primary)) return primary.slice(0, 10);
+
+  const secondary = String(fallback ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(secondary)) return secondary;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(secondary)) return secondary.slice(0, 10);
+
+  return currentDateInputValue();
+}
+
+function isPdfFile(file: File) {
+  const mime = (file.type || "").toLowerCase();
+  const name = (file.name || "").toLowerCase();
+  return mime === "application/pdf" || name.endsWith(".pdf");
+}
+
+type ModalPdfUploadHandle = {
+  getSelectedFile: () => File | null;
+};
+
+function wireModalPdfUploadField(modalRoot: HTMLElement, signal: AbortSignal): ModalPdfUploadHandle {
+  const input = modalRoot.querySelector<HTMLInputElement>("[data-f=pdf]");
+  const dropzone = modalRoot.querySelector<HTMLElement>("[data-f=pdf_dropzone]");
+  const previewMount = modalRoot.querySelector<HTMLDivElement>("[data-f=pdf_preview]");
+  const removePdfInput = modalRoot.querySelector<HTMLInputElement>("[data-f=remove_pdf]");
+  let selectedFile: File | null = input?.files?.[0] ?? null;
+  let previewUrl: string | null = null;
+
+  const clearPreviewUrl = () => {
+    if (!previewUrl) return;
+    URL.revokeObjectURL(previewUrl);
+    previewUrl = null;
+  };
+
+  const syncRemoveCheckbox = () => {
+    if (!removePdfInput) return;
+    removePdfInput.disabled = Boolean(selectedFile);
+    if (selectedFile) removePdfInput.checked = false;
+  };
+
+  const renderPreview = () => {
+    if (!previewMount) return;
+    clearPreviewUrl();
+    if (!selectedFile) {
+      previewMount.innerHTML = `<div class="muted">Ingen ny PDF valgt.</div>`;
+      return;
+    }
+    previewUrl = URL.createObjectURL(selectedFile);
+    previewMount.innerHTML = `
+      <div class="wps-upload-preview">
+        <div class="wps-upload-preview-head">
+          <div class="wps-upload-preview-title">${esc(selectedFile.name)}</div>
+          <button type="button" class="btn small" data-pdf-preview-clear>Fjern</button>
+        </div>
+        <iframe class="wps-upload-preview-frame" src="${esc(previewUrl)}" title="Forhåndsvisning"></iframe>
+      </div>
+    `;
+  };
+
+  const setSelectedFile = (next: File | null, opts?: { clearInput?: boolean }) => {
+    selectedFile = next;
+    if (opts?.clearInput && input) input.value = "";
+    syncRemoveCheckbox();
+    renderPreview();
+  };
+
+  const pickDroppedFile = (files: File[]) => {
+    const pdf = files.find((file) => isPdfFile(file)) ?? null;
+    if (!pdf) {
+      alert("Kun PDF-filer er tillatt.");
+      return;
+    }
+    setSelectedFile(pdf, { clearInput: true });
+  };
+
+  input?.addEventListener(
+    "change",
+    () => {
+      const file = input.files?.[0] ?? null;
+      if (file && !isPdfFile(file)) {
+        input.value = "";
+        alert("Kun PDF-filer er tillatt.");
+        setSelectedFile(null);
+        return;
+      }
+      setSelectedFile(file);
+    },
+    { signal }
+  );
+
+  dropzone?.addEventListener(
+    "dragover",
+    (e) => {
+      e.preventDefault();
+      dropzone.classList.add("is-drag");
+    },
+    { signal }
+  );
+
+  dropzone?.addEventListener(
+    "dragleave",
+    () => {
+      dropzone.classList.remove("is-drag");
+    },
+    { signal }
+  );
+
+  dropzone?.addEventListener(
+    "drop",
+    (e) => {
+      e.preventDefault();
+      dropzone.classList.remove("is-drag");
+      const dt = (e as DragEvent).dataTransfer;
+      const files = dt?.files ? Array.from(dt.files) : [];
+      if (!files.length) return;
+      pickDroppedFile(files);
+    },
+    { signal }
+  );
+
+  previewMount?.addEventListener(
+    "click",
+    (e) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-pdf-preview-clear]")) return;
+      setSelectedFile(null, { clearInput: true });
+    },
+    { signal }
+  );
+
+  signal.addEventListener("abort", clearPreviewUrl, { once: true });
+  syncRemoveCheckbox();
+  renderPreview();
+
+  return {
+    getSelectedFile: () => selectedFile,
+  };
+}
+
+function wireExistingPdfPreview(modalRoot: HTMLElement, signal: AbortSignal) {
+  const openBtn = modalRoot.querySelector<HTMLButtonElement>("[data-open-existing-pdf]");
+  if (!openBtn) return;
+
+  openBtn.addEventListener(
+    "click",
+    () => {
+      const ref = (openBtn.getAttribute("data-open-existing-pdf") || "").trim();
+      if (!ref) return;
+      void openPdf(ref).catch((err) => {
+        console.error(err);
+        alert("Klarte ikke å åpne PDF.");
+      });
+    },
+    { signal }
+  );
+}
+
 function readCommonForm(modalRoot: HTMLElement, materials: WpsPageState["materials"]) {
   const doc_no_raw = (getField<HTMLInputElement>(modalRoot, "doc_no").value || "").trim();
+  const doc_date = (getField<HTMLInputElement>(modalRoot, "doc_date").value || "").trim();
   const standard_id = (getField<HTMLSelectElement>(modalRoot, "standard_id").value || "").trim();
   const process = (getField<HTMLSelectElement>(modalRoot, "process").value || "").trim();
   const materialId = (getField<HTMLSelectElement>(modalRoot, "material_id").value || "").trim();
@@ -48,31 +221,12 @@ function readCommonForm(modalRoot: HTMLElement, materials: WpsPageState["materia
   const material_id = material?.id ?? "";
   const material_label = material ? formatMaterialLabel(material) : "";
   const fuge = (getField<HTMLSelectElement>(modalRoot, "fuge").value || "").trim();
-  const thicknessSingle = modalRoot.querySelector<HTMLSelectElement>("[data-f=tykkelse]");
-  const thicknessFrom = modalRoot.querySelector<HTMLSelectElement>("[data-f=tykkelse_from]");
-  const thicknessTo = modalRoot.querySelector<HTMLSelectElement>("[data-f=tykkelse_to]");
-  const wpqrSelect = modalRoot.querySelector<HTMLSelectElement>("[data-f=wpqr_id]");
-
-  let tykkelse = "";
-  if (thicknessSingle) {
-    tykkelse = (thicknessSingle.value || "").trim();
-  } else if (thicknessFrom && thicknessTo) {
-    const from = (thicknessFrom.value || "").trim();
-    const to = (thicknessTo.value || "").trim();
-    if (from && to) {
-      const isWpqr = !wpqrSelect;
-      if (from === to) {
-        tykkelse = from;
-      } else {
-        tykkelse = isWpqr ? `${from} mot ${to}` : `${from}-${to}`;
-      }
-    } else {
-      tykkelse = "";
-    }
-  }
+  const thicknessInput = modalRoot.querySelector<HTMLInputElement>("[data-f=tykkelse]");
+  const tykkelse = (thicknessInput?.value || "").trim();
 
   return {
     doc_no: normalizeDocNo(doc_no_raw),
+    doc_date,
     standard_id,
     process,
     material_id,
@@ -83,7 +237,7 @@ function readCommonForm(modalRoot: HTMLElement, materials: WpsPageState["materia
 }
 
 function requireFields(base: ReturnType<typeof readCommonForm>, extraMsg = "") {
-  if (!base.doc_no || !base.standard_id || !base.process || !base.material_id || !base.fuge || !base.tykkelse) {
+  if (!base.doc_no || !base.doc_date || !base.standard_id || !base.process || !base.material_id || !base.fuge || !base.tykkelse) {
     throw new Error(`Fyll ut alle felter.${extraMsg ? " " + extraMsg : ""}`);
   }
 }
@@ -95,9 +249,10 @@ export function fillWpqrDropdownByProcess(
   selectedId: string | null
 ) {
   const sel = getField<HTMLSelectElement>(modalRoot, "wpqr_id");
-  const p = (process || "").trim();
+  const processValue = resolveProcessValue(process, state.processes);
+  const processKey = processCode(processValue);
 
-  if (!p) {
+  if (!processKey) {
     sel.innerHTML = `<option value="">Velg metode først…</option>`;
     sel.disabled = true;
     return;
@@ -106,7 +261,7 @@ export function fillWpqrDropdownByProcess(
   sel.disabled = false;
 
   const list = state.wpqrAll
-    .filter((w) => w.process === p)
+    .filter((w) => processCode(resolveProcessValue(w.process, state.processes)) === processKey)
     .slice()
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
 
@@ -115,7 +270,7 @@ export function fillWpqrDropdownByProcess(
     list
       .map((w) => {
         const materialLabel = formatMaterialLabel(w.material, w.materiale);
-        return `<option value="${esc(w.id)}">${esc(w.doc_no)} • ${esc(materialLabel)} • ${esc(w.tykkelse)} mm</option>`;
+        return `<option value="${esc(w.id)}">${esc(w.doc_no)} • ${esc(materialLabel)} • ${esc(w.tykkelse)}</option>`;
       })
       .join("");
 
@@ -178,12 +333,23 @@ export function openWpqrModal(
 
   const modalHtml = renderModal(title, wpqrFormBody(selectableStandards, processes, materials, jointTypes), saveLabel);
   const h = openModal(mount, modalHtml, signal);
+  wireDatePickers(h.root, signal);
 
   // prefill
   if (row) {
     getField<HTMLInputElement>(h.root, "doc_no").value = row.doc_no;
+    getField<HTMLInputElement>(h.root, "doc_date").value = toDateInputValue(row.doc_date, row.created_at);
     getField<HTMLSelectElement>(h.root, "standard_id").value = row.standard_id || "";
-    getField<HTMLSelectElement>(h.root, "process").value = row.process || "";
+    const processSelect = getField<HTMLSelectElement>(h.root, "process");
+    const resolvedProcess = resolveProcessValue(row.process, processes);
+    processSelect.value = resolvedProcess;
+    if (resolvedProcess && !Array.from(processSelect.options).some((opt) => opt.value === resolvedProcess)) {
+      const opt = document.createElement("option");
+      opt.value = resolvedProcess;
+      opt.textContent = resolvedProcess;
+      processSelect.appendChild(opt);
+      processSelect.value = resolvedProcess;
+    }
     const materialSelect = getField<HTMLSelectElement>(h.root, "material_id");
     if (row.material_id) {
       const hasOption = Array.from(materialSelect.options).some((opt) => opt.value === row.material_id);
@@ -202,21 +368,17 @@ export function openWpqrModal(
       materialSelect.value = "";
     }
     getField<HTMLSelectElement>(h.root, "fuge").value = row.fuge || "";
-    const thicknessFrom = h.root.querySelector<HTMLSelectElement>("[data-f=tykkelse_from]");
-    const thicknessTo = h.root.querySelector<HTMLSelectElement>("[data-f=tykkelse_to]");
-    if (thicknessFrom && thicknessTo) {
-      const raw = toThicknessInput(row.tykkelse);
-      const parts = raw.includes(" mot ") ? raw.split(" mot ") : raw.split("-");
-      const [fromRaw, toRaw] = parts.length === 2 ? parts : [raw, raw];
-      thicknessFrom.value = (fromRaw || "").trim();
-      thicknessTo.value = (toRaw || "").trim();
-    }
+    const thicknessInput = h.root.querySelector<HTMLInputElement>("[data-f=tykkelse]");
+    if (thicknessInput) thicknessInput.value = toThicknessInput(row.tykkelse);
 
     const meta = getField<HTMLDivElement>(h.root, "pdfMeta");
     meta.innerHTML = currentPdfMeta(row?.file_id ?? null);
   } else {
+    getField<HTMLInputElement>(h.root, "doc_date").value = currentDateInputValue();
     getField<HTMLDivElement>(h.root, "pdfMeta").innerHTML = currentPdfMeta(null);
   }
+  wireExistingPdfPreview(h.root, signal);
+  const wpqrPdfUpload = wireModalPdfUploadField(h.root, signal);
 
   // optional: live uppercase
   const doc = getField<HTMLInputElement>(h.root, "doc_no");
@@ -233,11 +395,10 @@ export function openWpqrModal(
         const base = readCommonForm(h.root, materials);
         requireFields(base, "(PDF er valgfri.)");
 
-        const pdfInput = getField<HTMLInputElement>(h.root, "pdf");
-        const pdfFile = pdfInput.files?.[0] ?? null;
-
-        const removePdf =
+        const pdfFile = wpqrPdfUpload.getSelectedFile();
+        let removePdf =
           (h.root.querySelector<HTMLInputElement>(`[data-f="remove_pdf"]`)?.checked ?? false) === true;
+        if (pdfFile) removePdf = false;
 
         if (pdfFile) {
           const err = validatePdfFile(pdfFile, 25);
@@ -287,14 +448,24 @@ export function openWpsModal(
     saveLabel
   );
   const h = openModal(mount, modalHtml, signal);
+  wireDatePickers(h.root, signal);
 
   const processSel = getField<HTMLSelectElement>(h.root, "process");
 
   // prefill
   if (row) {
     getField<HTMLInputElement>(h.root, "doc_no").value = row.doc_no;
+    getField<HTMLInputElement>(h.root, "doc_date").value = toDateInputValue(row.doc_date, row.created_at);
     getField<HTMLSelectElement>(h.root, "standard_id").value = row.standard_id || "";
-    processSel.value = row.process || "";
+    const resolvedProcess = resolveProcessValue(row.process, state.processes);
+    processSel.value = resolvedProcess;
+    if (resolvedProcess && !Array.from(processSel.options).some((opt) => opt.value === resolvedProcess)) {
+      const opt = document.createElement("option");
+      opt.value = resolvedProcess;
+      opt.textContent = resolvedProcess;
+      processSel.appendChild(opt);
+      processSel.value = resolvedProcess;
+    }
     const materialSelect = getField<HTMLSelectElement>(h.root, "material_id");
     if (row.material_id) {
       const hasOption = Array.from(materialSelect.options).some((opt) => opt.value === row.material_id);
@@ -313,18 +484,17 @@ export function openWpsModal(
       materialSelect.value = "";
     }
     getField<HTMLSelectElement>(h.root, "fuge").value = row.fuge || "";
-    const toValue = toThicknessInput(row.tykkelse);
-    const [fromRaw, toRaw] = toValue.includes("-") ? toValue.split("-") : [toValue, toValue];
-    const thicknessFrom = h.root.querySelector<HTMLSelectElement>("[data-f=tykkelse_from]");
-    const thicknessTo = h.root.querySelector<HTMLSelectElement>("[data-f=tykkelse_to]");
-    if (thicknessFrom) thicknessFrom.value = (fromRaw || "").trim();
-    if (thicknessTo) thicknessTo.value = (toRaw || "").trim();
+    const thicknessInput = h.root.querySelector<HTMLInputElement>("[data-f=tykkelse]");
+    if (thicknessInput) thicknessInput.value = toThicknessInput(row.tykkelse);
 
     const meta = getField<HTMLDivElement>(h.root, "pdfMeta");
     meta.innerHTML = currentPdfMeta(row?.file_id ?? null);
   } else {
+    getField<HTMLInputElement>(h.root, "doc_date").value = currentDateInputValue();
     getField<HTMLDivElement>(h.root, "pdfMeta").innerHTML = currentPdfMeta(null);
   }
+  wireExistingPdfPreview(h.root, signal);
+  const wpsPdfUpload = wireModalPdfUploadField(h.root, signal);
 
   // optional: live uppercase
   const doc = getField<HTMLInputElement>(h.root, "doc_no");
@@ -354,11 +524,10 @@ export function openWpsModal(
 
         const wpqr_id = (getField<HTMLSelectElement>(h.root, "wpqr_id").value || "").trim() || null;
 
-        const pdfInput = getField<HTMLInputElement>(h.root, "pdf");
-        const pdfFile = pdfInput.files?.[0] ?? null;
-
-        const removePdf =
+        const pdfFile = wpsPdfUpload.getSelectedFile();
+        let removePdf =
           (h.root.querySelector<HTMLInputElement>(`[data-f="remove_pdf"]`)?.checked ?? false) === true;
+        if (pdfFile) removePdf = false;
 
         if (pdfFile) {
           const err = validatePdfFile(pdfFile, 25);

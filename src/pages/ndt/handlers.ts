@@ -2,14 +2,17 @@ import type { ProfileWelderRow } from "../../repo/certRepo";
 import type { ProjectRow } from "../../repo/projectRepo";
 import type { CustomerRow } from "../../repo/customerRepo";
 import type { NdtMethodRow, NdtReportRow } from "../../repo/ndtReportRepo";
+import type { NdtSupplierRow, NdtInspectorRow } from "../../repo/ndtSupplierRepo";
 
 import {
   createNdtReportWithFile,
+  createNdtReportWithExistingFile,
   updateNdtReport,
   updateNdtReportFile,
   deleteNdtReport,
 } from "../../repo/ndtReportRepo";
 import { createSignedUrlForFileRef } from "../../repo/fileRepo";
+import { markFileInboxProcessed } from "../../repo/fileInboxRepo";
 
 import { esc, qs, qsa } from "../../utils/dom";
 import { printPdfUrl } from "../../utils/print";
@@ -53,8 +56,13 @@ export async function handleDeleteReport(row: NdtReportRow) {
 }
 
 export type NdtUploadEntry = {
-  file: File;
+  file: File | null;
+  file_id: string | null;
+  inbox_id?: string | null;
+  source_name: string;
   method_id: string;
+  ndt_supplier_id: string | null;
+  ndt_inspector_id: string | null;
   weld_count: number | null;
   defect_count: number | null;
   title: string;
@@ -66,10 +74,49 @@ export type NdtUploadEntry = {
 export async function uploadNdtBatchWithMeta(entries: NdtUploadEntry[], onProgress?: (idx: number, total: number) => void) {
   for (let i = 0; i < entries.length; i += 1) {
     const entry = entries[i];
-    const err = validatePdfFile(entry.file, 25);
-    if (err) throw new Error(err);
+    const hasLocalFile = !!entry.file;
+    if (!hasLocalFile && !entry.file_id) {
+      throw new Error("Manglende filreferanse for opplasting.");
+    }
+    if (entry.file) {
+      const err = validatePdfFile(entry.file, 25);
+      if (err) throw new Error(err);
+    }
     onProgress?.(i + 1, entries.length);
-    await createNdtReportWithFile(entry);
+
+    if (entry.file) {
+      await createNdtReportWithFile({
+        source_name: entry.source_name,
+        method_id: entry.method_id,
+        ndt_supplier_id: entry.ndt_supplier_id,
+        ndt_inspector_id: entry.ndt_inspector_id,
+        weld_count: entry.weld_count,
+        defect_count: entry.defect_count,
+        title: entry.title,
+        customer: entry.customer,
+        report_date: entry.report_date,
+        welder_stats: entry.welder_stats,
+        file: entry.file,
+      });
+    } else {
+      await createNdtReportWithExistingFile({
+        source_name: entry.source_name,
+        method_id: entry.method_id,
+        ndt_supplier_id: entry.ndt_supplier_id,
+        ndt_inspector_id: entry.ndt_inspector_id,
+        weld_count: entry.weld_count,
+        defect_count: entry.defect_count,
+        title: entry.title,
+        customer: entry.customer,
+        report_date: entry.report_date,
+        welder_stats: entry.welder_stats,
+        file_id: entry.file_id!,
+      });
+    }
+
+    if (entry.inbox_id) {
+      await markFileInboxProcessed(entry.inbox_id);
+    }
   }
 }
 
@@ -80,6 +127,8 @@ export function openNdtReportModal(
   welders: ProfileWelderRow[],
   projects: ProjectRow[],
   customers: CustomerRow[],
+  suppliers: NdtSupplierRow[],
+  inspectors: NdtInspectorRow[],
   mode: "new" | "edit",
   row: NdtReportRow | null,
   onDone: () => Promise<void>
@@ -88,13 +137,15 @@ export function openNdtReportModal(
   const saveLabel = mode === "new" ? "Lagre" : "Oppdater";
   const modalHtml = renderModal(
     title,
-    ndtReportFormBody(methods, welders, projects, customers, { showReplaceFile: mode === "edit" }),
+    ndtReportFormBody(methods, welders, projects, customers, suppliers, inspectors, { showReplaceFile: mode === "edit" }),
     saveLabel
   );
   const h = openModal(mount, modalHtml, signal);
   wireDatePickers(h.root, signal);
 
   const methodSelect = getField<HTMLSelectElement>(h.root, "method_id");
+  const supplierSelect = getField<HTMLSelectElement>(h.root, "ndt_supplier_id");
+  const inspectorSelect = getField<HTMLSelectElement>(h.root, "ndt_inspector_id");
   const customerSelect = getField<HTMLSelectElement>(h.root, "customer");
   const projectSelect = getField<HTMLSelectElement>(h.root, "title");
   const rtFields = qsa<HTMLElement>(h.root, "[data-rt-only]");
@@ -102,9 +153,37 @@ export function openNdtReportModal(
   const pdfMeta = getField<HTMLDivElement>(h.root, "pdfMeta");
   const welderList = getField<HTMLDivElement>(h.root, "welder_list");
   const welderCounts = getField<HTMLDivElement>(h.root, "welder_counts");
-  const welderSearch = getField<HTMLInputElement>(h.root, "welder_search");
   const projectMap = new Map(projects.map((p) => [String(p.project_no), p]));
   const welderLabelMap = new Map(welders.map((w) => [w.id, formatWelderLabel(w)]));
+  const inspectorById = new Map(inspectors.map((inspector) => [inspector.id, inspector] as const));
+
+  const renderInspectorOptions = (supplierId: string, selectedInspectorId = "") => {
+    const rows = supplierId ? inspectors.filter((inspector) => inspector.supplier_id === supplierId) : [];
+    inspectorSelect.innerHTML =
+      `<option value="">${supplierId ? "Velg kontrollør..." : "Velg firma først..."}</option>` +
+      rows.map((inspector) => `<option value="${esc(inspector.id)}">${esc(inspector.name)}</option>`).join("");
+
+    if (selectedInspectorId && rows.some((inspector) => inspector.id === selectedInspectorId)) {
+      inspectorSelect.value = selectedInspectorId;
+      return;
+    }
+
+    if (selectedInspectorId) {
+      const fallback = inspectors.find((inspector) => inspector.id === selectedInspectorId);
+      if (fallback) {
+        const opt = document.createElement("option");
+        opt.value = fallback.id;
+        opt.textContent = fallback.name;
+        inspectorSelect.appendChild(opt);
+        inspectorSelect.value = fallback.id;
+      } else {
+        inspectorSelect.value = "";
+      }
+      return;
+    }
+
+    inspectorSelect.value = "";
+  };
 
   let selectedFile: File | null = null;
 
@@ -199,23 +278,18 @@ export function openNdtReportModal(
   };
 
   methodSelect.addEventListener("change", setRtVisible, { signal });
+  supplierSelect.addEventListener(
+    "change",
+    () => {
+      renderInspectorOptions((supplierSelect.value || "").trim());
+    },
+    { signal }
+  );
   projectSelect.addEventListener("change", syncCustomerFromProject, { signal });
   welderList.addEventListener(
     "change",
     () => {
       renderWelderCounts();
-    },
-    { signal }
-  );
-  welderSearch.addEventListener(
-    "input",
-    () => {
-      const q = (welderSearch.value || "").trim().toLowerCase();
-      qsa<HTMLElement>(welderList, ".welder-pill").forEach((pill) => {
-        const label = (pill.dataset.welderLabel || "").toLowerCase();
-        const match = !q || label.includes(q);
-        pill.style.display = match ? "" : "none";
-      });
     },
     { signal }
   );
@@ -230,6 +304,7 @@ export function openNdtReportModal(
   );
 
   setRtVisible();
+  renderInspectorOptions((supplierSelect.value || "").trim());
   renderPdfMeta();
   syncCustomerFromProject();
   renderWelderCounts();
@@ -264,6 +339,8 @@ export function openNdtReportModal(
       }
     }
     projectSelect.value = projectValue;
+    supplierSelect.value = row.ndt_supplier_id ?? "";
+    renderInspectorOptions((supplierSelect.value || "").trim(), row.ndt_inspector_id ?? "");
     syncCustomerFromProject();
     if (row.customer) {
       const hasOption = Array.from(customerSelect.options).some((opt) => opt.value === row.customer);
@@ -298,12 +375,23 @@ export function openNdtReportModal(
         const title = (projectSelect.value || "").trim();
         const customer = (customerSelect.value || "").trim();
         const report_date = (getField<HTMLInputElement>(h.root, "report_date").value || "").trim();
+        const ndt_supplier_id = (supplierSelect.value || "").trim() || null;
+        const ndt_inspector_id = (inspectorSelect.value || "").trim() || null;
         if (!title || !customer || !report_date) {
           throw new Error("Velg prosjektnr, kunde og dato.");
         }
 
         const method_id = (methodSelect.value || "").trim();
         if (!method_id) throw new Error("Velg NDT-metode.");
+        if (!!ndt_supplier_id !== !!ndt_inspector_id) {
+          throw new Error("Velg både NDT-firma og kontrollør, eller la begge stå tomme.");
+        }
+        if (ndt_supplier_id && ndt_inspector_id) {
+          const inspector = inspectorById.get(ndt_inspector_id);
+          if (!inspector || inspector.supplier_id !== ndt_supplier_id) {
+            throw new Error("Valgt kontrollør tilhører ikke valgt firma.");
+          }
+        }
 
         if (mode === "new" && !selectedFile) throw new Error("Velg én PDF.");
 
@@ -350,6 +438,8 @@ export function openNdtReportModal(
         if (mode === "new") {
           await createNdtReportWithFile({
             method_id,
+            ndt_supplier_id,
+            ndt_inspector_id,
             weld_count: reportWelds,
             defect_count: reportDefects,
             title,
@@ -361,6 +451,8 @@ export function openNdtReportModal(
         } else {
           await updateNdtReport(row!.id, {
             method_id,
+            ndt_supplier_id,
+            ndt_inspector_id,
             weld_count: reportWelds,
             defect_count: reportDefects,
             title,

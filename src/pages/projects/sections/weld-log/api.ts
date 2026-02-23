@@ -6,6 +6,7 @@ const BASE_SELECT = `
   sveis_id:weld_no,
   fuge:joint_type,
   sveiser_id:welder_id,
+  welder_cert_id,
   dato:weld_date,
   status,
   kontrollert_av:visual_inspector,
@@ -151,6 +152,7 @@ const mapPatchToProjectWelds = (patch: Partial<WeldDetailRow>) => {
   }
   if (hasField("fuge")) mapped.joint_type = patch.fuge || null;
   if (hasField("sveiser_id")) mapped.welder_id = patch.sveiser_id || null;
+  if (hasField("welder_cert_id")) mapped.welder_cert_id = patch.welder_cert_id || null;
   if (hasField("wps_id")) mapped.wps_id = patch.wps_id || null;
   if (patch.dato != null) mapped.weld_date = patch.dato;
   if (hasField("komponent_a_id")) mapped.component_a_id = patch.komponent_a_id || null;
@@ -235,6 +237,7 @@ export async function createWeld(input: { logId: string; patch: Partial<WeldDeta
     component_a_id: mapped.component_a_id ?? null,
     component_b_id: mapped.component_b_id ?? null,
     welder_id: mapped.welder_id ?? null,
+    welder_cert_id: mapped.welder_cert_id ?? null,
     wps_id: mapped.wps_id ?? null,
     weld_date: mapped.weld_date ?? null,
     filler_traceability_id: mapped.filler_traceability_id ?? null,

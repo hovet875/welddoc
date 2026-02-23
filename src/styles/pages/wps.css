@@ -103,24 +103,44 @@
   overflow: visible;
 }
 
-.panel-head-center{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  flex-wrap: wrap;
-}
-
-.method-pill-btn{
-  background: transparent;
-  border: 0;
-  padding: 0;
-  margin: 0;
-  cursor: pointer;
-}
-
 /* unngå overbrede tabeller */
 .page-wps .data-table{
  width:100%;
+}
+
+.page-wps .wps-process-group{
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.02);
+}
+
+.page-wps .wps-process-group + .wps-process-group{
+  margin-top: 12px;
+}
+
+.page-wps .wps-process-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+
+.page-wps .wps-process-title{
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.page-wps .wps-process-meta{
+  color: rgba(255,255,255,0.65);
+  font-size: 13px;
+}
+
+.page-wps .wps-process-group .table-scroll{
+  margin-top: 0;
 }
 
 /* WPS thickness full-width + spacing */
@@ -132,6 +152,93 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.modal .wps-upload-field .dropzone{
+  border: 1px dashed rgba(255,255,255,0.25);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  background: rgba(0,0,0,0.18);
+  display: grid;
+  gap: 6px;
+}
+
+.modal .wps-upload-field .dropzone.is-drag{
+  border-color: rgba(120,170,255,0.6);
+  background: rgba(0,102,204,0.08);
+}
+
+.modal .wps-upload-field .dropzone-title{
+  font-weight: 600;
+}
+
+.modal .wps-upload-field .dropzone-sub{
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.modal .wps-upload-field .dropzone input[type="file"]{
+  margin-top: 6px;
+}
+
+.modal .wps-upload-field .filelist{
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px dashed rgba(255,255,255,0.15);
+  border-radius: var(--radius-lg);
+  background: rgba(0,0,0,0.2);
+  min-height: 44px;
+}
+
+.modal .wps-upload-preview{
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--radius-lg);
+  background: rgba(0,0,0,0.22);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+}
+
+.modal .wps-upload-preview-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+
+.modal .wps-upload-preview-title{
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.modal .wps-upload-preview-frame{
+  width: 100%;
+  height: 460px;
+  border: 0;
+  background: #0b0e12;
+}
+
+.modal .wps-pdf-meta{
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.modal .wps-pdf-existing{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+@media (max-width: 900px){
+  .modal .wps-upload-preview-frame{
+    height: 360px;
+  }
 }
 
 
