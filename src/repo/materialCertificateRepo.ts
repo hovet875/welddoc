@@ -1,4 +1,5 @@
 import { supabase } from "../services/supabaseClient";
+import { createUuid } from "../utils/id";
 import {
   createFileRecord,
   createFileLink,
@@ -67,8 +68,8 @@ export async function createMaterialCertificateWithFile(input: {
   supplier?: string | null;
   file: File;
 }) {
-  const fileId = crypto.randomUUID();
-  const certId = crypto.randomUUID();
+  const fileId = createUuid();
+  const certId = createUuid();
   let certInserted = false;
 
   try {
@@ -121,7 +122,7 @@ export async function createMaterialCertificateWithExistingFile(input: {
   supplier?: string | null;
   file_id: string;
 }) {
-  const certId = crypto.randomUUID();
+  const certId = createUuid();
   let certInserted = false;
 
   try {

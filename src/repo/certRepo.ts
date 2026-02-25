@@ -1,4 +1,5 @@
 import { supabase } from "../services/supabaseClient";
+import { createUuid } from "../utils/id";
 
 export type ProfileWelderRow = {
   id: string;
@@ -357,7 +358,7 @@ export async function getWelderCertPdfPath(id: string) {
 }
 
 export async function createWelderCertWithPdf(base: UpsertWelderCertInput, pdfFile: File) {
-  const fileId = crypto.randomUUID();
+  const fileId = createUuid();
   const certId = await insertWelderCert({ ...base, file_id: null });
   let uploadedPath: string | null = null;
   let fileRecordCreated = false;
@@ -430,7 +431,7 @@ export async function updateWelderCertWithPdf(
       return;
     }
 
-    const fileId = crypto.randomUUID();
+    const fileId = createUuid();
     const { bucket, path, sha256 } = await uploadFileToIdPath("welder_certificate", fileId, opts.pdfFile);
     await createFileRecord({
       id: fileId,
@@ -488,7 +489,7 @@ export async function getNdtCertPdfPath(id: string) {
 }
 
 export async function createNdtCertWithPdf(base: UpsertNdtCertInput, pdfFile: File) {
-  const fileId = crypto.randomUUID();
+  const fileId = createUuid();
   const certId = await insertNdtCert({ ...base, file_id: null });
   let uploadedPath: string | null = null;
   let fileRecordCreated = false;
@@ -561,7 +562,7 @@ export async function updateNdtCertWithPdf(
       return;
     }
 
-    const fileId = crypto.randomUUID();
+    const fileId = createUuid();
     const { bucket, path, sha256 } = await uploadFileToIdPath("ndt_report", fileId, opts.pdfFile);
     await createFileRecord({
       id: fileId,

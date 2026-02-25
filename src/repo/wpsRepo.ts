@@ -1,4 +1,5 @@
 import { supabase } from "../services/supabaseClient";
+import { createUuid } from "../utils/id";
 import {
   createFileRecord,
   createFileLink,
@@ -221,7 +222,7 @@ export async function createWpqrWithOptionalPdf(base: UpsertWPQRInput, pdfFile: 
   if (!pdfFile) return id;
 
   try {
-    const fileId = crypto.randomUUID();
+    const fileId = createUuid();
     const { bucket, path, sha256 } = await uploadFileToIdPath("wpqr", fileId, pdfFile);
     await createFileRecord({
       id: fileId,
@@ -269,7 +270,7 @@ export async function updateWpqrWithPdf(
   }
 
   if (opts.pdfFile) {
-    const fileId = crypto.randomUUID();
+    const fileId = createUuid();
     const { bucket, path, sha256 } = await uploadFileToIdPath("wpqr", fileId, opts.pdfFile);
     await createFileRecord({
       id: fileId,
@@ -332,7 +333,7 @@ export async function createWpsWithOptionalPdf(base: UpsertWPSInput, pdfFile: Fi
   if (!pdfFile) return id;
 
   try {
-    const fileId = crypto.randomUUID();
+    const fileId = createUuid();
     const { bucket, path, sha256 } = await uploadFileToIdPath("wps", fileId, pdfFile);
     await createFileRecord({
       id: fileId,
@@ -373,7 +374,7 @@ export async function updateWpsWithPdf(
   }
 
   if (opts.pdfFile) {
-    const fileId = crypto.randomUUID();
+    const fileId = createUuid();
     const { bucket, path, sha256 } = await uploadFileToIdPath("wps", fileId, opts.pdfFile);
     await createFileRecord({
       id: fileId,

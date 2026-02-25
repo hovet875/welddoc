@@ -40,15 +40,9 @@ export type ListResult<T> = {
 
 export type ListFilters = {
   status: "false" | "true" | "all";
-  search: string;
 };
 
-export type BulkMethodSlot = "vt" | "pt" | "vol";
-
-export type NdtMethodOption = {
-  code: string;
-  label: string;
-};
+export type BulkChangeField = "fuge" | "sveiser" | "dato" | "tilsett" | "vt" | "pt" | "vol";
 
 export type DrawingOption = {
   id: string;

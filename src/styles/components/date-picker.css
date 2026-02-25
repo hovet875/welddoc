@@ -3,6 +3,31 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
+  min-width: 0;
+}
+
+.date-picker > input[type="date"][data-date-input]{
+  inline-size: 100%;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-inline-size: 0;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+  line-height: 1.4;
+}
+
+/* Keep WebKit date internals aligned with normal input height. */
+.date-picker > input[type="date"][data-date-input]::-webkit-date-and-time-value{
+  line-height: 1.4;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+}
+
+.date-picker > input[type="date"][data-date-input]::-webkit-datetime-edit{
+  padding: 0;
 }
 
 .date-picker__btn{
@@ -24,4 +49,23 @@
 
 input[type="date"][data-date-input]::-webkit-calendar-picker-indicator{
   opacity: 0;
+  margin: 0;
+  padding: 0;
+}
+
+/* iPhone/iPad and other touch-first devices:
+   use native date field interaction and hide the helper button. */
+@media (hover: none), (pointer: coarse){
+  .date-picker{
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .date-picker__btn{
+    display: none;
+  }
+
+  input[type="date"][data-date-input]::-webkit-calendar-picker-indicator{
+    opacity: 0.72;
+  }
 }

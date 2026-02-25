@@ -1,5 +1,6 @@
 import { supabase } from "../../../../services/supabaseClient";
-import type { EmployeeOption, ListFilters, ListResult, NdtMethodOption, NdtReportRow, WeldDetailRow, WeldListRow } from "./types";
+import type { EmployeeOption, ListFilters, ListResult, NdtReportRow, WeldDetailRow, WeldListRow } from "./types";
+import { createUuid } from "../../../../utils/id";
 
 const BASE_SELECT = `
   id,
@@ -194,20 +195,6 @@ export async function listWelds(opts: {
     query = query.eq("status", false);
   }
 
-  const search = filters.search.trim();
-  if (search) {
-    const q = `%${search}%`;
-    query = query.or(
-      [
-        `weld_no.ilike.${q}`,
-        `joint_type.ilike.${q}`,
-        `welder_id.ilike.${q}`,
-        `crack_report_id.ilike.${q}`,
-        `volumetric_report_id.ilike.${q}`,
-      ].join(",")
-    );
-  }
-
   const { data, error, count } = await query;
   if (error) throw error;
   const rows = (data ?? []).map((row) => normalizeWeldRow(row as RawWeldRow));
@@ -230,7 +217,7 @@ export async function createWeld(input: { logId: string; patch: Partial<WeldDeta
     throw new Error("Sveis ID mangler eller er ugyldig.");
   }
   const payload = {
-    id: crypto.randomUUID(),
+    id: createUuid(),
     log_id: input.logId,
     weld_no: mapped.weld_no as number,
     joint_type: mapped.joint_type ?? null,
@@ -271,7 +258,7 @@ export async function createEmptyWeldRows(input: { logId: string; count: number 
   const startNo = Number.isFinite(latest) ? latest + 1 : 1;
 
   const payload = Array.from({ length: count }, (_, idx) => ({
-    id: crypto.randomUUID(),
+    id: createUuid(),
     log_id: logId,
     weld_no: startNo + idx,
     status: false,
@@ -340,21 +327,6 @@ export async function listNdtReports(opts?: { projectNo?: string | null }): Prom
     file_url: null,
     notes: null,
   })) as NdtReportRow[];
-}
-
-export async function listNdtMethods(): Promise<NdtMethodOption[]> {
-  const { data, error } = await supabase
-    .from("parameter_ndt_methods")
-    .select("code, label, is_active, sort_order")
-    .eq("is_active", true)
-    .order("sort_order", { ascending: true })
-    .order("code", { ascending: true });
-
-  if (error) throw error;
-  return (data ?? []).map((row: any) => ({
-    code: String(row.code ?? "").trim().toUpperCase(),
-    label: String(row.label ?? row.code ?? "").trim(),
-  }));
 }
 
 export async function listEmployees(): Promise<EmployeeOption[]> {

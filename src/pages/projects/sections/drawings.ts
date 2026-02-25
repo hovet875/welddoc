@@ -6,6 +6,7 @@ import { openModal, modalSaveButton, renderModal } from "../../../ui/modal";
 import { toast } from "../../../ui/toast";
 import { renderIconButton, iconSvg } from "../../../ui/iconButton";
 import { fmtDate, truncateLabel, validatePdfFile } from "../../../utils/format";
+import { createUuid } from "../../../utils/id";
 import { createSignedUrlForFileRef } from "../../../repo/fileRepo";
 import { PDFDocument } from "pdf-lib";
 import { printPdfUrl, printBlobUrl } from "../../../utils/print";
@@ -78,6 +79,12 @@ export async function renderProjectDrawingsSection(opts: {
   let drawings: Awaited<ReturnType<typeof fetchProjectDrawings>> = [];
   let selected = new Set<string>();
   let loadSeq = 0;
+  const printSelectedDefaultLabel = "Skriv ut valgte";
+
+  const setPrintSelectedLabel = (label: string) => {
+    if (!printSelectedBtn) return;
+    printSelectedBtn.innerHTML = `${iconSvg("print")} ${label}`;
+  };
 
 
 const revisionClass = (rev: string) => {
@@ -199,7 +206,7 @@ const revisionClass = (rev: string) => {
     for (const f of Array.from(files)) {
       const base = f.name.replace(/\.[^/.]+$/, "");
       pending.push({
-        id: crypto.randomUUID(),
+        id: createUuid(),
         file: f,
         drawingNo: base,
         revision: "A",
@@ -331,12 +338,16 @@ const revisionClass = (rev: string) => {
         }
         if (pending.length === 0) return;
 
+        const totalUploads = pending.length;
+        let uploadIdx = 0;
         saveBtn.disabled = true;
-        saveBtn.textContent = "Lagrer…";
+        saveBtn.textContent = `Laster opp ${uploadIdx}/${totalUploads}…`;
         try {
           const duplicates = new Set<string>();
           const remaining: Pending[] = [];
           for (const p of pending) {
+            uploadIdx += 1;
+            saveBtn.textContent = `Laster opp ${uploadIdx}/${totalUploads}…`;
             const drawingNo = p.drawingNo.trim();
             const revision = (p.revision || "A").trim() || "A";
             if (!drawingNo) throw new Error("Tegningsnr kan ikke være tomt.");
@@ -576,10 +587,13 @@ const revisionClass = (rev: string) => {
 
         const rows = Array.from(selected)
           .map((id) => drawings.find((d) => d.id === id))
-          .filter(Boolean);
+          .filter((row): row is NonNullable<typeof row> => Boolean(row));
         if (rows.length === 0) return;
 
+        const totalPrints = rows.length;
+        let printIdx = 0;
         printSelectedBtn.disabled = true;
+        setPrintSelectedLabel(`Skriver ut ${printIdx}/${totalPrints}…`);
 
         const fetchArrayBuffer = async (url: string) => {
           const res = await fetch(url, { credentials: "omit" });
@@ -590,7 +604,9 @@ const revisionClass = (rev: string) => {
         try {
           const merged = await PDFDocument.create();
           for (const row of rows) {
-            if (!row?.file_id) continue;
+            printIdx += 1;
+            setPrintSelectedLabel(`Skriver ut ${printIdx}/${totalPrints}…`);
+            if (!row.file_id) continue;
             const url = await createSignedUrlForFileRef(row.file_id, { expiresSeconds: 120 });
             const buffer = await fetchArrayBuffer(url);
             const doc = await PDFDocument.load(buffer);
@@ -612,6 +628,7 @@ const revisionClass = (rev: string) => {
           console.error(e);
           toast(String(e?.message ?? e));
         } finally {
+          setPrintSelectedLabel(printSelectedDefaultLabel);
           printSelectedBtn.disabled = selected.size === 0;
         }
       },

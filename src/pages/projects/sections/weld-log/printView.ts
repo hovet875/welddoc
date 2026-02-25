@@ -2,7 +2,7 @@ import type { ProjectRow } from "../../../../repo/projectRepo";
 import { esc } from "../../../../utils/dom";
 import type { EmployeeOption, NdtReportRow, WeldListRow } from "./types";
 
-const dash = "-";
+const dash = "\u2014";
 
 const formatDate = (value: string | null | undefined) => {
   if (!value) return dash;

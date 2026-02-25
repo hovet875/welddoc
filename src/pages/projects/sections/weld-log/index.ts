@@ -10,13 +10,12 @@ import { fetchWelderCertScopes } from "../../../../repo/welderCertScopeRepo";
 import { fetchProjectTraceability, type ProjectTraceabilityRow } from "../../../../repo/traceabilityRepo";
 import { fetchWpsData } from "../../../../repo/wpsRepo";
 import { wireDatePickers } from "../../../../ui/datePicker";
-import { bulkUpdate, createEmptyWeldRows, createWeld, deleteWelds, getWeldDetail, listEmployees, listNdtMethods, listNdtReports, listWelds, updateWeld } from "./api";
+import { bulkUpdate, createEmptyWeldRows, createWeld, deleteWelds, getWeldDetail, listEmployees, listNdtReports, listWelds, updateWeld } from "./api";
 import type {
-  BulkMethodSlot,
+  BulkChangeField,
   DrawingOption,
   EmployeeOption,
   ListFilters,
-  NdtMethodOption,
   NdtReportRow,
   RowWpsStatus,
   TraceabilitySelectOption,
@@ -27,14 +26,15 @@ import type {
   WeldDetailRow,
   WeldListRow,
 } from "./types";
-import { VT_NO_REPORT_VALUE, renderBulkReportOptions, renderDrawer, renderLayout, renderPagination, renderRows } from "./templates";
+import { VT_NO_REPORT_VALUE, renderDrawer, renderLayout, renderPagination, renderRows } from "./templates";
 import { printWeldLogTable } from "./printView";
 
-const PAGE_SIZE = 25;
+const DEFAULT_PAGE_SIZE = 20;
+const PAGE_SIZE_STORAGE_KEY = "weldLogPageSize";
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
 const defaultFilters: ListFilters = {
   status: "all",
-  search: "",
 };
 
 const nextTick = () => new Promise((resolve) => requestAnimationFrame(resolve));
@@ -71,11 +71,17 @@ export async function renderProjectWeldLogSection(opts: {
   signal: AbortSignal;
 }) {
   const { app, mount, modalMount, project, signal } = opts;
+  const savedPageSize = Number(localStorage.getItem(PAGE_SIZE_STORAGE_KEY) || "");
+  const initialPageSize = PAGE_SIZE_OPTIONS.includes(savedPageSize as (typeof PAGE_SIZE_OPTIONS)[number])
+    ? savedPageSize
+    : DEFAULT_PAGE_SIZE;
+  localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(initialPageSize));
 
   const state = {
     rows: [] as WeldListRow[],
     total: 0,
     page: 0,
+    pageSize: initialPageSize,
     orderBy: "weld_no" as const,
     orderDir: "asc" as const,
     filters: { ...defaultFilters },
@@ -95,11 +101,10 @@ export async function renderProjectWeldLogSection(opts: {
     welderCerts: [] as WelderCertScopeOption[],
     welderMatchScopes: [] as WelderMatchScopeRule[],
     employees: [] as EmployeeOption[],
-    ndtMethods: [] as NdtMethodOption[],
-    bulkMethodCode: "",
-    bulkWelderValue: "",
-    bulkFillerId: "",
-    bulkFugeValue: "",
+    bulkChangeField: "" as BulkChangeField | "",
+    bulkChangeValue: "",
+    bulkVtNoReport: false,
+    bulkVtInspectorId: "",
     jointTypes: [] as string[],
     componentOptions: [] as TraceabilitySelectOption[],
     fillerOptions: [] as TraceabilitySelectOption[],
@@ -420,16 +425,18 @@ export async function renderProjectWeldLogSection(opts: {
   const render = () => {
     mount.innerHTML = renderLayout(
       state.filters,
+      state.pageSize,
       state.drawings,
       state.currentDrawingId,
-      state.ndtMethods,
-      state.bulkMethodCode,
+      state.bulkChangeField,
+      state.bulkChangeValue,
+      state.bulkVtNoReport,
+      state.bulkVtInspectorId,
+      state.reports,
       state.welders,
+      state.employees,
       state.fillerOptions,
-      state.jointTypes,
-      state.bulkWelderValue,
-      state.bulkFillerId,
-      state.bulkFugeValue
+      state.jointTypes
     );
     const body = qs<HTMLElement>(mount, "[data-weld-body]");
     const certStatusByRow = new Map<string, RowWpsStatus>();
@@ -438,7 +445,7 @@ export async function renderProjectWeldLogSection(opts: {
     state.rows.forEach((row) => wpsStatusByRow.set(row.id, wpsStatusForRow(row)));
     body.innerHTML = renderRows(state.rows, state.selected, certStatusByRow, wpsStatusByRow);
     const pagination = qs<HTMLElement>(mount, "[data-weld-pagination]");
-    pagination.innerHTML = renderPagination(state.page, PAGE_SIZE, state.total);
+    pagination.innerHTML = renderPagination(state.page, state.pageSize, state.total);
     const drawerRoot = qs<HTMLElement>(mount, "[data-weld-drawer-root]");
     const wpsState = drawerWpsOptions(state.drawerData);
     drawerRoot.innerHTML = renderDrawer(
@@ -457,9 +464,6 @@ export async function renderProjectWeldLogSection(opts: {
       state.drawerErrors,
       state.drawerLoading
     );
-    const bulkDatalist = qs<HTMLDataListElement>(mount, "#bulk-report-list");
-    bulkDatalist.innerHTML = renderBulkReportOptions(state.reports);
-    refreshBulkReportOptions();
     updateBulkBar();
     wireDrawerFocus();
   };
@@ -512,7 +516,7 @@ export async function renderProjectWeldLogSection(opts: {
     try {
       const { rows, count } = await listWelds({
         page: state.page,
-        pageSize: PAGE_SIZE,
+        pageSize: state.pageSize,
         filters: state.filters,
         orderBy: state.orderBy,
         orderDir: state.orderDir,
@@ -539,7 +543,7 @@ export async function renderProjectWeldLogSection(opts: {
     const drawing = state.drawings.find((row) => row.id === state.currentDrawingId);
     if (!drawing) return "-";
     const rev = String(drawing.revision ?? "-").trim().toUpperCase() || "-";
-    return `${drawing.drawing_no} · Rev ${rev}`;
+    return `${drawing.drawing_no} - Rev ${rev}`;
   };
 
   const fetchAllRowsForPrint = async () => {
@@ -553,7 +557,7 @@ export async function renderProjectWeldLogSection(opts: {
       const result = await listWelds({
         page,
         pageSize,
-        filters: { status: "all", search: "" },
+        filters: { status: "all" },
         orderBy: "weld_no",
         orderDir: "asc",
         logId: state.currentLogId,
@@ -725,20 +729,6 @@ export async function renderProjectWeldLogSection(opts: {
     }
   };
 
-  const loadNdtMethods = async () => {
-    try {
-      const rows = await listNdtMethods();
-      state.ndtMethods = rows.filter((row) => Boolean(slotFromMethodCode(row.code)));
-      if (!state.bulkMethodCode || !state.ndtMethods.some((row) => row.code === state.bulkMethodCode)) {
-        state.bulkMethodCode = state.ndtMethods[0]?.code ?? "";
-      }
-    } catch (e: any) {
-      state.ndtMethods = [];
-      state.bulkMethodCode = "";
-      toast(String(e?.message ?? e));
-    }
-  };
-
   const openDrawer = async (id: string, focusReturn?: HTMLElement) => {
     state.drawerOpen = true;
     state.drawerLoading = true;
@@ -788,33 +778,12 @@ export async function renderProjectWeldLogSection(opts: {
     return match?.id ?? "";
   };
 
-  const resolveEmployeeId = (value: string) => {
-    const raw = value.trim();
-    if (!raw) return "";
-    if (/^[0-9a-fA-F-]{36}$/.test(raw)) return raw;
-    const normalizedRaw = normalizeText(raw);
-    const normalizedWelderNo = normalizeWelderNo(raw);
-    const match = state.employees.find((emp) => {
-      const id = String(emp.id ?? "").trim();
-      const label = String(emp.label ?? "").trim();
-      const no = String(emp.welder_no ?? "").trim();
-      const name = String(emp.display_name ?? "").trim();
-      return (
-        (id && (id === raw || normalizeText(id) === normalizedRaw)) ||
-        (label && normalizeText(label) === normalizedRaw) ||
-        (name && normalizeText(name) === normalizedRaw) ||
-        (no && (no === raw || normalizeWelderNo(no) === normalizedWelderNo))
-      );
-    });
-    return match?.id ?? "";
-  };
-
   const validateDrawer = (data: WeldDetailRow) => {
     const errors: Record<string, string> = {};
-    if (!data.sveis_id) errors.sveis_id = "Sveis ID er paakrevd.";
-    if (!data.fuge) errors.fuge = "Fuge er paakrevd.";
-    if (!data.sveiser_id) errors.sveiser_id = "Sveiser er paakrevd.";
-    if (!data.dato) errors.dato = "Dato er paakrevd.";
+    if (!data.sveis_id) errors.sveis_id = "Sveis ID er påkrevd.";
+    if (!data.fuge) errors.fuge = "Fuge er påkrevd.";
+    if (!data.sveiser_id) errors.sveiser_id = "Sveiser er påkrevd.";
+    if (!data.dato) errors.dato = "Dato er påkrevd.";
     return errors;
   };
 
@@ -828,71 +797,25 @@ export async function renderProjectWeldLogSection(opts: {
 
   const normalizeMethodCode = (value: string | null | undefined) => String(value ?? "").trim().toUpperCase();
 
-  const slotFromMethodCode = (methodCode: string): BulkMethodSlot | null => {
-    const code = normalizeMethodCode(methodCode);
-    if (code === "VT") return "vt";
-    if (code === "PT" || code === "MT" || code === "CRACK") return "pt";
-    if (code === "RT" || code === "UT" || code === "VOL") return "vol";
-    return null;
+  const reportMatchesBulkField = (field: "vt" | "pt" | "vol", report: NdtReportRow) => {
+    const methodCode = normalizeMethodCode(report.method);
+    if (field === "vt") return methodCode === "VT";
+    if (field === "pt") return methodCode === "PT" || methodCode === "MT";
+    return methodCode === "RT" || methodCode === "UT";
   };
 
-  const methodMatchesCode = (selectedCode: string, reportMethodCode: string) => {
-    if (selectedCode === "VOL") return reportMethodCode === "RT" || reportMethodCode === "UT";
-    if (selectedCode === "CRACK") return reportMethodCode === "PT" || reportMethodCode === "MT";
-    return reportMethodCode === selectedCode;
+  const normalizeDateInput = (value: string) => {
+    const raw = String(value ?? "").trim();
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return "";
+    return `${match[1]}-${match[2]}-${match[3]}`;
   };
 
-  const filteredBulkReports = () => {
-    const selectedCode = normalizeMethodCode(state.bulkMethodCode);
-    if (!selectedCode) return [] as NdtReportRow[];
-    return state.reports.filter((r) => methodMatchesCode(selectedCode, normalizeMethodCode(r.method)));
-  };
-
-  const bulkVtAttachOptions = () => {
-    const options: string[] = [];
-    const seen = new Set<string>();
-    const addOption = (value: string | null | undefined) => {
-      const text = String(value ?? "").trim();
-      if (!text) return;
-      const key = normalizeText(text);
-      if (!key || seen.has(key)) return;
-      seen.add(key);
-      options.push(`<option value="${esc(text)}"></option>`);
-    };
-
-    filteredBulkReports().forEach((report) => addOption(report.report_no));
-    state.employees.forEach((employee) => {
-      const label = String(employee.label ?? "").trim() || String(employee.display_name ?? "").trim() || String(employee.id ?? "").trim();
-      addOption(label);
-    });
-
-    return options.join("");
-  };
-
-  const refreshBulkReportOptions = (resetInput = false) => {
-    const selectedCode = normalizeMethodCode(state.bulkMethodCode);
-    const isVt = slotFromMethodCode(selectedCode) === "vt";
-    const datalist = mount.querySelector<HTMLDataListElement>("#bulk-report-list");
-    const reportInput = mount.querySelector<HTMLInputElement>("[data-bulk-report]");
-    if (datalist) {
-      datalist.innerHTML = isVt ? bulkVtAttachOptions() : renderBulkReportOptions(filteredBulkReports());
-    }
-    if (reportInput) {
-      reportInput.placeholder = isVt ? "Velg rapport eller intern godkjenner" : "Velg rapport";
-      if (resetInput) reportInput.value = "";
-    }
-  };
-
-  const attachReportByNo = (methodCode: string, reportNo: string) => {
-    const normalized = reportNo.trim();
-    if (!normalized) return null;
-    const selectedCode = normalizeMethodCode(methodCode);
-    const report = state.reports.find((r) => {
-      const m = normalizeMethodCode(r.method);
-      const matchesMethod = methodMatchesCode(selectedCode, m);
-      return matchesMethod && (r.report_no || "").trim() === normalized;
-    });
-    return report?.id ?? null;
+  const resetBulkEditor = () => {
+    state.bulkChangeField = "";
+    state.bulkChangeValue = "";
+    state.bulkVtNoReport = false;
+    state.bulkVtInspectorId = "";
   };
 
   const traceCodeById = (list: TraceabilitySelectOption[], id: string | null | undefined) => {
@@ -1006,30 +929,65 @@ export async function renderProjectWeldLogSection(opts: {
     }
   };
 
-  const bulkAttach = async (methodCode: string, reportNo: string) => {
+  const bulkApplyChange = async () => {
     const ids = Array.from(state.selected);
     if (!ids.length) return;
-    const slot = slotFromMethodCode(methodCode);
-    if (!slot) {
-      toast("Valgt NDT-metode støttes ikke i sveiseloggen.");
+    const field = state.bulkChangeField;
+    if (!field) {
+      toast("Velg hva du vil endre.");
       return;
     }
-    const input = String(reportNo ?? "").trim();
-    if (!input) {
-      toast(slot === "vt" ? "Velg VT-rapport eller intern godkjenner." : "Velg rapport.");
-      return;
-    }
-    const patch: Record<string, string | null> = {};
-    let successMessage = "Rapport knyttet til valgte rader.";
-    if (slot === "vt") {
-      const reportId = attachReportByNo(methodCode, input);
-      if (reportId) {
-        patch.vt_report_id = reportId;
-        patch.kontrollert_av = null;
-      } else {
-        const inspectorId = resolveEmployeeId(input);
+
+    const value = String(state.bulkChangeValue ?? "").trim();
+    const patch: Partial<WeldDetailRow> = {};
+    let successMessage = "Valgte rader oppdatert.";
+
+    if (field === "fuge") {
+      if (!value) {
+        toast("Velg fugetype.");
+        return;
+      }
+      patch.fuge = value;
+      patch.welder_cert_id = null;
+      successMessage = "Fugetype satt for valgte rader.";
+    } else if (field === "sveiser") {
+      const resolvedWelderId = resolveWelderId(value);
+      if (!resolvedWelderId) {
+        toast("Ugyldig sveiser valgt.");
+        return;
+      }
+      patch.sveiser_id = resolvedWelderId;
+      patch.welder_cert_id = null;
+      successMessage = "Sveiser satt for valgte rader.";
+    } else if (field === "dato") {
+      const nextDate = normalizeDateInput(value);
+      if (!nextDate) {
+        toast("Velg gyldig dato.");
+        return;
+      }
+      patch.dato = nextDate;
+      successMessage = "Dato satt for valgte rader.";
+    } else if (field === "tilsett") {
+      if (!value) {
+        toast("Velg tilsett.");
+        return;
+      }
+      if (!state.fillerOptions.some((row) => row.id === value)) {
+        toast("Ugyldig tilsett valgt.");
+        return;
+      }
+      patch.tilsett_id = value;
+      successMessage = "Tilsett satt for valgte rader.";
+    } else if (field === "vt") {
+      const useInspector = state.bulkVtNoReport || value === VT_NO_REPORT_VALUE;
+      if (useInspector) {
+        const inspectorId = String(state.bulkVtInspectorId ?? "").trim();
         if (!inspectorId) {
-          toast("Fant ikke VT-rapport eller intern godkjenner.");
+          toast("Velg intern godkjenner.");
+          return;
+        }
+        if (!state.employees.some((emp) => emp.id === inspectorId)) {
+          toast("Ugyldig intern godkjenner valgt.");
           return;
         }
         const hasConflict = state.rows.some((row) => ids.includes(row.id) && String(row.sveiser_id ?? "").trim() === inspectorId);
@@ -1037,144 +995,54 @@ export async function renderProjectWeldLogSection(opts: {
           toast("Intern godkjenner kan ikke være samme person som sveiser på valgt rad.");
           return;
         }
-        patch.kontrollert_av = inspectorId;
         patch.vt_report_id = null;
-        successMessage = "Intern VT-godkjenner knyttet til valgte rader.";
+        patch.kontrollert_av = inspectorId;
+        successMessage = "Intern VT-godkjenner satt for valgte rader.";
+      } else {
+        if (!value) {
+          toast("Velg visuell rapport.");
+          return;
+        }
+        const report = state.reports.find((row) => row.id === value && reportMatchesBulkField("vt", row));
+        if (!report) {
+          toast("Ugyldig visuell rapport valgt.");
+          return;
+        }
+        patch.vt_report_id = report.id;
+        patch.kontrollert_av = null;
+        successMessage = "Visuell rapport satt for valgte rader.";
       }
-    } else {
-      const reportId = attachReportByNo(methodCode, input);
-      if (!reportId) {
-        toast("Fant ikke rapport.");
+    } else if (field === "pt") {
+      if (!value) {
+        toast("Velg sprekkrapport.");
         return;
       }
-      if (slot === "pt") patch.pt_report_id = reportId;
-      if (slot === "vol") patch.vol_report_id = reportId;
+      const report = state.reports.find((row) => row.id === value && reportMatchesBulkField("pt", row));
+      if (!report) {
+        toast("Ugyldig sprekkrapport valgt.");
+        return;
+      }
+      patch.pt_report_id = report.id;
+      successMessage = "Sprekkrapport satt for valgte rader.";
+    } else if (field === "vol") {
+      if (!value) {
+        toast("Velg volumetrisk rapport.");
+        return;
+      }
+      const report = state.reports.find((row) => row.id === value && reportMatchesBulkField("vol", row));
+      if (!report) {
+        toast("Ugyldig volumetrisk rapport valgt.");
+        return;
+      }
+      patch.vol_report_id = report.id;
+      successMessage = "Volumetrisk rapport satt for valgte rader.";
     }
 
     try {
-      await bulkUpdate(ids, patch as any);
+      await bulkUpdate(ids, patch);
       toast(successMessage);
-      fetchList();
-    } catch (e: any) {
-      toast(String(e?.message ?? e));
-    }
-  };
-
-  const bulkSetWelder = async (welderValue: string) => {
-    const ids = Array.from(state.selected);
-    if (!ids.length) return;
-    const resolvedWelderId = resolveWelderId(String(welderValue ?? "").trim());
-    if (!resolvedWelderId) {
-      toast("Ugyldig sveiser. Velg en gyldig sveiser.");
-      return;
-    }
-
-    try {
-      await bulkUpdate(ids, { sveiser_id: resolvedWelderId, welder_cert_id: null });
-      toast("Sveiser knyttet til valgte rader. Sertifikatmatch oppdateres ved lagring per rad.");
-      fetchList();
-    } catch (e: any) {
-      toast(String(e?.message ?? e));
-    }
-  };
-
-  const bulkSetFiller = async (fillerId: string) => {
-    const ids = Array.from(state.selected);
-    if (!ids.length) return;
-    const selectedId = String(fillerId ?? "").trim();
-    if (!selectedId) {
-      toast("Velg tilsett.");
-      return;
-    }
-    if (!state.fillerOptions.some((row) => row.id === selectedId)) {
-      toast("Ugyldig tilsett valgt.");
-      return;
-    }
-
-    try {
-      await bulkUpdate(ids, { tilsett_id: selectedId });
-      toast("Tilsett satt for valgte rader.");
-      fetchList();
-    } catch (e: any) {
-      toast(String(e?.message ?? e));
-    }
-  };
-
-  const bulkSetFuge = async (fuge: string) => {
-    const ids = Array.from(state.selected);
-    if (!ids.length) return;
-    const nextFuge = String(fuge ?? "").trim();
-    if (!nextFuge) {
-      toast("Velg fugetype.");
-      return;
-    }
-
-    try {
-      await bulkUpdate(ids, { fuge: nextFuge, welder_cert_id: null });
-      toast("Fugetype satt for valgte rader.");
-      fetchList();
-    } catch (e: any) {
-      toast(String(e?.message ?? e));
-    }
-  };
-
-  const bulkClearFuge = async () => {
-    const ids = Array.from(state.selected);
-    if (!ids.length) return;
-    try {
-      await bulkUpdate(ids, { fuge: null, welder_cert_id: null });
-      toast("Fugetype fjernet fra valgte rader.");
-      fetchList();
-    } catch (e: any) {
-      toast(String(e?.message ?? e));
-    }
-  };
-
-  const bulkClearWelder = async () => {
-    const ids = Array.from(state.selected);
-    if (!ids.length) return;
-    try {
-      await bulkUpdate(ids, { sveiser_id: null, welder_cert_id: null });
-      toast("Sveiser kobling fjernet fra valgte rader.");
-      fetchList();
-    } catch (e: any) {
-      toast(String(e?.message ?? e));
-    }
-  };
-
-  const bulkClearFiller = async () => {
-    const ids = Array.from(state.selected);
-    if (!ids.length) return;
-    try {
-      await bulkUpdate(ids, { tilsett_id: null });
-      toast("Tilsett kobling fjernet fra valgte rader.");
-      fetchList();
-    } catch (e: any) {
-      toast(String(e?.message ?? e));
-    }
-  };
-
-  const bulkClearAttach = async (methodCode: string) => {
-    const ids = Array.from(state.selected);
-    if (!ids.length) return;
-    const slot = slotFromMethodCode(methodCode);
-    if (!slot) {
-      toast("Valgt NDT-metode støttes ikke i sveiseloggen.");
-      return;
-    }
-
-    const patch: Record<string, string | null> = {};
-    if (slot === "vt") {
-      patch.vt_report_id = null;
-      patch.kontrollert_av = null;
-    }
-    if (slot === "pt") patch.pt_report_id = null;
-    if (slot === "vol") patch.vol_report_id = null;
-
-    try {
-      await bulkUpdate(ids, patch as any);
-      toast("NDT-kobling fjernet fra valgte rader.");
-      fetchList();
+      resetBulkEditor();
+      await fetchList();
     } catch (e: any) {
       toast(String(e?.message ?? e));
     }
@@ -1211,13 +1079,14 @@ export async function renderProjectWeldLogSection(opts: {
   };
 
   const openNewWeld = (focusReturn?: HTMLElement) => {
+    const today = new Date().toISOString().slice(0, 10);
     state.drawerOpen = true;
     state.drawerLoading = false;
     state.drawerErrors = {};
     state.drawerDirty = false;
     state.drawerVtNoReportSelected = false;
     state.drawerFocusReturn = focusReturn ?? null;
-    state.drawerData = emptyDetail();
+    state.drawerData = { ...emptyDetail(), dato: today };
     render();
     nextTick().then(() => {
       const closeBtn = mount.querySelector<HTMLElement>("[data-drawer-close]");
@@ -1278,7 +1147,7 @@ export async function renderProjectWeldLogSection(opts: {
           handle.close();
           if (state.filters.status !== "true") {
             const projectedTotal = state.total + created.count;
-            state.page = Math.max(0, Math.ceil(projectedTotal / PAGE_SIZE) - 1);
+            state.page = Math.max(0, Math.ceil(projectedTotal / state.pageSize) - 1);
           }
           await fetchList();
           toast(
@@ -1610,67 +1479,9 @@ export async function renderProjectWeldLogSection(opts: {
 
       const bulkDeleteBtn = target.closest<HTMLElement>("[data-bulk-delete]");
       if (bulkDeleteBtn) bulkDelete();
-
-      const bulkAttachBtn = target.closest<HTMLElement>("[data-bulk-attach]");
-      if (bulkAttachBtn) {
-        const methodEl = mount.querySelector<HTMLSelectElement>("[data-bulk-method]");
-        const reportEl = mount.querySelector<HTMLInputElement>("[data-bulk-report]");
-        const methodCode = normalizeMethodCode(methodEl?.value || state.bulkMethodCode);
-        const reportNo = reportEl?.value || "";
-        bulkAttach(methodCode, reportNo);
-        return;
-      }
-
-      const bulkClearAttachBtn = target.closest<HTMLElement>("[data-bulk-clear-attach]");
-      if (bulkClearAttachBtn) {
-        const methodEl = mount.querySelector<HTMLSelectElement>("[data-bulk-method]");
-        const methodCode = normalizeMethodCode(methodEl?.value || state.bulkMethodCode);
-        bulkClearAttach(methodCode);
-        return;
-      }
-
-      const bulkSetWelderBtn = target.closest<HTMLElement>("[data-bulk-set-welder]");
-      if (bulkSetWelderBtn) {
-        const welderEl = mount.querySelector<HTMLInputElement>("[data-bulk-welder]");
-        const welderValue = welderEl?.value ?? state.bulkWelderValue;
-        state.bulkWelderValue = welderValue;
-        bulkSetWelder(welderValue);
-        return;
-      }
-
-      const bulkClearWelderBtn = target.closest<HTMLElement>("[data-bulk-clear-welder]");
-      if (bulkClearWelderBtn) {
-        bulkClearWelder();
-        return;
-      }
-
-      const bulkSetFillerBtn = target.closest<HTMLElement>("[data-bulk-set-filler]");
-      if (bulkSetFillerBtn) {
-        const fillerEl = mount.querySelector<HTMLSelectElement>("[data-bulk-filler]");
-        const fillerId = fillerEl?.value ?? state.bulkFillerId;
-        state.bulkFillerId = fillerId;
-        bulkSetFiller(fillerId);
-        return;
-      }
-
-      const bulkClearFillerBtn = target.closest<HTMLElement>("[data-bulk-clear-filler]");
-      if (bulkClearFillerBtn) {
-        bulkClearFiller();
-        return;
-      }
-
-      const bulkSetFugeBtn = target.closest<HTMLElement>("[data-bulk-set-fuge]");
-      if (bulkSetFugeBtn) {
-        const fugeEl = mount.querySelector<HTMLSelectElement>("[data-bulk-fuge]");
-        const fugeValue = fugeEl?.value ?? state.bulkFugeValue;
-        state.bulkFugeValue = fugeValue;
-        bulkSetFuge(fugeValue);
-        return;
-      }
-
-      const bulkClearFugeBtn = target.closest<HTMLElement>("[data-bulk-clear-fuge]");
-      if (bulkClearFugeBtn) {
-        bulkClearFuge();
+      const bulkApplyBtn = target.closest<HTMLElement>("[data-bulk-apply]");
+      if (bulkApplyBtn) {
+        bulkApplyChange();
         return;
       }
     },
@@ -1694,20 +1505,6 @@ export async function renderProjectWeldLogSection(opts: {
     "input",
     (e) => {
       const target = e.target as HTMLElement;
-      const search = target.closest<HTMLInputElement>("[data-filter-search]");
-      if (search) {
-        state.filters.search = search.value;
-        state.page = 0;
-        fetchList();
-        return;
-      }
-
-      const bulkWelder = target.closest<HTMLInputElement>("[data-bulk-welder]");
-      if (bulkWelder) {
-        state.bulkWelderValue = bulkWelder.value;
-        return;
-      }
-
       if (!state.drawerOpen || !state.drawerData) return;
       const field = target.getAttribute("data-f") || "";
       if (!field) return;
@@ -1738,23 +1535,43 @@ export async function renderProjectWeldLogSection(opts: {
         fetchList();
         return;
       }
-
-      const bulkMethod = target.closest<HTMLSelectElement>("[data-bulk-method]");
-      if (bulkMethod) {
-        state.bulkMethodCode = normalizeMethodCode(bulkMethod.value);
-        refreshBulkReportOptions(true);
+      const pageSizeFilter = target.closest<HTMLSelectElement>("[data-page-size]");
+      if (pageSizeFilter) {
+        const next = Number(pageSizeFilter.value || String(DEFAULT_PAGE_SIZE));
+        if (!PAGE_SIZE_OPTIONS.includes(next as (typeof PAGE_SIZE_OPTIONS)[number])) return;
+        if (next === state.pageSize) return;
+        state.pageSize = next;
+        state.page = 0;
+        localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(next));
+        fetchList();
         return;
       }
 
-      const bulkFiller = target.closest<HTMLSelectElement>("[data-bulk-filler]");
-      if (bulkFiller) {
-        state.bulkFillerId = bulkFiller.value || "";
+      const bulkField = target.closest<HTMLSelectElement>("[data-bulk-change-field]");
+      if (bulkField) {
+        state.bulkChangeField = (bulkField.value || "") as BulkChangeField | "";
+        state.bulkChangeValue = "";
+        state.bulkVtNoReport = false;
+        state.bulkVtInspectorId = "";
+        render();
         return;
       }
 
-      const bulkFuge = target.closest<HTMLSelectElement>("[data-bulk-fuge]");
-      if (bulkFuge) {
-        state.bulkFugeValue = bulkFuge.value || "";
+      const bulkValue = target.closest<HTMLInputElement | HTMLSelectElement>("[data-bulk-change-value]");
+      if (bulkValue) {
+        state.bulkChangeValue = String((bulkValue as HTMLInputElement).value || "").trim();
+        if (state.bulkChangeField === "vt") {
+          state.bulkVtNoReport = state.bulkChangeValue === VT_NO_REPORT_VALUE;
+          if (!state.bulkVtNoReport) state.bulkVtInspectorId = "";
+        }
+        render();
+        return;
+      }
+
+      const bulkVtInspector = target.closest<HTMLSelectElement>("[data-bulk-vt-inspector]");
+      if (bulkVtInspector) {
+        state.bulkVtInspectorId = bulkVtInspector.value || "";
+        render();
         return;
       }
 
@@ -1806,10 +1623,10 @@ export async function renderProjectWeldLogSection(opts: {
     "click",
     (e) => {
       const target = e.target as HTMLElement;
-      const pageBtn = target.closest<HTMLButtonElement>("[data-page]");
+      const pageBtn = target.closest<HTMLButtonElement>("[data-weldpager][data-page]");
       if (pageBtn) {
         const next = Number(pageBtn.getAttribute("data-page"));
-        const totalPages = Math.max(1, Math.ceil(state.total / PAGE_SIZE));
+        const totalPages = Math.max(1, Math.ceil(state.total / state.pageSize));
         if (Number.isFinite(next) && next >= 1 && next <= totalPages) {
           state.page = next - 1;
           fetchList();
@@ -1845,18 +1662,22 @@ export async function renderProjectWeldLogSection(opts: {
 
   wireDatePickers(mount, signal);
 
-  await fetchReports();
-  await loadNdtMethods();
-  await loadWelders();
-  await loadEmployees();
-  await loadTraceabilityOptions();
-  await loadWpsOptions();
+  const preloadPromise = Promise.all([
+    fetchReports(),
+    loadWelders(),
+    loadEmployees(),
+    loadTraceabilityOptions(),
+    loadWpsOptions(),
+  ]);
   await loadDrawings();
   render();
   await fetchList();
+  await preloadPromise;
+  render();
 
   const openAddBtn = app.querySelector<HTMLElement>("[data-open-weld-add]");
   if (openAddBtn) {
     openAddBtn.addEventListener("click", () => openNewWeld(openAddBtn), { signal });
   }
 }
+

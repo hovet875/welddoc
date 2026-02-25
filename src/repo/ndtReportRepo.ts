@@ -1,4 +1,5 @@
 import { supabase } from "../services/supabaseClient";
+import { createUuid } from "../utils/id";
 import {
   createFileRecord,
   createFileLink,
@@ -174,8 +175,8 @@ type NdtReportCreateInput = {
 };
 
 export async function createNdtReportWithFile(input: NdtReportCreateInput & { file: File }) {
-  const fileId = crypto.randomUUID();
-  const reportId = crypto.randomUUID();
+  const fileId = createUuid();
+  const reportId = createUuid();
   let reportInserted = false;
   let linkInserted = false;
 
@@ -242,7 +243,7 @@ export async function createNdtReportWithFile(input: NdtReportCreateInput & { fi
 }
 
 export async function createNdtReportWithExistingFile(input: NdtReportCreateInput & { file_id: string }) {
-  const reportId = crypto.randomUUID();
+  const reportId = createUuid();
   let reportInserted = false;
   let linkInserted = false;
 

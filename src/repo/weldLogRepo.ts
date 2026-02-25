@@ -1,4 +1,5 @@
 import { supabase } from "../services/supabaseClient";
+import { createUuid } from "../utils/id";
 
 export type ProjectWeldLogRow = {
   id: string;
@@ -242,7 +243,7 @@ export async function createProjectWeld(input: {
   status?: boolean | null;
 }) {
   const payload = {
-    id: crypto.randomUUID(),
+    id: createUuid(),
     log_id: input.log_id,
     weld_no: input.weld_no,
     joint_type: input.joint_type ?? null,

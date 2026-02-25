@@ -1,4 +1,5 @@
 import { supabase } from "../services/supabaseClient";
+import { createUuid } from "../utils/id";
 
 export type TraceabilityTypeRow = {
   code: string;
@@ -232,7 +233,7 @@ export async function createProjectTraceability(input: {
   }
 
   const payload = {
-    id: crypto.randomUUID(),
+    id: createUuid(),
     project_id: input.project_id,
     type_code: input.type_code,
     code_index: nextIndex,

@@ -269,18 +269,18 @@ export async function renderProjectPressureTestSection(opts: {
         const rowId = esc(row.id);
         return `
           <tr data-pt-row-id="${rowId}" tabindex="0">
-            <td class="id-col">${lineNo(row)}</td>
-            <td>${esc(String(row.drawing_no ?? "")) || "-"}</td>
-            <td>${esc(String(row.description ?? "")) || "-"}</td>
-            <td>${esc(String(row.test_medium ?? "")) || "-"}</td>
-            <td>${esc(String(row.working_pressure ?? "")) || "-"}</td>
-            <td>${esc(String(row.test_pressure ?? "")) || "-"}</td>
-            <td>${esc(String(row.hold_time ?? "")) || "-"}</td>
-            <td><span class="chip ${result.tone}">${esc(result.label)}</span></td>
+            <td class="id-col" data-label="ID">${lineNo(row)}</td>
+            <td data-label="Tegning">${esc(String(row.drawing_no ?? "")) || "-"}</td>
+            <td data-label="Beskrivelse">${esc(String(row.description ?? "")) || "-"}</td>
+            <td data-label="Testmedie">${esc(String(row.test_medium ?? "")) || "-"}</td>
+            <td data-label="Arbeidstrykk">${esc(String(row.working_pressure ?? "")) || "-"}</td>
+            <td data-label="Testtrykk">${esc(String(row.test_pressure ?? "")) || "-"}</td>
+            <td data-label="Holdetid">${esc(String(row.hold_time ?? "")) || "-"}</td>
+            <td data-label="Status"><span class="chip ${result.tone}">${esc(result.label)}</span></td>
             ${
               isAdmin
                 ? `
-                  <td class="row-menu-cell">
+                  <td class="row-menu-cell" data-label="Handling">
                     <button class="btn ghost small" type="button" data-pt-row-menu>...</button>
                     <div class="row-menu" data-pt-row-menu-panel>
                       <button type="button" data-pt-row-action="edit">Rediger</button>

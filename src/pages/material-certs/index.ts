@@ -3,6 +3,7 @@ import { getIsAdmin, getSession, getProfileAccess } from "../../app/auth";
 import { toast } from "../../ui/toast";
 import { Footer } from "../../components/footer";
 import { esc, qs } from "../../utils/dom";
+import { createUuid } from "../../utils/id";
 
 import "../../styles/pages/material-certs.css";
 
@@ -746,7 +747,7 @@ export async function renderMaterialCertsPage(app: HTMLElement) {
       }
       if (existingKeys.has(key)) return;
       nextEntries.push({
-        id: crypto.randomUUID(),
+        id: createUuid(),
         source: { kind: "local", file },
         heatNumbers: [],
         materialId: type === "material" ? globalMaterial : null,

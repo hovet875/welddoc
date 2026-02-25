@@ -1,4 +1,5 @@
 import { supabase } from "../services/supabaseClient";
+import { createUuid } from "../utils/id";
 import {
   createFileLink,
   createFileRecord,
@@ -207,7 +208,7 @@ export async function createProjectPressureTestRow(input: {
 }) {
   const lineNo = input.line_no && Number.isFinite(input.line_no) ? Math.max(1, Math.trunc(input.line_no)) : await nextLineNoForProject(input.project_id);
   const payload = {
-    id: crypto.randomUUID(),
+    id: createUuid(),
     project_id: input.project_id,
     line_no: lineNo,
     drawing_no: input.drawing_no ?? null,
@@ -229,7 +230,7 @@ export async function createProjectPressureTestRows(input: { project_id: string;
 
   const startLineNo = await nextLineNoForProject(input.project_id);
   const payload = Array.from({ length: count }, (_, idx) => ({
-    id: crypto.randomUUID(),
+    id: createUuid(),
     project_id: input.project_id,
     line_no: startLineNo + idx,
   }));
@@ -283,7 +284,7 @@ export async function upsertPressureGaugeCertificate(projectId: string, file: Fi
     return await fetchProjectPressureTestMeta(projectId);
   }
 
-  const fileId = crypto.randomUUID();
+  const fileId = createUuid();
   try {
     const { bucket, path, sha256 } = await uploadFileToIdPath("project_pressure_gauge", fileId, file);
     await createFileRecord({

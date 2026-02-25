@@ -1,4 +1,5 @@
 import { supabase } from "../services/supabaseClient";
+import { createUuid } from "../utils/id";
 import {
   createFileRecord,
   createFileLink,
@@ -62,7 +63,7 @@ export async function upsertProjectWorkOrder(projectId: string, file: File) {
     return existing;
   }
 
-  const fileId = crypto.randomUUID();
+  const fileId = createUuid();
   const { bucket, path, sha256 } = await uploadFileToIdPath("project_work_order", fileId, file);
   await createFileRecord({
     id: fileId,

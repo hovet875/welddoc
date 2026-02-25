@@ -1838,7 +1838,7 @@ const fetchAllProjectWeldRows = async (projectId: string) => {
       const result = await listWelds({
         page,
         pageSize,
-        filters: { status: "all", search: "" },
+        filters: { status: "all" },
         orderBy: "weld_no",
         orderDir: "asc",
         logId: log.id,

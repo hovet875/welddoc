@@ -1,5 +1,6 @@
 import { supabase } from "../services/supabaseClient";
 import { PDFDocument } from "pdf-lib";
+import { createUuid } from "../utils/id";
 import {
   createFileRecord,
   createFileLink,
@@ -52,8 +53,8 @@ export async function createProjectDrawingWithFile(input: {
   revision: string;
   file: File;
 }) {
-  const fileId = crypto.randomUUID();
-  const drawingId = crypto.randomUUID();
+  const fileId = createUuid();
+  const drawingId = createUuid();
   let inserted = false;
 
   try {

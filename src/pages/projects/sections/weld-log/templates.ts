@@ -3,10 +3,10 @@ import { renderPagerButtons } from "../../../../ui/pager";
 import { renderDatePickerInput } from "../../../../ui/datePicker";
 import { iconSvg, renderIconButton } from "../../../../ui/iconButton";
 import type {
+  BulkChangeField,
   DrawingOption,
   EmployeeOption,
   ListFilters,
-  NdtMethodOption,
   NdtReportRow,
   RowWpsStatus,
   TraceabilitySelectOption,
@@ -16,7 +16,7 @@ import type {
   WeldListRow,
 } from "./types";
 
-const dash = "—";
+const dash = "\u2014";
 
 export const VT_NO_REPORT_VALUE = "__VT_NO_REPORT__";
 
@@ -54,72 +54,252 @@ const wpsStatusBadge = (status: RowWpsStatus | undefined) => {
 
 const drawingLabel = (row: DrawingOption) => {
   const rev = (row.revision || "-").trim().toUpperCase() || "-";
-  return `${row.drawing_no} · Rev ${rev}`;
+  return `${row.drawing_no} - Rev ${rev}`;
 };
 
-const bulkMethodOptions = (methods: NdtMethodOption[], selectedCode: string) => {
-  return methods
-    .map((method) => {
-      const code = (method.code || "").trim().toUpperCase();
-      if (!code) return "";
-      const selected = code === selectedCode ? " selected" : "";
-      return `<option value="${esc(code)}"${selected}>${esc(method.label || code)}</option>`;
-    })
-    .join("");
+const bulkFieldOptions = (selected: BulkChangeField | "") => {
+  const rows: Array<{ value: BulkChangeField; label: string }> = [
+    { value: "fuge", label: "Fugetype" },
+    { value: "sveiser", label: "Sveiser" },
+    { value: "dato", label: "Dato" },
+    { value: "tilsett", label: "Tilsett" },
+    { value: "vt", label: "Visuell" },
+    { value: "pt", label: "Sprekk" },
+    { value: "vol", label: "Volumetrisk" },
+  ];
+  return [
+    `<option value="">Velg felt...</option>`,
+    ...rows.map((row) => `<option value="${row.value}"${selected === row.value ? " selected" : ""}>${esc(row.label)}</option>`),
+  ].join("");
 };
 
-const bulkWelderDatalistOptions = (welders: WelderOption[]) => {
-  return welders
-    .map((welder) => {
+const bulkReportRows = (reports: NdtReportRow[], field: "vt" | "pt" | "vol") => {
+  const methods = field === "vt" ? ["vt"] : field === "pt" ? ["pt", "mt"] : ["rt", "ut"];
+  return reports.filter((report) => methods.includes(String(report.method ?? "").trim().toLowerCase()));
+};
+
+const bulkReportOptions = (reports: NdtReportRow[], field: "vt" | "pt" | "vol", selectedValue: string, vtNoReport: boolean) => {
+  const selected = String(selectedValue || "").trim();
+  const rows = bulkReportRows(reports, field);
+  const options = [
+    `<option value="">Velg rapport...</option>`,
+    ...(field === "vt"
+      ? [`<option value="${esc(VT_NO_REPORT_VALUE)}"${vtNoReport ? " selected" : ""}>Ingen rapport</option>`]
+      : []),
+    ...rows.map((report) => {
+      const reportNo = String(report.report_no ?? "").trim() || dash;
+      const date = String(report.date ?? "").trim();
+      const label = date ? `${reportNo} - ${date}` : reportNo;
+      const selectedAttr = !vtNoReport && report.id === selected ? " selected" : "";
+      return `<option value="${esc(report.id)}"${selectedAttr}>${esc(label)}</option>`;
+    }),
+  ];
+  if (selected && selected !== VT_NO_REPORT_VALUE && !rows.some((row) => row.id === selected)) {
+    options.push(`<option value="${esc(selected)}" selected>${esc(selected)}</option>`);
+  }
+  return options.join("");
+};
+
+const bulkWelderOptions = (welders: WelderOption[], selectedValue: string) => {
+  const selected = String(selectedValue || "").trim();
+  const rows = [
+    `<option value="">Velg sveiser...</option>`,
+    ...welders.map((welder) => {
       const no = String(welder.welder_no ?? "").trim();
       const name = String(welder.display_name ?? "").trim();
-      const label = [no, name].filter(Boolean).join(" - ");
-      if (!label) return "";
-      return `<option value="${esc(no || label)}">${esc(label)}</option>`;
-    })
-    .join("");
+      const label = [no, name].filter(Boolean).join(" - ") || String(welder.id ?? "").trim() || dash;
+      const selectedAttr = welder.id === selected ? " selected" : "";
+      return `<option value="${esc(welder.id)}"${selectedAttr}>${esc(label)}</option>`;
+    }),
+  ];
+  if (selected && !welders.some((welder) => welder.id === selected)) {
+    rows.push(`<option value="${esc(selected)}" selected>${esc(selected)}</option>`);
+  }
+  return rows.join("");
 };
 
-const bulkFillerSelectOptions = (options: TraceabilitySelectOption[], selectedId: string) => {
-  const selected = String(selectedId || "").trim();
+const bulkFillerOptions = (options: TraceabilitySelectOption[], selectedValue: string) => {
+  const selected = String(selectedValue || "").trim();
   const rows = [
     `<option value="">Velg tilsett...</option>`,
-    ...options.map((opt) => `<option value="${esc(opt.id)}"${opt.id === selected ? " selected" : ""}>${esc(opt.label)}</option>`),
+    ...options.map((option) => `<option value="${esc(option.id)}"${option.id === selected ? " selected" : ""}>${esc(option.label)}</option>`),
   ];
+  if (selected && !options.some((option) => option.id === selected)) {
+    rows.push(`<option value="${esc(selected)}" selected>${esc(selected)}</option>`);
+  }
   return rows.join("");
 };
 
-const bulkFugeSelectOptions = (jointTypes: string[], selectedValue: string) => {
+const bulkJointTypeOptions = (jointTypes: string[], selectedValue: string) => {
   const selected = String(selectedValue || "").trim();
-  const values = Array.from(new Set(jointTypes.map((row) => String(row || "").trim()).filter(Boolean)));
+  const values = Array.from(new Set(jointTypes.map((value) => String(value || "").trim()).filter(Boolean)));
   values.sort((a, b) => a.localeCompare(b, "nb", { sensitivity: "base" }));
-  const rows = [
+  if (selected && !values.includes(selected)) values.push(selected);
+  return [
     `<option value="">Velg fugetype...</option>`,
     ...values.map((value) => `<option value="${esc(value)}"${value === selected ? " selected" : ""}>${esc(value)}</option>`),
+  ].join("");
+};
+
+const bulkInspectorOptions = (employees: EmployeeOption[], selectedValue: string) => {
+  const selected = String(selectedValue || "").trim();
+  const rows = [
+    `<option value="">Velg intern godkjenner...</option>`,
+    ...employees.map((employee) => {
+      const label = String(employee.label ?? "").trim() || String(employee.display_name ?? "").trim() || String(employee.id ?? "").trim();
+      return `<option value="${esc(employee.id)}"${employee.id === selected ? " selected" : ""}>${esc(label)}</option>`;
+    }),
   ];
+  if (selected && !employees.some((employee) => employee.id === selected)) {
+    rows.push(`<option value="${esc(selected)}" selected>${esc(selected)}</option>`);
+  }
   return rows.join("");
+};
+
+const bulkValueEditor = (
+  field: BulkChangeField | "",
+  value: string,
+  vtNoReport: boolean,
+  vtInspectorId: string,
+  reports: NdtReportRow[],
+  welders: WelderOption[],
+  employees: EmployeeOption[],
+  fillerOptions: TraceabilitySelectOption[],
+  jointTypes: string[]
+) => {
+  if (!field) {
+    return `<div class="muted">Velg et felt for å fortsette.</div>`;
+  }
+
+  if (field === "fuge") {
+    return `
+      <label class="field">
+        <span class="muted">Ny fugetype</span>
+        <select class="select" data-bulk-change-value>
+          ${bulkJointTypeOptions(jointTypes, value)}
+        </select>
+      </label>
+    `;
+  }
+
+  if (field === "sveiser") {
+    return `
+      <label class="field">
+        <span class="muted">Ny sveiser</span>
+        <select class="select" data-bulk-change-value>
+          ${bulkWelderOptions(welders, value)}
+        </select>
+      </label>
+    `;
+  }
+
+  if (field === "dato") {
+    return `
+      <label class="field">
+        <span class="muted">Ny dato</span>
+        ${renderDatePickerInput({
+          value: value || "",
+          inputAttrs: `data-bulk-change-value class="input"`,
+          openLabel: "Velg dato",
+        })}
+      </label>
+    `;
+  }
+
+  if (field === "tilsett") {
+    return `
+      <label class="field">
+        <span class="muted">Ny tilsett</span>
+        <select class="select" data-bulk-change-value>
+          ${bulkFillerOptions(fillerOptions, value)}
+        </select>
+      </label>
+    `;
+  }
+
+  if (field === "vt") {
+    return `
+      <div class="weld-bulk-vt-grid">
+        <label class="field">
+          <span class="muted">Visuell rapport</span>
+          <select class="select" data-bulk-change-value>
+            ${bulkReportOptions(reports, "vt", value, vtNoReport)}
+          </select>
+        </label>
+        ${
+          vtNoReport
+            ? `
+              <label class="field">
+                <span class="muted">Intern godkjenner</span>
+                <select class="select" data-bulk-vt-inspector>
+                  ${bulkInspectorOptions(employees, vtInspectorId)}
+                </select>
+              </label>
+            `
+            : ""
+        }
+      </div>
+    `;
+  }
+
+  if (field === "pt") {
+    return `
+      <label class="field">
+        <span class="muted">Sprekkrapport (PT/MT)</span>
+        <select class="select" data-bulk-change-value>
+          ${bulkReportOptions(reports, "pt", value, false)}
+        </select>
+      </label>
+    `;
+  }
+
+  return `
+    <label class="field">
+      <span class="muted">Volumetrisk rapport (RT/UT)</span>
+      <select class="select" data-bulk-change-value>
+        ${bulkReportOptions(reports, "vol", value, false)}
+      </select>
+    </label>
+  `;
+};
+
+const bulkApplyDisabled = (field: BulkChangeField | "", value: string, vtNoReport: boolean, vtInspectorId: string) => {
+  if (!field) return true;
+  const selectedValue = String(value || "").trim();
+  if (field === "vt") {
+    if (vtNoReport) return !String(vtInspectorId || "").trim();
+    return !selectedValue || selectedValue === VT_NO_REPORT_VALUE;
+  }
+  return !selectedValue;
 };
 
 export function renderLayout(
   filters: ListFilters,
+  pageSize: number,
   drawings: DrawingOption[],
   currentDrawingId: string | null,
-  ndtMethods: NdtMethodOption[],
-  selectedBulkMethodCode: string,
+  bulkField: BulkChangeField | "",
+  bulkValue: string,
+  bulkVtNoReport: boolean,
+  bulkVtInspectorId: string,
+  reports: NdtReportRow[],
   welders: WelderOption[],
+  employees: EmployeeOption[],
   fillerOptions: TraceabilitySelectOption[],
-  jointTypes: string[],
-  bulkWelderValue: string,
-  bulkFillerId: string,
-  bulkFugeValue: string
+  jointTypes: string[]
 ) {
-  const methodOptions = bulkMethodOptions(ndtMethods, selectedBulkMethodCode);
-  const bulkMethodDisabled = ndtMethods.length ? "" : " disabled";
-  const welderOptions = bulkWelderDatalistOptions(welders);
-  const fillerSelectOptions = bulkFillerSelectOptions(fillerOptions, bulkFillerId);
-  const fugeSelectOptions = bulkFugeSelectOptions(jointTypes, bulkFugeValue);
-  const bulkFillerDisabled = fillerOptions.length ? "" : " disabled";
-  const bulkFugeDisabled = jointTypes.length ? "" : " disabled";
+  const editorHtml = bulkValueEditor(
+    bulkField,
+    bulkValue,
+    bulkVtNoReport,
+    bulkVtInspectorId,
+    reports,
+    welders,
+    employees,
+    fillerOptions,
+    jointTypes
+  );
+  const applyDisabled = bulkApplyDisabled(bulkField, bulkValue, bulkVtNoReport, bulkVtInspectorId) ? " disabled" : "";
   return `
     <section class="panel weld-log">
       <div class="panel-head">
@@ -130,7 +310,7 @@ export function renderLayout(
         <div class="weld-log-actions">
           <button class="btn small" type="button" data-weld-new>Ny sveis</button>
           <button class="btn small" type="button" data-weld-bulk-add>Bulk legg til</button>
-          <button class="btn small" type="button" data-weld-refresh>Oppdater</button>
+          <button class="btn small" type="button" data-weld-refresh>&#x21bb;</button>
           ${renderIconButton({ dataKey: "weld-print", id: "weld-print", title: "Skriv ut", icon: iconSvg("print") })}
         </div>
       </div>
@@ -156,66 +336,15 @@ export function renderLayout(
                 <option value="all"${filters.status === "all" ? " selected" : ""}>Alle</option>
               </select>
             </label>
-            <label class="field is-wide">
-              <span class="muted">Sok</span>
-              <input class="input" data-filter-search placeholder="Sveis ID, sveiser, WPS, rapport" value="${esc(filters.search)}" />
+            <label class="field">
+              <span class="muted">Per side</span>
+              <select class="select" data-page-size>
+                <option value="10"${pageSize === 10 ? " selected" : ""}>10</option>
+                <option value="20"${pageSize === 20 ? " selected" : ""}>20</option>
+                <option value="50"${pageSize === 50 ? " selected" : ""}>50</option>
+                <option value="100"${pageSize === 100 ? " selected" : ""}>100</option>
+              </select>
             </label>
-          </div>
-        </div>
-        <div class="weld-bulkbar" data-weld-bulkbar hidden>
-          <div class="weld-bulk-groups">
-            <div class="weld-bulk-group weld-bulk-group-main">
-              <div class="weld-bulk-group-title">Valgte rader</div>
-              <strong data-bulk-count>0 valgt</strong>
-              <button class="btn small" type="button" data-bulk-approve>Godkjenn valgte</button>
-              <button class="btn small" type="button" data-bulk-review>Sett til kontroll</button>
-              <button class="btn danger small" type="button" data-bulk-delete>Slett valgte</button>
-            </div>
-            <div class="weld-bulk-group weld-bulk-group-fuge">
-              <div class="weld-bulk-group-title">Fugetype</div>
-              <select class="select small" data-bulk-fuge${bulkFugeDisabled}>
-                ${fugeSelectOptions}
-              </select>
-              <div class="weld-bulk-actions-row">
-                <button class="btn small" type="button" data-bulk-set-fuge>Sett</button>
-                <button class="btn danger small" type="button" data-bulk-clear-fuge>Fjern</button>
-              </div>
-            </div>
-            <div class="weld-bulk-group weld-bulk-group-welder">
-              <div class="weld-bulk-group-title">Sveiser ID</div>
-              <input
-                class="input small"
-                data-bulk-welder
-                placeholder="Velg sveiser"
-                list="bulk-welder-list"
-                value="${esc(bulkWelderValue)}"
-              />
-              <div class="weld-bulk-actions-row">
-                <button class="btn small" type="button" data-bulk-set-welder>Sett</button>
-                <button class="btn danger small" type="button" data-bulk-clear-welder>Fjern</button>
-              </div>
-            </div>
-            <div class="weld-bulk-group weld-bulk-group-filler">
-              <div class="weld-bulk-group-title">Tilsett</div>
-              <select class="select small" data-bulk-filler${bulkFillerDisabled}>
-                ${fillerSelectOptions}
-              </select>
-              <div class="weld-bulk-actions-row">
-                <button class="btn small" type="button" data-bulk-set-filler>Sett</button>
-                <button class="btn danger small" type="button" data-bulk-clear-filler>Fjern</button>
-              </div>
-            </div>
-            <div class="weld-bulk-group weld-bulk-group-report">
-              <div class="weld-bulk-group-title">NDT (rapport/godkjenner)</div>
-              <select class="select small" data-bulk-method${bulkMethodDisabled}>
-                ${methodOptions || `<option value="">Ingen metoder</option>`}
-              </select>
-              <input class="input small" data-bulk-report placeholder="Velg rapport" list="bulk-report-list" />
-              <div class="weld-bulk-actions-row">
-                <button class="btn small" type="button" data-bulk-attach>Sett</button>
-                <button class="btn danger small" type="button" data-bulk-clear-attach>Fjern</button>
-              </div>
-            </div>
           </div>
         </div>
         <div class="weld-table-wrap">
@@ -246,11 +375,31 @@ export function renderLayout(
           </table>
         </div>
         <div class="weld-pagination" data-weld-pagination></div>
+        <div class="weld-bulkbar" data-weld-bulkbar hidden>
+          <div class="weld-bulkbar-editor">
+            <label class="field">
+              <span class="muted">Hva vil du endre?</span>
+              <select class="select" data-bulk-change-field>
+                ${bulkFieldOptions(bulkField)}
+              </select>
+            </label>
+            <div class="weld-bulkbar-editor-next">
+              ${editorHtml}
+            </div>
+            <button class="btn small" type="button" data-bulk-apply${applyDisabled}>Endre valgte</button>
+          </div>
+          <div class="weld-bulkbar-footer">
+            <strong class="weld-bulkbar-count" data-bulk-count>0 valgt</strong>
+            <div class="weld-bulkbar-actions">
+              <button class="btn success small" type="button" data-bulk-approve>Godkjenn valgte</button>
+              <button class="btn small" type="button" data-bulk-review>Sett valgte til kontroll</button>
+              <button class="btn danger small" type="button" data-bulk-delete>Slett valgte</button>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
     <div class="weld-drawer-root" data-weld-drawer-root></div>
-    <datalist id="bulk-report-list"></datalist>
-    <datalist id="bulk-welder-list">${welderOptions}</datalist>
   `;
 }
 
@@ -292,19 +441,19 @@ export function renderRows(
 
       return `
         <tr data-row-id="${esc(row.id)}" tabindex="0">
-          <td class="sticky-col select-col">
+          <td class="sticky-col select-col" data-label="Velg">
             <input type="checkbox" data-row-select value="${esc(row.id)}"${selected.has(row.id) ? " checked" : ""} />
           </td>
-          <td class="sticky-col id-col" data-cell="id">${renderValue(row.sveis_id)}</td>
-          <td>${renderValue(row.fuge)}</td>
-          <td>${component}</td>
-          <td>${esc(welderLabel)}</td>
-          <td class="cert-col">${certStatusBadge(certStatusByRow.get(row.id))}</td>
-          <td class="wps-col">${wpsStatusBadge(wpsStatusByRow.get(row.id))}</td>
-          <td>${formatDate(row.dato)}</td>
-          <td class="ndt-cell"><div class="ndt-pills">${ndt}</div></td>
-          <td><span class="chip ${status.tone}">${esc(status.label)}</span></td>
-          <td class="row-menu-cell">
+          <td class="sticky-col id-col" data-cell="id" data-label="Sveis ID">${renderValue(row.sveis_id)}</td>
+          <td data-label="Fuge">${renderValue(row.fuge)}</td>
+          <td data-label="Komponent">${component}</td>
+          <td data-label="Sveiser">${esc(welderLabel)}</td>
+          <td class="cert-col" data-label="Sertifikat">${certStatusBadge(certStatusByRow.get(row.id))}</td>
+          <td class="wps-col" data-label="WPS">${wpsStatusBadge(wpsStatusByRow.get(row.id))}</td>
+          <td data-label="Dato">${formatDate(row.dato)}</td>
+          <td class="ndt-cell" data-label="NDT"><div class="ndt-pills">${ndt}</div></td>
+          <td data-label="Status"><span class="chip ${status.tone}">${esc(status.label)}</span></td>
+          <td class="row-menu-cell" data-label="Handling">
             <button class="btn ghost small" type="button" data-row-menu>...</button>
             <div class="row-menu" data-row-menu-panel>
               <button type="button" data-row-action="info">Vis informasjon</button>
@@ -319,14 +468,8 @@ export function renderRows(
 
 export function renderPagination(page: number, pageSize: number, total: number) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const buttons = renderPagerButtons({ totalPages, currentPage: page + 1 });
+  const buttons = renderPagerButtons({ totalPages, currentPage: page + 1, dataAttrs: { weldpager: "1" } });
   return `<div class="pager">${buttons}</div>`;
-}
-
-export function renderBulkReportOptions(reports: NdtReportRow[]) {
-  return reports
-    .map((r) => `<option value="${esc(r.report_no ?? "")}"></option>`)
-    .join("");
 }
 
 const reportSelectOptions = (
@@ -657,3 +800,4 @@ export function renderDrawer(
     </aside>
   `;
 }
+

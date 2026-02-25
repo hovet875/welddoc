@@ -349,6 +349,22 @@ export async function renderHome(app: HTMLElement) {
     <div class="shell page-home">
       ${renderHeader(displayName, email)}
       <main class="main">
+      <section class="section">
+          <div class="tiles">
+            <div class="tile">
+              <div class="tileh">Sveis</div>
+              <div class="tilep">Hurtigregistrer sveis i sveiselogg.</div>
+            </div>
+            <div class="tile">
+              <div class="tileh">Sporbarhet</div>
+              <div class="tilep">Hurtigregistrer sporbarhet i prosjekt.</div>
+            </div>
+            <div class="tile">
+              <div class="tileh">Dokumenter</div>
+              <div class="tilep">PDF-tegninger, MTC, NDT-rapporter og vedlegg.</div>
+            </div>
+          </div>
+        </section>
         <section class="hero">
           <div class="herotext">
             <h1>Dokumentasjon som faktisk funker i verkstedet.</h1>
@@ -404,28 +420,6 @@ export async function renderHome(app: HTMLElement) {
               <div class="muted">Laster klimadata...</div>
             </div>
             <div class="ub-foot muted" data-ub-last-updated>Sist oppdatert: -</div>
-          </div>
-        </section>
-
-        <section class="section">
-          <div class="sectionhead">
-            <h2>Oversikt</h2>
-            <p>Byggesteinene vi fyller med funksjon etter hvert.</p>
-          </div>
-
-          <div class="tiles">
-            <div class="tile">
-              <div class="tileh">Prosjekt</div>
-              <div class="tilep">Master for alt: tegninger, sveiser, materialer, dokumenter.</div>
-            </div>
-            <div class="tile">
-              <div class="tileh">Sporbarhet</div>
-              <div class="tilep">Heat -> kode (P1/P2...) -> knyttes til prosjekt og linjer.</div>
-            </div>
-            <div class="tile">
-              <div class="tileh">Dokumenter</div>
-              <div class="tilep">PDF-tegninger, MTC, NDT-rapporter og vedlegg.</div>
-            </div>
           </div>
         </section>
       </main>
