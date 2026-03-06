@@ -1,29 +1,28 @@
-import { Link } from "react-router-dom";
+import { AppButton } from "@react/ui/AppButton";
+import { AppLinkButton } from "@react/ui/AppLinkButton";
+import { AppRefreshIconButton } from "@react/ui/AppRefreshIconButton";
+import { AppSectionHeader } from "@react/ui/AppSectionHeader";
 
 type UsersHeaderProps = {
   onRefresh: () => void;
   onAddUser: () => void;
+  refreshing?: boolean;
 };
 
-export function UsersHeader({ onRefresh, onAddUser }: UsersHeaderProps) {
+export function UsersHeader({ onRefresh, onAddUser, refreshing = false }: UsersHeaderProps) {
   return (
-    <section className="section-header">
-      <div>
-        <h1 className="section-title">Administrer brukere</h1>
-        <p className="section-subtitle">Oversikt over brukere i systemet.</p>
-      </div>
-
-      <div className="section-actions">
-        <Link className="btn small" to="/settings">
-          &larr; Tilbake
-        </Link>
-        <button className="btn accent small" type="button" onClick={onAddUser}>
-          Legg til bruker
-        </button>
-        <button className="btn small" type="button" onClick={onRefresh}>
-          Oppdater
-        </button>
-      </div>
-    </section>
+    <AppSectionHeader
+      title="Administrer brukere"
+      subtitle="Oversikt over brukere i systemet."
+      actions={
+        <>
+          <AppLinkButton to="/settings">&larr; Tilbake</AppLinkButton>
+          <AppButton tone="primary" onClick={onAddUser}>
+            Legg til bruker
+          </AppButton>
+          <AppRefreshIconButton onClick={onRefresh} disabled={refreshing} loading={refreshing} />
+        </>
+      }
+    />
   );
 }

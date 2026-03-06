@@ -1,15 +1,12 @@
-/* base.css */
+/* base.css 
 
-/* Reset / base */
 * { box-sizing: border-box; }
 
 :root{
-  /* Fallbacks (sørg for at siden aldri blir “hvit” pga manglende variabler) */
   --bg: #0b1c2d;
   --text: #e8eef7;
   --muted: rgba(255,255,255,0.72);
 
-  /* iOS: jevnere bakgrunn */
   --bg-grad-1: rgba(110,231,255,0.16);
   --bg-grad-2: rgba(139,92,246,0.16);
   --bg-grad-3: rgba(34,211,238,0.09);
@@ -20,7 +17,6 @@ html, body {
   padding: 0;
 }
 
-/* Deaktiver “tap to zoom”-følelse (NB: ekte zoom stopper du ikke 100% i Safari uten HTML-viewport hacks) */
 html {
   touch-action: manipulation;
   -ms-touch-action: manipulation;
@@ -31,22 +27,17 @@ body{
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   color: var(--text);
 
-  /* Stabil viewport på mobil (ikke bruk 100% høyde her) */
-  min-height: 100vh;   /* fallback */
-  min-height: 100svh;  /* stabil på iOS */
+  min-height: 100vh; 
+  min-height: 100svh; 
 
-  /* Gjør at body fyller bredden uten side-scroll */
   overflow-x: hidden;
 
-  /* Safe area: så innhold ikke havner bak notch/bunnlinje */
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
 
-  /* Forhindrer “white flash” rundt kanten ved bounce */
   background: var(--bg);
 }
 
-/* Super-stabil bakgrunn: fixed layer + ingen “scroll stretch” */
 body::before{
   content: "";
   position: fixed;
@@ -55,7 +46,6 @@ body::before{
   background: var(--bg);
 }
 
-/* Gradient som egen layer (mindre glitch på iOS) */
 body::after{
   content: "";
   position: fixed;
@@ -68,13 +58,11 @@ body::after{
     radial-gradient(900px 650px at 50% 92%, var(--bg-grad-3), transparent 58%);
 }
 
-/* Link defaults */
 a{ color: inherit; text-decoration: none; }
 
 .muted{ color: var(--muted); }
-.mutedcell{ color: rgba(255,255,255,0.65); }
+.mutedcell{ color: rgba(255,255,255,0.65); } 
 
-/* Toast */
 .toastmount{
   position: fixed;
   bottom: calc(18px + env(safe-area-inset-bottom));
@@ -93,3 +81,60 @@ a{ color: inherit; text-decoration: none; }
   font-size: 14px;
   box-shadow: 0 8px 22px rgba(0,0,0,.25);
 }
+*/
+
+/* base.css */
+
+/* Reset / base */
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  touch-action: manipulation;
+  -ms-touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+}
+
+body{
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  color: var(--text);
+
+  min-height: 100vh;
+  min-height: 100svh;
+
+  overflow-x: hidden;
+
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+
+  background: var(--bg);
+}
+
+body::before{
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background: var(--bg);
+}
+
+body::after{
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(1100px 650px at 12% 12%, var(--bg-grad-1), transparent 58%),
+    radial-gradient(950px 600px at 85% 16%, var(--bg-grad-2), transparent 58%),
+    radial-gradient(900px 650px at 50% 92%, var(--bg-grad-3), transparent 58%);
+}
+
+a{ color: inherit; text-decoration: none; }
+
+.muted{ color: var(--muted); }
+.mutedcell{ color: var(--mutedcell); }

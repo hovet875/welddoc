@@ -52,7 +52,7 @@ export function useSettingsData({ userId, fallbackDisplayName }: UseSettingsData
             try {
               return await fetchJobTitles();
             } catch (err) {
-              console.warn("Feilet å hente stillinger", err);
+              console.warn("Feilet \u00e5 hente stillinger", err);
               return [];
             }
           })(),

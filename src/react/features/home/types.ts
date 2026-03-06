@@ -27,23 +27,13 @@ export type UbibotChartDataModel = {
   kind: "data";
   lastUpdatedText: string;
   avgRhLabel: string;
-  viewW: number;
-  viewH: number;
-  padL: number;
-  padR: number;
-  yGrid: Array<{
-    y: number;
-    tempLabel: string;
-    rhLabel: string;
-  }>;
-  xTicks: Array<{
-    x: number;
+  points: Array<{
     label: string;
+    temp: number | null;
+    rh: number | null;
   }>;
-  tempPath: string;
-  rhPath: string;
-  tempMarker: null | { x: number; y: number };
-  rhMarker: null | { x: number; y: number };
+  tempDomain: [number, number];
+  rhDomain: [number, number];
   tempMinLabel: string;
   tempMaxLabel: string;
   rhMinLabel: string;

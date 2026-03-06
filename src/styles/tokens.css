@@ -1,26 +1,51 @@
-:root{
-  --bg: #0b1220;
-  --panel: rgba(255,255,255,0.06);
-  --panel2: rgba(255,255,255,0.08);
-  --border: rgba(255,255,255,0.10);
-  --text: rgba(255,255,255,0.92);
-  --muted: rgba(255,255,255,0.65);
-  --accent: #6ee7ff;
-  --accent2: #8b5cf6;
-  --shadow: 0 18px 60px rgba(0,0,0,0.35);
 
+/* Ikke-farge tokens (felles) */
+:root {
   /* radius tokens */
   --radius-sm: 10px;
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 18px;
   --radius-pill: 999px;
+}
 
-  /* gradients & effects */
+/* ========================= */
+/* DARK MODE                 */
+/* ========================= */
+:root{
+  --bg: #0b1c2d;
+
+  --panel: rgba(255,255,255,0.06);
+  --panel2: rgba(255,255,255,0.08);
+  --border: rgba(255,255,255,0.10);
+
+  --text: #e8eef7;
+  --muted: rgba(255,255,255,0.65);
+
+  --accent: #6ee7ff;
+  --accent2: #8b5cf6;
+
+  --shadow: 0 18px 60px rgba(0,0,0,0.35);
+  --btn-shadow: 0 10px 26px rgba(0,0,0,0.18);
+
   --panel-gradient: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
   --panel-gradient-soft: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.025));
+
   --accent-gradient: linear-gradient(135deg, rgba(110,231,255,0.20), rgba(139,92,246,0.18));
   --accent-gradient-hover: linear-gradient(135deg, rgba(110,231,255,0.28), rgba(139,92,246,0.22));
+
   --focus-ring: 0 0 0 3px rgba(110,231,255,0.14);
-  --btn-shadow: 0 10px 26px rgba(0,0,0,0.18);
+
+  /* aurora */
+  --bg-grad-1: rgba(110,231,255,0.16);
+  --bg-grad-2: rgba(139,92,246,0.16);
+  --bg-grad-3: rgba(34,211,238,0.09);
+
+  /* util */
+  --mutedcell: rgba(255,255,255,0.65);
+
+  /* toast */
+  --toast-bg: rgba(20,20,20,.92);
+  --toast-text: #fff;
+  --toast-shadow: 0 8px 22px rgba(0,0,0,.25);
 }

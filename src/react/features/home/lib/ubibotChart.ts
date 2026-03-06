@@ -30,7 +30,7 @@ const DATE_TIME_FMT = new Intl.DateTimeFormat("nb-NO", {
   timeStyle: "short",
 });
 
-const EMPTY_LAST_UPDATED = "Sist oppdatert: - | Siste m\u00E5ling: -";
+const EMPTY_LAST_UPDATED = "Sist oppdatert: - | Siste måling: -";
 
 export function asSpan(value: string): UbiSpan {
   if (value === "7d" || value === "30d" || value === "90d" || value === "12m" || value === "month") return value;
@@ -52,6 +52,8 @@ export function currentMonthValue() {
 export function asMonthValue(value: string | null | undefined): string {
   const raw = String(value ?? "").trim();
   if (/^\d{4}-(0[1-9]|1[0-2])$/.test(raw)) return raw;
+  const fullDateMatch = /^(\d{4})-(0[1-9]|1[0-2])(?:-[0-3]\d)?(?:[T ].*)?$/.exec(raw);
+  if (fullDateMatch) return `${fullDateMatch[1]}-${fullDateMatch[2]}`;
   return currentMonthValue();
 }
 
@@ -81,9 +83,9 @@ function periodLabel(span: UbiSpan, monthValue: string): string {
     case "90d":
       return "90 dager";
     case "12m":
-      return "12 m\u00E5neder";
+      return "12 måneder";
     case "month":
-      return `M\u00E5ned ${monthLabel(monthValue)}`;
+      return `Måned ${monthLabel(monthValue)}`;
   }
 }
 
@@ -272,19 +274,6 @@ function compressPoints(points: UbibotPoint[], maxPoints: number): UbibotPoint[]
   return out;
 }
 
-function pickTickIndices(total: number, maxTicks = 6): number[] {
-  if (total <= 0) return [];
-  if (total <= maxTicks) return Array.from({ length: total }, (_, index) => index);
-
-  const out = new Set<number>([0, total - 1]);
-  const inner = maxTicks - 2;
-  const step = (total - 1) / (inner + 1);
-  for (let i = 1; i <= inner; i += 1) {
-    out.add(Math.round(i * step));
-  }
-  return Array.from(out).sort((a, b) => a - b);
-}
-
 function valueDomain(values: number[], fallback: [number, number]): [number, number] {
   if (values.length === 0) return fallback;
 
@@ -301,31 +290,8 @@ function valueDomain(values: number[], fallback: [number, number]): [number, num
   return [min - pad, max + pad];
 }
 
-function buildLinePath(
-  points: UbibotPoint[],
-  getValue: (point: UbibotPoint) => number | null,
-  xFor: (index: number) => number,
-  yFor: (value: number) => number
-) {
-  let d = "";
-  let drawing = false;
-
-  for (let i = 0; i < points.length; i += 1) {
-    const value = getValue(points[i]);
-    if (!isFiniteNumber(value)) {
-      drawing = false;
-      continue;
-    }
-    const x = xFor(i);
-    const y = yFor(value);
-    d += `${drawing ? "L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)} `;
-    drawing = true;
-  }
-  return d.trim();
-}
-
 export function bucketsForSpan(span: UbiSpan): UbiBucketOption[] {
-  if (span === "12m") return [{ value: "day", label: "Per dag" }, { value: "month", label: "Per m\u00E5ned" }];
+  if (span === "12m") return [{ value: "day", label: "Per dag" }, { value: "month", label: "Per måned" }];
   if (span === "90d") return [{ value: "day", label: "Per dag" }];
   return [{ value: "hour", label: "Per time" }, { value: "day", label: "Per dag" }];
 }
@@ -374,7 +340,7 @@ export function buildUbibotChartModel({
   if (rows.length === 0) {
     return {
       kind: "empty",
-      message: `Ingen m\u00E5linger for ${periodLabel(span, monthValue).toLowerCase()}.`,
+      message: `Ingen målinger for ${periodLabel(span, monthValue).toLowerCase()}.`,
       lastUpdatedText: EMPTY_LAST_UPDATED,
     };
   }
@@ -383,7 +349,7 @@ export function buildUbibotChartModel({
   if (points.length === 0) {
     return {
       kind: "empty",
-      message: "Fant ikke gyldige m\u00E5linger i valgt periode.",
+      message: "Fant ikke gyldige målinger i valgt periode.",
       lastUpdatedText: EMPTY_LAST_UPDATED,
     };
   }
@@ -395,7 +361,7 @@ export function buildUbibotChartModel({
   if (tempValues.length === 0 && rhValues.length === 0) {
     return {
       kind: "empty",
-      message: "M\u00E5lingene mangler temperatur- og fuktverdier.",
+      message: "Målingene mangler temperatur- og fuktverdier.",
       lastUpdatedText: EMPTY_LAST_UPDATED,
     };
   }
@@ -429,78 +395,15 @@ export function buildUbibotChartModel({
       latestMeasurementMs = measurementMs;
     }
   }
-  const lastUpdatedText = `Sist oppdatert: ${formatMillis(latestInsertedMs)} | Siste m\u00E5ling: ${formatMillis(latestMeasurementMs)}`;
-
-  const viewW = 760;
-  const viewH = 268;
-  const padL = 56;
-  const padR = 64;
-  const padT = 16;
-  const padB = 40;
-  const chartW = viewW - padL - padR;
-  const chartH = viewH - padT - padB;
-  const xFor = (index: number) =>
-    displayPoints.length <= 1 ? padL + chartW / 2 : padL + (index / (displayPoints.length - 1)) * chartW;
-
-  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+  const lastUpdatedText = `Sist oppdatert: ${formatMillis(latestInsertedMs)} | Siste måling: ${formatMillis(latestMeasurementMs)}`;
   const tempDomain = valueDomain(tempValues, [0, 30]);
   const rhDomain = valueDomain(rhValues, [20, 80]);
 
-  const yForTemp = (value: number) => {
-    const v = clamp(value, tempDomain[0], tempDomain[1]);
-    return padT + (1 - (v - tempDomain[0]) / (tempDomain[1] - tempDomain[0])) * chartH;
-  };
-
-  const yForRh = (value: number) => {
-    const v = clamp(value, rhDomain[0], rhDomain[1]);
-    return padT + (1 - (v - rhDomain[0]) / (rhDomain[1] - rhDomain[0])) * chartH;
-  };
-
-  const tempPath = buildLinePath(displayPoints, (point) => point.temp, xFor, yForTemp);
-  const rhPath = buildLinePath(displayPoints, (point) => point.rh, xFor, yForRh);
-
-  const ySteps = 4;
-  const yGrid = Array.from({ length: ySteps + 1 }, (_, index) => {
-    const ratio = index / ySteps;
-    const y = padT + (1 - ratio) * chartH;
-    const tempValue = tempDomain[0] + (tempDomain[1] - tempDomain[0]) * ratio;
-    const rhValue = rhDomain[0] + (rhDomain[1] - rhDomain[0]) * ratio;
-    return {
-      y,
-      tempLabel: `${formatNumber(tempValue)} \u00B0C`,
-      rhLabel: `${formatNumber(rhValue)} %`,
-    };
-  });
-
-  const xTicks = pickTickIndices(displayPoints.length, 7).flatMap((index) => {
-    const point = displayPoints[index];
-    if (!point) return [];
-    return [{ x: xFor(index), label: point.label }];
-  });
-
-  const latestTempIdx = (() => {
-    for (let i = displayPoints.length - 1; i >= 0; i -= 1) {
-      if (isFiniteNumber(displayPoints[i]?.temp)) return i;
-    }
-    return -1;
-  })();
-
-  const latestRhIdx = (() => {
-    for (let i = displayPoints.length - 1; i >= 0; i -= 1) {
-      if (isFiniteNumber(displayPoints[i]?.rh)) return i;
-    }
-    return -1;
-  })();
-
-  const tempMarker =
-    latestTempIdx >= 0
-      ? { x: xFor(latestTempIdx), y: yForTemp(displayPoints[latestTempIdx].temp as number) }
-      : null;
-
-  const rhMarker =
-    latestRhIdx >= 0
-      ? { x: xFor(latestRhIdx), y: yForRh(displayPoints[latestRhIdx].rh as number) }
-      : null;
+  const chartPoints = displayPoints.map((point) => ({
+    label: point.label,
+    temp: point.temp,
+    rh: point.rh,
+  }));
 
   const note = displayPoints.length < points.length
     ? `Viser ${displayPoints.length} punkter (aggregert fra ${points.length}).`
@@ -510,16 +413,9 @@ export function buildUbibotChartModel({
     kind: "data",
     lastUpdatedText,
     avgRhLabel: `${formatNumber(avgRh)}%`,
-    viewW,
-    viewH,
-    padL,
-    padR,
-    yGrid,
-    xTicks,
-    tempPath,
-    rhPath,
-    tempMarker,
-    rhMarker,
+    points: chartPoints,
+    tempDomain,
+    rhDomain,
     tempMinLabel: formatNumber(tempMin),
     tempMaxLabel: formatNumber(tempMax),
     rhMinLabel: formatNumber(rhMin),

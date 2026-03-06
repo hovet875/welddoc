@@ -3,8 +3,10 @@ self.addEventListener("install", () => {
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil((async () => {
+    if (self.registration.navigationPreload) {
+      await self.registration.navigationPreload.enable();
+    }
+    await self.clients.claim();
+  })());
 });
-
-// Minimal fetch handler to keep the service worker active for installability checks.
-self.addEventListener("fetch", () => {});

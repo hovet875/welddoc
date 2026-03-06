@@ -1,6 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useMemo, useState, type FormEvent } from "react";
+import { Box, Group, SimpleGrid, Stack } from "@mantine/core";
 import { supabase } from "@/services/supabaseClient";
+import { AppActionsMenu, createDeleteAction, createEditAction } from "@react/ui/AppActionsMenu";
+import { AppAsyncState } from "@react/ui/AppAsyncState";
+import { AppButton } from "@react/ui/AppButton";
+import { AppModalActions } from "@react/ui/AppModalActions";
+import { AppModal } from "@react/ui/AppModal";
+import { AppNativeSelect } from "@react/ui/AppNativeSelect";
+import { AppRefreshIconButton } from "@react/ui/AppRefreshIconButton";
+import { AppSelect } from "@react/ui/AppSelect";
+import { AppTextInput } from "@react/ui/AppTextInput";
+import { useDeleteConfirmModal } from "@react/ui/useDeleteConfirmModal";
 import {
   createMaterial,
   deleteMaterial,
@@ -36,21 +46,18 @@ import {
   updateWeldJointType,
   type WeldJointTypeRow,
 } from "@/repo/weldJointTypeRepo";
-import { openConfirmDelete } from "@/ui/confirm";
-import { modalSaveButton, openModal, renderModal } from "@/ui/modal";
-import { toast } from "@/ui/toast";
+import { toast } from "@react/ui/notify";
 import { esc } from "@/utils/dom";
 import { useAuth } from "../../../../auth/AuthProvider";
-import { AppFooter } from "../../../../layout/AppFooter";
-import { AppHeader } from "../../../../layout/AppHeader";
+import { AppPageLayout } from "../../../../layout/AppPageLayout";
 import { CompanySettingsHeader } from "../components/CompanySettingsHeader";
 import { useWeldingData } from "./hooks/useWeldingData";
-import { PencilIcon, TrashIcon } from "./components/WeldingActionIcons";
-import { WeldingCollapsiblePanel } from "./components/WeldingCollapsiblePanel";
+import { WeldingAdminListPanel } from "./components/WeldingAdminListPanel";
+import { WeldingListItem } from "./components/WeldingListItem";
 
 const STANDARD_TYPES = [
   "Sveisesertifisering",
-  "Sveiseprosedyreproving",
+  "Sveiseprosedyreprøving",
   "Sveiseprosedyrespesifikasjon",
   "Material/typestandard",
   "Utforelse",
@@ -82,45 +89,112 @@ function processLabelText(row: Pick<WeldingProcessRow, "code" | "label">) {
   return code || label;
 }
 
-function renderStandardTypeOptions(selected: string | null) {
-  const options = [`<option value="">Velg type...</option>`];
-  for (const type of STANDARD_TYPES) {
-    options.push(
-      `<option value="${esc(type)}" ${selected === type ? "selected" : ""}>${esc(type)}</option>`
-    );
-  }
-  if (selected && !STANDARD_TYPES.includes(selected as (typeof STANDARD_TYPES)[number])) {
-    options.push(`<option value="${esc(selected)}" selected>${esc(selected)}</option>`);
-  }
-  return options.join("");
-}
-
-function renderRevisionOptions(selected: number | null) {
-  const year = new Date().getFullYear();
-  const options = [`<option value="">Ingen revisjon</option>`];
-  for (let i = 0; i <= 30; i += 1) {
-    const value = String(year - i);
-    options.push(
-      `<option value="${esc(value)}" ${selected === Number(value) ? "selected" : ""}>${esc(value)}</option>`
-    );
-  }
-  if (selected != null && !options.some((item) => item.includes(`value="${selected}"`))) {
-    options.push(`<option value="${esc(String(selected))}" selected>${esc(String(selected))}</option>`);
-  }
-  return options.join("");
-}
-
 async function countReferences(table: string, column: string, value: string) {
   const result = await supabase.from(table).select("id", { count: "exact", head: true }).eq(column, value);
   if (result.error) throw result.error;
   return result.count ?? 0;
 }
 
-type ConfirmDeleteArgs = {
-  title: string;
-  messageHtml: string;
-  onConfirm: () => Promise<void>;
-  onDone: () => Promise<void>;
+type FmGroupsModalState = {
+  opened: boolean;
+  standardId: string;
+  standardLabel: string;
+};
+
+type FmGroupEditModalState = {
+  opened: boolean;
+  rowId: string;
+  label: string;
+};
+
+type MaterialEditModalState = {
+  opened: boolean;
+  rowId: string;
+  name: string;
+  code: string;
+  group: string;
+};
+
+type StandardEditModalState = {
+  opened: boolean;
+  rowId: string;
+  label: string;
+  description: string;
+  type: string;
+  revision: string;
+};
+
+type NdtMethodEditModalState = {
+  opened: boolean;
+  rowId: string;
+  code: string;
+  label: string;
+  description: string;
+  standardId: string;
+};
+
+type ProcessEditModalState = {
+  opened: boolean;
+  rowId: string;
+  code: string;
+  label: string;
+};
+
+type JointTypeEditModalState = {
+  opened: boolean;
+  rowId: string;
+  label: string;
+};
+
+const FM_GROUPS_MODAL_INITIAL_STATE: FmGroupsModalState = {
+  opened: false,
+  standardId: "",
+  standardLabel: "",
+};
+
+const FM_GROUP_EDIT_MODAL_INITIAL_STATE: FmGroupEditModalState = {
+  opened: false,
+  rowId: "",
+  label: "",
+};
+
+const MATERIAL_EDIT_MODAL_INITIAL_STATE: MaterialEditModalState = {
+  opened: false,
+  rowId: "",
+  name: "",
+  code: "",
+  group: "",
+};
+
+const STANDARD_EDIT_MODAL_INITIAL_STATE: StandardEditModalState = {
+  opened: false,
+  rowId: "",
+  label: "",
+  description: "",
+  type: "",
+  revision: "",
+};
+
+const NDT_METHOD_EDIT_MODAL_INITIAL_STATE: NdtMethodEditModalState = {
+  opened: false,
+  rowId: "",
+  code: "",
+  label: "",
+  description: "",
+  standardId: "",
+};
+
+const PROCESS_EDIT_MODAL_INITIAL_STATE: ProcessEditModalState = {
+  opened: false,
+  rowId: "",
+  code: "",
+  label: "",
+};
+
+const JOINT_TYPE_EDIT_MODAL_INITIAL_STATE: JointTypeEditModalState = {
+  opened: false,
+  rowId: "",
+  label: "",
 };
 
 export function CompanySettingsWeldingPage() {
@@ -166,18 +240,37 @@ export function CompanySettingsWeldingPage() {
 
   const [jointTypeLabel, setJointTypeLabel] = useState("");
   const [addingJointType, setAddingJointType] = useState(false);
-
-  const modalMountRef = useRef<HTMLDivElement | null>(null);
-  const modalControllerRef = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    modalControllerRef.current = controller;
-    return () => {
-      controller.abort();
-      modalControllerRef.current = null;
-    };
-  }, []);
+  const [materialEditModal, setMaterialEditModal] = useState<MaterialEditModalState>(
+    MATERIAL_EDIT_MODAL_INITIAL_STATE
+  );
+  const [materialEditSaving, setMaterialEditSaving] = useState(false);
+  const [standardEditModal, setStandardEditModal] = useState<StandardEditModalState>(
+    STANDARD_EDIT_MODAL_INITIAL_STATE
+  );
+  const [standardEditSaving, setStandardEditSaving] = useState(false);
+  const [fmGroupsModal, setFmGroupsModal] = useState<FmGroupsModalState>(FM_GROUPS_MODAL_INITIAL_STATE);
+  const [fmGroupsRows, setFmGroupsRows] = useState<StandardFmGroupRow[]>([]);
+  const [fmGroupsLoading, setFmGroupsLoading] = useState(false);
+  const [fmGroupsError, setFmGroupsError] = useState<string | null>(null);
+  const [fmGroupInput, setFmGroupInput] = useState("");
+  const [fmGroupSaving, setFmGroupSaving] = useState(false);
+  const [fmGroupEditModal, setFmGroupEditModal] = useState<FmGroupEditModalState>(
+    FM_GROUP_EDIT_MODAL_INITIAL_STATE
+  );
+  const [fmGroupEditSaving, setFmGroupEditSaving] = useState(false);
+  const [ndtMethodEditModal, setNdtMethodEditModal] = useState<NdtMethodEditModalState>(
+    NDT_METHOD_EDIT_MODAL_INITIAL_STATE
+  );
+  const [ndtMethodEditSaving, setNdtMethodEditSaving] = useState(false);
+  const [processEditModal, setProcessEditModal] = useState<ProcessEditModalState>(
+    PROCESS_EDIT_MODAL_INITIAL_STATE
+  );
+  const [processEditSaving, setProcessEditSaving] = useState(false);
+  const [jointTypeEditModal, setJointTypeEditModal] = useState<JointTypeEditModalState>(
+    JOINT_TYPE_EDIT_MODAL_INITIAL_STATE
+  );
+  const [jointTypeEditSaving, setJointTypeEditSaving] = useState(false);
+  const { confirmDelete, deleteConfirmModal } = useDeleteConfirmModal();
 
   const isRefreshing = useMemo(
     () =>
@@ -198,172 +291,174 @@ export function CompanySettingsWeldingPage() {
     [standards.rows]
   );
 
-  const renderNdtStandardOptions = useCallback(
-    (selected?: string | null) => {
-      const options = [`<option value="">Standard (valgfritt)...</option>`];
-      for (const option of standardOptions) {
-        const isSelected = selected && selected === option.id;
-        options.push(
-          `<option value="${esc(option.id)}" ${isSelected ? "selected" : ""}>${esc(option.label)}</option>`
-        );
-      }
-      if (selected && !standardOptions.some((option) => option.id === selected)) {
-        options.push(`<option value="${esc(selected)}" selected>${esc(selected)}</option>`);
-      }
-      return options.join("");
-    },
-    [standardOptions]
+  const revisionYearOptions = useMemo(
+    () => Array.from({ length: 31 }, (_, i) => String(new Date().getFullYear() - i)),
+    []
   );
 
-  const confirmDelete = useCallback(({ title, messageHtml, onConfirm, onDone }: ConfirmDeleteArgs) => {
-    const mount = modalMountRef.current;
-    const signal = modalControllerRef.current?.signal;
-    if (!mount || !signal) return;
-    void openConfirmDelete(mount, signal, { title, messageHtml, onConfirm, onDone });
+  const standardTypeOptions = useMemo(() => {
+    const base = STANDARD_TYPES.map((type) => ({ value: type, label: type }));
+    if (!standardEditModal.type || STANDARD_TYPES.includes(standardEditModal.type as (typeof STANDARD_TYPES)[number])) {
+      return [{ value: "", label: "Velg type..." }, ...base];
+    }
+    return [{ value: "", label: "Velg type..." }, ...base, { value: standardEditModal.type, label: standardEditModal.type }];
+  }, [standardEditModal.type]);
+
+  const standardRevisionOptions = useMemo(() => {
+    const base = revisionYearOptions.map((year) => ({ value: year, label: year }));
+    if (!standardEditModal.revision || revisionYearOptions.includes(standardEditModal.revision)) {
+      return [{ value: "", label: "Ingen revisjon" }, ...base];
+    }
+    return [
+      { value: "", label: "Ingen revisjon" },
+      ...base,
+      { value: standardEditModal.revision, label: standardEditModal.revision },
+    ];
+  }, [revisionYearOptions, standardEditModal.revision]);
+
+  const ndtModalStandardOptions = useMemo(() => {
+    const base = standardOptions.map((option) => ({
+      value: option.id,
+      label: option.label,
+    }));
+    if (!ndtMethodEditModal.standardId || standardOptions.some((option) => option.id === ndtMethodEditModal.standardId)) {
+      return [{ value: "", label: "Standard (valgfritt)" }, ...base];
+    }
+    return [
+      { value: "", label: "Standard (valgfritt)" },
+      ...base,
+      { value: ndtMethodEditModal.standardId, label: ndtMethodEditModal.standardId },
+    ];
+  }, [ndtMethodEditModal.standardId, standardOptions]);
+
+
+  const closeFmGroupsModal = useCallback(() => {
+    setFmGroupsModal(FM_GROUPS_MODAL_INITIAL_STATE);
+    setFmGroupsRows([]);
+    setFmGroupsError(null);
+    setFmGroupsLoading(false);
+    setFmGroupInput("");
+    setFmGroupSaving(false);
+    setFmGroupEditModal(FM_GROUP_EDIT_MODAL_INITIAL_STATE);
+    setFmGroupEditSaving(false);
   }, []);
 
-  const openFmGroupsModal = useCallback(async (standard: StandardRow) => {
-    const mount = modalMountRef.current;
-    const signal = modalControllerRef.current?.signal;
-    if (!mount || !signal) return;
+  const loadFmGroups = useCallback(async (standardId: string) => {
+    setFmGroupsLoading(true);
+    setFmGroupsError(null);
 
-    const modalHtml = renderModal(
-      `FM-grupper - ${esc(standard.label)}`,
-      `
-        <div class="settings-form">
-          <div class="settings-row inline">
-            <input data-fm-input class="input" type="text" placeholder="Ny FM-gruppe..." />
-            <button data-fm-add class="btn primary small" type="button">Legg til</button>
-          </div>
-          <div data-fm-list class="settings-list"><div class="muted">Laster...</div></div>
-        </div>
-      `,
-      "Ferdig"
-    );
+    try {
+      const rows = await fetchStandardFmGroups(standardId);
+      setFmGroupsRows(rows);
+    } catch (err) {
+      console.error(err);
+      setFmGroupsRows([]);
+      setFmGroupsError(readErrorMessage(err, "Kunne ikke hente FM-grupper."));
+    } finally {
+      setFmGroupsLoading(false);
+    }
+  }, []);
 
-    const handle = openModal(mount, modalHtml, signal);
-    const listEl = handle.root.querySelector<HTMLDivElement>("[data-fm-list]");
-    const inputEl = handle.root.querySelector<HTMLInputElement>("[data-fm-input]");
-    const addBtn = handle.root.querySelector<HTMLButtonElement>("[data-fm-add]");
-    if (!listEl || !inputEl || !addBtn) return;
+  const openFmGroupsModal = useCallback(
+    (standard: StandardRow) => {
+      setFmGroupsModal({
+        opened: true,
+        standardId: standard.id,
+        standardLabel: standard.label,
+      });
+      setFmGroupsRows([]);
+      setFmGroupsError(null);
+      setFmGroupInput("");
+      void loadFmGroups(standard.id);
+    },
+    [loadFmGroups]
+  );
 
-    const doneBtn = modalSaveButton(handle.root);
-    doneBtn.addEventListener("click", () => handle.close(), { signal });
+  const addFmGroup = useCallback(async () => {
+    const label = fmGroupInput.trim();
+    const standardId = fmGroupsModal.standardId;
 
-    const renderRows = (rows: StandardFmGroupRow[]) => {
-      if (rows.length === 0) {
-        listEl.innerHTML = `<div class="muted">Ingen FM-grupper.</div>`;
+    if (!standardId) return;
+    if (!label) {
+      toast("Skriv inn FM-gruppe.");
+      return;
+    }
+
+    try {
+      setFmGroupSaving(true);
+      await createStandardFmGroup({ standard_id: standardId, label });
+      setFmGroupInput("");
+      await Promise.all([loadFmGroups(standardId), reloadStandards()]);
+      toast("FM-gruppe lagt til.");
+    } catch (err) {
+      console.error(err);
+      toast(readErrorMessage(err, "Kunne ikke legge til FM-gruppe."));
+    } finally {
+      setFmGroupSaving(false);
+    }
+  }, [fmGroupInput, fmGroupsModal.standardId, loadFmGroups, reloadStandards]);
+
+  const openFmGroupEditModal = useCallback((row: StandardFmGroupRow) => {
+    setFmGroupEditModal({
+      opened: true,
+      rowId: row.id,
+      label: row.label,
+    });
+  }, []);
+
+  const closeFmGroupEditModal = useCallback(() => {
+    setFmGroupEditModal(FM_GROUP_EDIT_MODAL_INITIAL_STATE);
+    setFmGroupEditSaving(false);
+  }, []);
+
+  const submitFmGroupEditModal = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const label = fmGroupEditModal.label.trim();
+      const rowId = fmGroupEditModal.rowId;
+      const standardId = fmGroupsModal.standardId;
+
+      if (!standardId || !rowId) return;
+      if (!label) {
+        toast("Skriv inn FM-gruppe.");
         return;
       }
 
-      listEl.innerHTML = rows
-        .map(
-          (row) => `
-            <div class="settings-item" data-fm-id="${esc(row.id)}">
-              <div class="settings-item__title">${esc(row.label)}</div>
-              <div class="settings-item__meta"></div>
-              <div class="settings-item__actions">
-                <button class="iconbtn small" type="button" data-fm-edit title="Endre" aria-label="Endre">
-                  <svg viewBox="0 0 24 24" class="svgicon" aria-hidden="true">
-                    <path fill="currentColor" d="M16.862 3.487a2.25 2.25 0 0 1 3.182 3.182L8.25 18.463 3 19.5l1.037-5.25L16.862 3.487zM5.39 17.11l2.872-.566L18.98 5.826l-2.306-2.306L5.956 14.238l-.566 2.872z"/>
-                  </svg>
-                </button>
-                <button class="iconbtn small danger" type="button" data-fm-delete title="Slett" aria-label="Slett">
-                  <svg viewBox="0 0 24 24" class="svgicon" aria-hidden="true">
-                    <path fill="currentColor" d="M9 3a1 1 0 0 0-1 1v1H5.5a1 1 0 1 0 0 2H6v13a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7h.5a1 1 0 1 0 0-2H16V4a1 1 0 0 0-1-1H9zm1 2h4V4h-4v1zm-1 5a1 1 0 0 1 1 1v8a1 1 0 1 1-2 0v-8a1 1 0 0 1 1-1zm6 0a1 1 0 0 1 1 1v8a1 1 0 1 1-2 0v-8a1 1 0 0 1 1-1z"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          `
-        )
-        .join("");
-    };
-
-    const loadRows = async () => {
-      listEl.innerHTML = `<div class="muted">Laster...</div>`;
       try {
-        const rows = await fetchStandardFmGroups(standard.id);
-        renderRows(rows);
+        setFmGroupEditSaving(true);
+        await updateStandardFmGroup(rowId, { label });
+        closeFmGroupEditModal();
+        await Promise.all([loadFmGroups(standardId), reloadStandards()]);
+        toast("Oppdatert.");
       } catch (err) {
-        listEl.innerHTML = `<div class="err">Feil: ${esc(readErrorMessage(err, "Kunne ikke hente FM-grupper."))}</div>`;
+        console.error(err);
+        toast(readErrorMessage(err, "Kunne ikke oppdatere FM-gruppe."));
+      } finally {
+        setFmGroupEditSaving(false);
       }
-    };
+    },
+    [closeFmGroupEditModal, fmGroupEditModal.label, fmGroupEditModal.rowId, fmGroupsModal.standardId, loadFmGroups, reloadStandards]
+  );
 
-    addBtn.addEventListener(
-      "click",
-      async () => {
-        const label = inputEl.value.trim();
-        if (!label) {
-          toast("Skriv inn FM-gruppe.");
-          return;
-        }
+  const deleteFmGroupRow = useCallback(
+    (row: StandardFmGroupRow) => {
+      const standardId = fmGroupsModal.standardId;
+      if (!standardId) return;
 
-        try {
-          addBtn.disabled = true;
-          await createStandardFmGroup({ standard_id: standard.id, label });
-          inputEl.value = "";
-          await loadRows();
-          toast("FM-gruppe lagt til.");
-        } catch (err) {
-          console.error(err);
-          toast(readErrorMessage(err, "Kunne ikke legge til FM-gruppe."));
-        } finally {
-          addBtn.disabled = false;
-        }
-      },
-      { signal }
-    );
-
-    listEl.addEventListener(
-      "click",
-      async (event: MouseEvent) => {
-        const target = event.target as HTMLElement | null;
-        if (!target) return;
-
-        const item = target.closest<HTMLElement>("[data-fm-id]");
-        if (!item) return;
-
-        const id = item.getAttribute("data-fm-id") ?? "";
-        if (!id) return;
-
-        if (target.closest("[data-fm-delete]")) {
-          const title = item.querySelector(".settings-item__title")?.textContent?.trim() ?? "FM-gruppen";
-          const confirmed = window.confirm(`Slette ${title}?`);
-          if (!confirmed) return;
-
-          try {
-            await deleteStandardFmGroup(id);
-            await loadRows();
-            toast("FM-gruppe slettet.");
-          } catch (err) {
-            console.error(err);
-            toast(readErrorMessage(err, "Kunne ikke slette FM-gruppe."));
-          }
-          return;
-        }
-
-        if (target.closest("[data-fm-edit]")) {
-          const current = item.querySelector(".settings-item__title")?.textContent?.trim() ?? "";
-          const next = window.prompt("Endre FM-gruppe", current) ?? "";
-          const label = next.trim();
-          if (!label || label === current) return;
-
-          try {
-            await updateStandardFmGroup(id, { label });
-            await loadRows();
-            toast("Oppdatert.");
-          } catch (err) {
-            console.error(err);
-            toast(readErrorMessage(err, "Kunne ikke oppdatere FM-gruppe."));
-          }
-        }
-      },
-      { signal }
-    );
-
-    await loadRows();
-  }, []);
+      confirmDelete({
+        title: "Slett FM-gruppe",
+        messageHtml: `Er du sikker pa at du vil slette <b>${esc(row.label)}</b>?`,
+        onConfirm: async () => {
+          await deleteStandardFmGroup(row.id);
+        },
+        onDone: async () => {
+          await Promise.all([loadFmGroups(standardId), reloadStandards()]);
+          toast("FM-gruppe slettet.");
+        },
+      });
+    },
+    [confirmDelete, fmGroupsModal.standardId, loadFmGroups, reloadStandards]
+  );
 
   const addMaterial = async () => {
     const name = materialName.trim();
@@ -397,74 +492,54 @@ export function CompanySettingsWeldingPage() {
 
   const openMaterialEditModal = useCallback(
     (row: MaterialRow) => {
-      const mount = modalMountRef.current;
-      const signal = modalControllerRef.current?.signal;
-      if (!mount || !signal) return;
-
-      const modalHtml = renderModal(
-        "Endre materiale",
-        `
-          <div class="modalgrid">
-            <div class="field" style="grid-column:1 / -1;">
-              <label>Materialnavn</label>
-              <input data-f="name" class="input" type="text" value="${esc(row.name)}" />
-            </div>
-            <div class="field">
-              <label>Materialkode</label>
-              <input data-f="code" class="input" type="text" value="${esc(row.material_code)}" />
-            </div>
-            <div class="field">
-              <label>Materialgruppe</label>
-              <input data-f="group" class="input" type="text" value="${esc(row.material_group)}" />
-            </div>
-          </div>
-        `,
-        "Lagre"
-      );
-
-      const handle = openModal(mount, modalHtml, signal);
-      const save = modalSaveButton(handle.root);
-
-      save.addEventListener(
-        "click",
-        async () => {
-          try {
-            save.disabled = true;
-            save.textContent = "Lagrer...";
-
-            const nextName =
-              handle.root.querySelector<HTMLInputElement>("[data-f=name]")?.value.trim() ?? "";
-            const nextCode =
-              handle.root.querySelector<HTMLInputElement>("[data-f=code]")?.value.trim() ?? "";
-            const nextGroup =
-              handle.root.querySelector<HTMLInputElement>("[data-f=group]")?.value.trim() ?? "";
-
-            if (!nextName || !nextCode || !nextGroup) {
-              toast("Fyll inn navn, kode og gruppe.");
-              return;
-            }
-
-            await updateMaterial(row.id, {
-              name: nextName,
-              material_code: nextCode,
-              material_group: nextGroup,
-            });
-
-            handle.close();
-            await reloadMaterials();
-            toast("Oppdatert.");
-          } catch (err) {
-            console.error(err);
-            toast(readErrorMessage(err, "Kunne ikke oppdatere materiale."));
-          } finally {
-            save.disabled = false;
-            save.textContent = "Lagre";
-          }
-        },
-        { signal }
-      );
+      setMaterialEditModal({
+        opened: true,
+        rowId: row.id,
+        name: row.name,
+        code: row.material_code,
+        group: row.material_group,
+      });
     },
-    [reloadMaterials]
+    []
+  );
+
+  const closeMaterialEditModal = useCallback(() => {
+    setMaterialEditModal(MATERIAL_EDIT_MODAL_INITIAL_STATE);
+    setMaterialEditSaving(false);
+  }, []);
+
+  const submitMaterialEditModal = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const nextName = materialEditModal.name.trim();
+      const nextCode = materialEditModal.code.trim();
+      const nextGroup = materialEditModal.group.trim();
+
+      if (!materialEditModal.rowId) return;
+      if (!nextName || !nextCode || !nextGroup) {
+        toast("Fyll inn navn, kode og gruppe.");
+        return;
+      }
+
+      try {
+        setMaterialEditSaving(true);
+        await updateMaterial(materialEditModal.rowId, {
+          name: nextName,
+          material_code: nextCode,
+          material_group: nextGroup,
+        });
+
+        closeMaterialEditModal();
+        await reloadMaterials();
+        toast("Oppdatert.");
+      } catch (err) {
+        console.error(err);
+        toast(readErrorMessage(err, "Kunne ikke oppdatere materiale."));
+      } finally {
+        setMaterialEditSaving(false);
+      }
+    },
+    [closeMaterialEditModal, materialEditModal.code, materialEditModal.group, materialEditModal.name, materialEditModal.rowId, reloadMaterials]
   );
 
   const deleteMaterialRow = useCallback(
@@ -482,7 +557,7 @@ export function CompanySettingsWeldingPage() {
 
         confirmDelete({
           title: "Slett materiale",
-          messageHtml: `Er du sikker pa at du vil slette <b>${esc(materialLabel(row))}</b>?`,
+          messageHtml: `Er du sikker på at du vil slette <b>${esc(materialLabel(row))}</b>?`,
           onConfirm: async () => {
             await deleteMaterial(row.id);
           },
@@ -535,82 +610,58 @@ export function CompanySettingsWeldingPage() {
 
   const openStandardEditModal = useCallback(
     (row: StandardRow) => {
-      const mount = modalMountRef.current;
-      const signal = modalControllerRef.current?.signal;
-      if (!mount || !signal) return;
-
-      const modalHtml = renderModal(
-        "Endre standard",
-        `
-          <div class="modalgrid">
-            <div class="field" style="grid-column:1 / -1;">
-              <label>Standardnavn</label>
-              <input data-f="label" class="input" type="text" value="${esc(row.label)}" />
-            </div>
-            <div class="field" style="grid-column:1 / -1;">
-              <label>Beskrivelse</label>
-              <input data-f="description" class="input" type="text" value="${esc(row.description ?? "")}" />
-            </div>
-            <div class="field" style="grid-column:1 / -1;">
-              <label>Type</label>
-              <select data-f="type" class="select">${renderStandardTypeOptions(row.type ?? null)}</select>
-            </div>
-            <div class="field" style="grid-column:1 / -1;">
-              <label>Revisjon</label>
-              <select data-f="revision" class="select">${renderRevisionOptions(row.revision ?? null)}</select>
-            </div>
-          </div>
-        `,
-        "Lagre"
-      );
-
-      const handle = openModal(mount, modalHtml, signal);
-      const save = modalSaveButton(handle.root);
-
-      save.addEventListener(
-        "click",
-        async () => {
-          try {
-            save.disabled = true;
-            save.textContent = "Lagrer...";
-
-            const nextLabel =
-              handle.root.querySelector<HTMLInputElement>("[data-f=label]")?.value.trim() ?? "";
-            const nextDescription =
-              handle.root.querySelector<HTMLInputElement>("[data-f=description]")?.value.trim() ?? "";
-            const nextType =
-              handle.root.querySelector<HTMLSelectElement>("[data-f=type]")?.value.trim() ?? "";
-            const revisionRaw =
-              handle.root.querySelector<HTMLSelectElement>("[data-f=revision]")?.value.trim() ?? "";
-            const revision = revisionRaw ? Number.parseInt(revisionRaw, 10) : null;
-
-            if (!nextLabel) {
-              toast("Fyll inn navn.");
-              return;
-            }
-
-            await updateStandard(row.id, {
-              label: nextLabel,
-              description: nextDescription || null,
-              type: nextType || null,
-              revision: revision && Number.isFinite(revision) ? revision : null,
-            });
-
-            handle.close();
-            await reloadStandards();
-            toast("Oppdatert.");
-          } catch (err) {
-            console.error(err);
-            toast(readErrorMessage(err, "Kunne ikke oppdatere standard."));
-          } finally {
-            save.disabled = false;
-            save.textContent = "Lagre";
-          }
-        },
-        { signal }
-      );
+      setStandardEditModal({
+        opened: true,
+        rowId: row.id,
+        label: row.label,
+        description: row.description ?? "",
+        type: row.type ?? "",
+        revision: row.revision != null ? String(row.revision) : "",
+      });
     },
-    [reloadStandards]
+    []
+  );
+
+  const closeStandardEditModal = useCallback(() => {
+    setStandardEditModal(STANDARD_EDIT_MODAL_INITIAL_STATE);
+    setStandardEditSaving(false);
+  }, []);
+
+  const submitStandardEditModal = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const nextLabel = standardEditModal.label.trim();
+      const nextDescription = standardEditModal.description.trim();
+      const nextType = standardEditModal.type.trim();
+      const revisionRaw = standardEditModal.revision.trim();
+      const revision = revisionRaw ? Number.parseInt(revisionRaw, 10) : null;
+
+      if (!standardEditModal.rowId) return;
+      if (!nextLabel) {
+        toast("Fyll inn navn.");
+        return;
+      }
+
+      try {
+        setStandardEditSaving(true);
+        await updateStandard(standardEditModal.rowId, {
+          label: nextLabel,
+          description: nextDescription || null,
+          type: nextType || null,
+          revision: revision && Number.isFinite(revision) ? revision : null,
+        });
+
+        closeStandardEditModal();
+        await reloadStandards();
+        toast("Oppdatert.");
+      } catch (err) {
+        console.error(err);
+        toast(readErrorMessage(err, "Kunne ikke oppdatere standard."));
+      } finally {
+        setStandardEditSaving(false);
+      }
+    },
+    [closeStandardEditModal, reloadStandards, standardEditModal.description, standardEditModal.label, standardEditModal.revision, standardEditModal.rowId, standardEditModal.type]
   );
 
   const deleteStandardRow = useCallback(
@@ -642,11 +693,10 @@ export function CompanySettingsWeldingPage() {
   );
 
   const openStandardFmModal = useCallback(
-    async (row: StandardRow) => {
-      await openFmGroupsModal(row);
-      await reloadStandards();
+    (row: StandardRow) => {
+      openFmGroupsModal(row);
     },
-    [openFmGroupsModal, reloadStandards]
+    [openFmGroupsModal]
   );
 
   const addNdtMethod = async () => {
@@ -684,83 +734,57 @@ export function CompanySettingsWeldingPage() {
 
   const openNdtMethodEditModal = useCallback(
     (row: NdtMethodRow) => {
-      const mount = modalMountRef.current;
-      const signal = modalControllerRef.current?.signal;
-      if (!mount || !signal) return;
-
-      const modalHtml = renderModal(
-        "Endre NDT-metode",
-        `
-          <div class="modalgrid">
-            <div class="field">
-              <label>Kode</label>
-              <input data-f="code" class="input" type="text" value="${esc(row.code)}" />
-            </div>
-            <div class="field">
-              <label>Navn</label>
-              <input data-f="label" class="input" type="text" value="${esc(row.label)}" />
-            </div>
-            <div class="field" style="grid-column:1 / -1;">
-              <label>Beskrivelse</label>
-              <input data-f="description" class="input" type="text" value="${esc(row.description ?? "")}" />
-            </div>
-            <div class="field" style="grid-column:1 / -1;">
-              <label>Standard (valgfritt)</label>
-              <select data-f="standard_id" class="select">
-                ${renderNdtStandardOptions(row.standard_id ?? null)}
-              </select>
-            </div>
-          </div>
-        `,
-        "Lagre"
-      );
-
-      const handle = openModal(mount, modalHtml, signal);
-      const save = modalSaveButton(handle.root);
-
-      save.addEventListener(
-        "click",
-        async () => {
-          try {
-            save.disabled = true;
-            save.textContent = "Lagrer...";
-
-            const code =
-              handle.root.querySelector<HTMLInputElement>("[data-f=code]")?.value.trim().toUpperCase() ?? "";
-            const label =
-              handle.root.querySelector<HTMLInputElement>("[data-f=label]")?.value.trim() ?? "";
-            const description =
-              handle.root.querySelector<HTMLInputElement>("[data-f=description]")?.value.trim() ?? "";
-            const standardId =
-              handle.root.querySelector<HTMLSelectElement>("[data-f=standard_id]")?.value.trim() || null;
-
-            if (!code || !label) {
-              toast("Fyll inn kode og navn.");
-              return;
-            }
-
-            await updateNdtMethod(row.id, {
-              code,
-              label,
-              description: description || null,
-              standard_id: standardId,
-            });
-
-            handle.close();
-            await reloadNdtMethods();
-            toast("Oppdatert.");
-          } catch (err) {
-            console.error(err);
-            toast(readErrorMessage(err, "Kunne ikke oppdatere NDT-metode."));
-          } finally {
-            save.disabled = false;
-            save.textContent = "Lagre";
-          }
-        },
-        { signal }
-      );
+      setNdtMethodEditModal({
+        opened: true,
+        rowId: row.id,
+        code: row.code,
+        label: row.label,
+        description: row.description ?? "",
+        standardId: row.standard_id ?? "",
+      });
     },
-    [reloadNdtMethods, renderNdtStandardOptions]
+    []
+  );
+
+  const closeNdtMethodEditModal = useCallback(() => {
+    setNdtMethodEditModal(NDT_METHOD_EDIT_MODAL_INITIAL_STATE);
+    setNdtMethodEditSaving(false);
+  }, []);
+
+  const submitNdtMethodEditModal = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const code = ndtMethodEditModal.code.trim().toUpperCase();
+      const label = ndtMethodEditModal.label.trim();
+      const description = ndtMethodEditModal.description.trim();
+      const standardId = ndtMethodEditModal.standardId.trim() || null;
+
+      if (!ndtMethodEditModal.rowId) return;
+      if (!code || !label) {
+        toast("Fyll inn kode og navn.");
+        return;
+      }
+
+      try {
+        setNdtMethodEditSaving(true);
+        await updateNdtMethod(ndtMethodEditModal.rowId, {
+          code,
+          label,
+          description: description || null,
+          standard_id: standardId,
+        });
+
+        closeNdtMethodEditModal();
+        await reloadNdtMethods();
+        toast("Oppdatert.");
+      } catch (err) {
+        console.error(err);
+        toast(readErrorMessage(err, "Kunne ikke oppdatere NDT-metode."));
+      } finally {
+        setNdtMethodEditSaving(false);
+      }
+    },
+    [closeNdtMethodEditModal, ndtMethodEditModal.code, ndtMethodEditModal.description, ndtMethodEditModal.label, ndtMethodEditModal.rowId, ndtMethodEditModal.standardId, reloadNdtMethods]
   );
 
   const deleteNdtMethodRow = useCallback(
@@ -820,67 +844,51 @@ export function CompanySettingsWeldingPage() {
 
   const openProcessEditModal = useCallback(
     (row: WeldingProcessRow) => {
-      const mount = modalMountRef.current;
-      const signal = modalControllerRef.current?.signal;
-      if (!mount || !signal) return;
-
-      const modalHtml = renderModal(
-        "Endre sveiseprosess",
-        `
-          <div class="modalgrid">
-            <div class="field">
-              <label>Kode</label>
-              <input data-f="code" class="input" type="text" value="${esc(String(row.code ?? ""))}" />
-            </div>
-            <div class="field">
-              <label>Beskrivelse</label>
-              <input data-f="label" class="input" type="text" value="${esc(row.label)}" />
-            </div>
-          </div>
-        `,
-        "Lagre"
-      );
-
-      const handle = openModal(mount, modalHtml, signal);
-      const save = modalSaveButton(handle.root);
-
-      save.addEventListener(
-        "click",
-        async () => {
-          try {
-            save.disabled = true;
-            save.textContent = "Lagrer...";
-
-            const code =
-              handle.root.querySelector<HTMLInputElement>("[data-f=code]")?.value.trim() ?? "";
-            const label =
-              handle.root.querySelector<HTMLInputElement>("[data-f=label]")?.value.trim() ?? "";
-
-            if (!code || !label) {
-              toast("Fyll inn kode og beskrivelse.");
-              return;
-            }
-            if (!PROCESS_CODE_PATTERN.test(code)) {
-              toast("Kode ma vare 2-4 siffer.");
-              return;
-            }
-
-            await updateWeldingProcess(row.id, { code, label });
-            handle.close();
-            await reloadProcesses();
-            toast("Oppdatert.");
-          } catch (err) {
-            console.error(err);
-            toast(readErrorMessage(err, "Kunne ikke oppdatere sveiseprosess."));
-          } finally {
-            save.disabled = false;
-            save.textContent = "Lagre";
-          }
-        },
-        { signal }
-      );
+      setProcessEditModal({
+        opened: true,
+        rowId: row.id,
+        code: String(row.code ?? ""),
+        label: row.label,
+      });
     },
-    [reloadProcesses]
+    []
+  );
+
+  const closeProcessEditModal = useCallback(() => {
+    setProcessEditModal(PROCESS_EDIT_MODAL_INITIAL_STATE);
+    setProcessEditSaving(false);
+  }, []);
+
+  const submitProcessEditModal = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const code = processEditModal.code.trim();
+      const label = processEditModal.label.trim();
+
+      if (!processEditModal.rowId) return;
+      if (!code || !label) {
+        toast("Fyll inn kode og beskrivelse.");
+        return;
+      }
+      if (!PROCESS_CODE_PATTERN.test(code)) {
+        toast("Kode ma vare 2-4 siffer.");
+        return;
+      }
+
+      try {
+        setProcessEditSaving(true);
+        await updateWeldingProcess(processEditModal.rowId, { code, label });
+        closeProcessEditModal();
+        await reloadProcesses();
+        toast("Oppdatert.");
+      } catch (err) {
+        console.error(err);
+        toast(readErrorMessage(err, "Kunne ikke oppdatere sveiseprosess."));
+      } finally {
+        setProcessEditSaving(false);
+      }
+    },
+    [closeProcessEditModal, processEditModal.code, processEditModal.label, processEditModal.rowId, reloadProcesses]
   );
 
   const deleteProcessRow = useCallback(
@@ -928,56 +936,45 @@ export function CompanySettingsWeldingPage() {
 
   const openJointTypeEditModal = useCallback(
     (row: WeldJointTypeRow) => {
-      const mount = modalMountRef.current;
-      const signal = modalControllerRef.current?.signal;
-      if (!mount || !signal) return;
-
-      const modalHtml = renderModal(
-        "Endre sveisefuge",
-        `
-          <div class="modalgrid">
-            <div class="field" style="grid-column:1 / -1;">
-              <label>Fugetype</label>
-              <input data-f="label" class="input" type="text" value="${esc(row.label)}" />
-            </div>
-          </div>
-        `,
-        "Lagre"
-      );
-
-      const handle = openModal(mount, modalHtml, signal);
-      const save = modalSaveButton(handle.root);
-
-      save.addEventListener(
-        "click",
-        async () => {
-          try {
-            save.disabled = true;
-            save.textContent = "Lagrer...";
-
-            const label =
-              handle.root.querySelector<HTMLInputElement>("[data-f=label]")?.value.trim().toUpperCase() ?? "";
-            if (!label) {
-              toast("Skriv inn fugetype.");
-              return;
-            }
-
-            await updateWeldJointType(row.id, label);
-            handle.close();
-            await reloadJointTypes();
-            toast("Oppdatert.");
-          } catch (err) {
-            console.error(err);
-            toast(readErrorMessage(err, "Kunne ikke oppdatere sveisefuge."));
-          } finally {
-            save.disabled = false;
-            save.textContent = "Lagre";
-          }
-        },
-        { signal }
-      );
+      setJointTypeEditModal({
+        opened: true,
+        rowId: row.id,
+        label: row.label,
+      });
     },
-    [reloadJointTypes]
+    []
+  );
+
+  const closeJointTypeEditModal = useCallback(() => {
+    setJointTypeEditModal(JOINT_TYPE_EDIT_MODAL_INITIAL_STATE);
+    setJointTypeEditSaving(false);
+  }, []);
+
+  const submitJointTypeEditModal = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const label = jointTypeEditModal.label.trim().toUpperCase();
+
+      if (!jointTypeEditModal.rowId) return;
+      if (!label) {
+        toast("Skriv inn fugetype.");
+        return;
+      }
+
+      try {
+        setJointTypeEditSaving(true);
+        await updateWeldJointType(jointTypeEditModal.rowId, label);
+        closeJointTypeEditModal();
+        await reloadJointTypes();
+        toast("Oppdatert.");
+      } catch (err) {
+        console.error(err);
+        toast(readErrorMessage(err, "Kunne ikke oppdatere sveisefuge."));
+      } finally {
+        setJointTypeEditSaving(false);
+      }
+    },
+    [closeJointTypeEditModal, jointTypeEditModal.label, jointTypeEditModal.rowId, reloadJointTypes]
   );
 
   const deleteJointTypeRow = useCallback(
@@ -1013,437 +1010,642 @@ export function CompanySettingsWeldingPage() {
 
   if (!isAdmin) {
     return (
-      <div className="shell page-company-settings">
-        <AppHeader displayName={displayName} email={email} />
-        <main className="main">
+      <AppPageLayout pageClassName="page-company-settings" displayName={displayName} email={email}>
           <CompanySettingsHeader
             title="App-parametere - Teknisk / Sveising"
             subtitle="Kun admin har tilgang."
             backTo="/settings/company"
             backLabel="<- App-parametere"
           />
-          <div className="muted" style={{ padding: 16 }}>
+          <div className="muted app-muted-block">
             Kun admin har tilgang.
           </div>
-        </main>
-        <AppFooter />
-      </div>
+      </AppPageLayout>
     );
   }
 
   return (
-    <div className="shell page-company-settings">
-      <AppHeader displayName={displayName} email={email} />
-
-      <main className="main">
-        <CompanySettingsHeader
+    <AppPageLayout pageClassName="page-company-settings" displayName={displayName} email={email}>
+      <CompanySettingsHeader
           title="App-parametere - Teknisk / Sveising"
           subtitle="Materialer, standarder, NDT-metoder, sveiseprosesser og sveisefuger."
           backTo="/settings/company"
           backLabel="<- App-parametere"
           actions={
-            <button className="btn small" type="button" disabled={isRefreshing} onClick={() => void reloadAll()}>
-              Oppdater
-            </button>
+            <AppRefreshIconButton
+              onClick={() => void reloadAll()}
+              disabled={isRefreshing}
+              loading={isRefreshing}
+            />
           }
         />
 
-        <section className="section-grid">
-          <WeldingCollapsiblePanel title="Materialer" meta="Admin">
-            <div className="settings-form">
-              <div className="settings-row inline">
-                <div className="settings-inputs">
-                  <input
-                    className="input"
-                    type="text"
-                    placeholder="Materialnavn..."
-                    value={materialName}
-                    onChange={(event) => setMaterialName(event.target.value)}
-                  />
-                  <input
-                    className="input"
-                    type="text"
-                    placeholder="Materialkode..."
-                    value={materialCode}
-                    onChange={(event) => setMaterialCode(event.target.value)}
-                  />
-                  <input
-                    className="input"
-                    type="text"
-                    placeholder="Materialgruppe..."
-                    value={materialGroup}
-                    onChange={(event) => setMaterialGroup(event.target.value)}
-                  />
-                </div>
-                <button className="btn primary small" type="button" disabled={addingMaterial} onClick={() => void addMaterial()}>
+        <Stack gap="md">
+          <WeldingAdminListPanel
+            title="Materialer"
+            helperText={'Vises som "Navn (kode) - gruppe".'}
+            listState={materials}
+            emptyMessage="Ingen materialer."
+            form={
+              <Group align="flex-end" gap="sm" wrap="wrap">
+                <Box flex={1} miw={320}>
+                  <SimpleGrid cols={{ base: 1, md: 3 }} spacing="sm">
+                    <AppTextInput placeholder="Materialnavn..." value={materialName} onChange={setMaterialName} />
+                    <AppTextInput placeholder="Materialkode..." value={materialCode} onChange={setMaterialCode} />
+                    <AppTextInput placeholder="Materialgruppe..." value={materialGroup} onChange={setMaterialGroup} />
+                  </SimpleGrid>
+                </Box>
+                <AppButton tone="primary" size="sm" disabled={addingMaterial} onClick={() => void addMaterial()}>
                   Legg til
-                </button>
-              </div>
-              <div className="muted" style={{ fontSize: 12 }}>
-                Vises som "Navn (kode) - gruppe".
-              </div>
-              <div className="settings-list">
-                {materials.loading ? <div className="muted">Laster...</div> : null}
-                {!materials.loading && materials.error ? <div className="err">Feil: {materials.error}</div> : null}
-                {!materials.loading && !materials.error && materials.rows.length === 0 ? (
-                  <div className="muted">Ingen materialer.</div>
-                ) : null}
-                {!materials.loading && !materials.error
-                  ? materials.rows.map((row) => (
-                      <div key={row.id} className="settings-item">
-                        <div className="settings-item__title">{materialLabel(row)}</div>
-                        <div className="settings-item__meta"></div>
-                        <div className="settings-item__actions">
-                          <button
-                            className="iconbtn small"
-                            type="button"
-                            title="Endre"
-                            onClick={() => openMaterialEditModal(row)}
-                          >
-                            <PencilIcon />
-                          </button>
-                          <button
-                            className="iconbtn small danger"
-                            type="button"
-                            title="Slett"
-                            onClick={() => void deleteMaterialRow(row)}
-                          >
-                            <TrashIcon />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  : null}
-              </div>
-            </div>
-          </WeldingCollapsiblePanel>
+                </AppButton>
+              </Group>
+            }
+            renderItem={(row) => (
+              <WeldingListItem
+                key={row.id}
+                title={materialLabel(row)}
+                actions={
+                  <AppActionsMenu
+                    items={[
+                      createEditAction({
+                        key: "edit-material",
+                        onClick: () => openMaterialEditModal(row),
+                      }),
+                      createDeleteAction({
+                        key: "delete-material",
+                        onClick: () => void deleteMaterialRow(row),
+                      }),
+                    ]}
+                  />
+                }
+              />
+            )}
+          />
 
-          <WeldingCollapsiblePanel title="Standarder" meta="Admin">
-            <div className="settings-form">
-              <div className="settings-row inline">
-                <div className="settings-inputs">
-                  <select
-                    className="select"
-                    value={standardType}
-                    onChange={(event) => setStandardType(event.target.value)}
-                  >
-                    <option value="">Velg type...</option>
-                    {STANDARD_TYPES.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    className="input"
-                    type="text"
-                    placeholder="Standardnavn... (f.eks NS-ISO 9606-1)"
-                    value={standardLabel}
-                    onChange={(event) => setStandardLabel(event.target.value)}
-                  />
-                  <input
-                    className="input"
-                    type="text"
-                    placeholder="Beskrivelse..."
-                    value={standardDescription}
-                    onChange={(event) => setStandardDescription(event.target.value)}
-                  />
-                  <select
-                    className="select"
-                    value={standardRevision}
-                    onChange={(event) => setStandardRevision(event.target.value)}
-                  >
-                    <option value="">Ingen revisjon</option>
-                    {Array.from({ length: 31 }, (_, i) => {
-                      const year = String(new Date().getFullYear() - i);
-                      return (
-                        <option key={year} value={year}>
-                          {year}
+          <WeldingAdminListPanel
+            title="Standarder"
+            listState={standards}
+            emptyMessage="Ingen standarder."
+            form={
+              <Group align="flex-end" gap="sm" wrap="wrap">
+                <Box flex={1} miw={320}>
+                  <SimpleGrid cols={{ base: 1, md: 2, xl: 4 }} spacing="sm">
+                    <AppNativeSelect value={standardType} onChange={setStandardType}>
+                      <option value="">Velg type...</option>
+                      {STANDARD_TYPES.map((type) => (
+                        <option key={type} value={type}>
+                          {type}
                         </option>
-                      );
-                    })}
-                  </select>
-                </div>
-                <button className="btn primary small" type="button" disabled={addingStandard} onClick={() => void addStandard()}>
+                      ))}
+                    </AppNativeSelect>
+                    <AppTextInput
+                      placeholder="Standardnavn... (f.eks NS-ISO 9606-1)"
+                      value={standardLabel}
+                      onChange={setStandardLabel}
+                    />
+                    <AppTextInput
+                      placeholder="Beskrivelse..."
+                      value={standardDescription}
+                      onChange={setStandardDescription}
+                    />
+                    <AppNativeSelect value={standardRevision} onChange={setStandardRevision}>
+                      <option value="">Ingen revisjon</option>
+                      {Array.from({ length: 31 }, (_, i) => {
+                        const year = String(new Date().getFullYear() - i);
+                        return (
+                          <option key={year} value={year}>
+                            {year}
+                          </option>
+                        );
+                      })}
+                    </AppNativeSelect>
+                  </SimpleGrid>
+                </Box>
+                <AppButton tone="primary" size="sm" disabled={addingStandard} onClick={() => void addStandard()}>
                   Legg til
-                </button>
-              </div>
-
-              <div className="settings-list">
-                {standards.loading ? <div className="muted">Laster...</div> : null}
-                {!standards.loading && standards.error ? <div className="err">Feil: {standards.error}</div> : null}
-                {!standards.loading && !standards.error && standards.rows.length === 0 ? (
-                  <div className="muted">Ingen standarder.</div>
-                ) : null}
-                {!standards.loading && !standards.error
-                  ? standards.rows.map((row) => {
-                      const meta = [row.type, row.description].filter(Boolean).join(" - ");
-                      return (
-                        <div key={row.id} className="settings-item">
-                          <div className="settings-item__title">{standardLabelText(row)}</div>
-                          <div className="settings-item__meta">{meta}</div>
-                          <div className="settings-item__actions">
-                            {row.has_fm_group ? (
-                              <button className="btn small" type="button" onClick={() => void openStandardFmModal(row)}>
-                                FM-grupper
-                              </button>
-                            ) : null}
-                            <button
-                              className="iconbtn small"
-                              type="button"
-                              title="Endre"
-                              onClick={() => openStandardEditModal(row)}
-                            >
-                              <PencilIcon />
-                            </button>
-                            <button
-                              className="iconbtn small danger"
-                              type="button"
-                              title="Slett"
-                              onClick={() => void deleteStandardRow(row)}
-                            >
-                              <TrashIcon />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  : null}
-              </div>
-            </div>
-          </WeldingCollapsiblePanel>
-
-          <WeldingCollapsiblePanel title="NDT-metoder" meta="Admin">
-            <div className="settings-form">
-              <div className="settings-row inline">
-                <div className="settings-inputs">
-                  <input
-                    className="input"
-                    type="text"
-                    placeholder="Kode... (f.eks RT)"
-                    value={ndtCode}
-                    onChange={(event) => setNdtCode(event.target.value)}
-                  />
-                  <input
-                    className="input"
-                    type="text"
-                    placeholder="Navn..."
-                    value={ndtLabel}
-                    onChange={(event) => setNdtLabel(event.target.value)}
-                  />
-                  <input
-                    className="input"
-                    type="text"
-                    placeholder="Beskrivelse..."
-                    value={ndtDescription}
-                    onChange={(event) => setNdtDescription(event.target.value)}
-                  />
-                  <select
-                    className="select"
-                    value={ndtStandardId}
-                    onChange={(event) => setNdtStandardId(event.target.value)}
-                  >
-                    <option value="">Standard (valgfritt)...</option>
-                    {standardOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  className="btn primary small"
-                  type="button"
-                  disabled={addingNdtMethod}
-                  onClick={() => void addNdtMethod()}
-                >
-                  Legg til
-                </button>
-              </div>
-              <div className="muted" style={{ fontSize: 12 }}>
-                NDT-metoder brukes i sertifikater og rapporter.
-              </div>
-
-              <div className="settings-list">
-                {ndtMethods.loading ? <div className="muted">Laster...</div> : null}
-                {!ndtMethods.loading && ndtMethods.error ? <div className="err">Feil: {ndtMethods.error}</div> : null}
-                {!ndtMethods.loading && !ndtMethods.error && ndtMethods.rows.length === 0 ? (
-                  <div className="muted">Ingen NDT-metoder.</div>
-                ) : null}
-                {!ndtMethods.loading && !ndtMethods.error
-                  ? ndtMethods.rows.map((row) => {
-                      const meta = [row.description, row.standard ? standardLabelText(row.standard) : null]
-                        .filter(Boolean)
-                        .join(" - ");
-                      return (
-                        <div key={row.id} className="settings-item">
-                          <div className="settings-item__title">
-                            {row.code} - {row.label}
-                          </div>
-                          <div className="settings-item__meta">{meta}</div>
-                          <div className="settings-item__actions">
-                            <button
-                              className="iconbtn small"
-                              type="button"
-                              title="Endre"
-                              onClick={() => openNdtMethodEditModal(row)}
-                            >
-                              <PencilIcon />
-                            </button>
-                            <button
-                              className="iconbtn small danger"
-                              type="button"
-                              title="Slett"
-                              onClick={() => void deleteNdtMethodRow(row)}
-                            >
-                              <TrashIcon />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  : null}
-              </div>
-            </div>
-          </WeldingCollapsiblePanel>
-
-          <WeldingCollapsiblePanel title="Sveiseprosesser" meta="Admin">
-            <div className="settings-form">
-              <div className="settings-row inline">
-                <div className="settings-inputs" style={{ gridTemplateColumns: "120px 1fr" }}>
-                  <input
-                    className="input"
-                    type="text"
-                    placeholder="Kode... (f.eks 141)"
-                    value={processCode}
-                    onChange={(event) => setProcessCode(event.target.value)}
-                  />
-                  <input
-                    className="input"
-                    type="text"
-                    placeholder="Beskrivelse... (f.eks TIG-sveis)"
-                    value={processLabel}
-                    onChange={(event) => setProcessLabel(event.target.value)}
-                  />
-                </div>
-                <button className="btn primary small" type="button" disabled={addingProcess} onClick={() => void addProcess()}>
-                  Legg til
-                </button>
-              </div>
-
-              <div className="settings-list">
-                {processes.loading ? <div className="muted">Laster...</div> : null}
-                {!processes.loading && processes.error ? <div className="err">Feil: {processes.error}</div> : null}
-                {!processes.loading && !processes.error && processes.rows.length === 0 ? (
-                  <div className="muted">Ingen sveiseprosesser.</div>
-                ) : null}
-                {!processes.loading && !processes.error
-                  ? processes.rows.map((row) => (
-                      <div key={row.id} className="settings-item">
-                        <div className="settings-item__title">{processLabelText(row)}</div>
-                        <div className="settings-item__meta"></div>
-                        <div className="settings-item__actions">
-                          <button
-                            className="iconbtn small"
-                            type="button"
-                            title="Endre"
-                            onClick={() => openProcessEditModal(row)}
-                          >
-                            <PencilIcon />
-                          </button>
-                          <button
-                            className="iconbtn small danger"
-                            type="button"
-                            title="Slett"
-                            onClick={() => void deleteProcessRow(row)}
-                          >
-                            <TrashIcon />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  : null}
-              </div>
-            </div>
-          </WeldingCollapsiblePanel>
-
-          <WeldingCollapsiblePanel title="Sveisefuger" meta="Admin">
-            <div className="settings-form">
-              <div className="settings-row inline">
-                <input
-                  className="input"
-                  type="text"
-                  placeholder="Ny fugetype... (f.eks BW eller FW)"
-                  value={jointTypeLabel}
-                  onChange={(event) => setJointTypeLabel(event.target.value)}
+                </AppButton>
+              </Group>
+            }
+            renderItem={(row) => {
+              const meta = [row.type, row.description].filter(Boolean).join(" - ");
+              return (
+                <WeldingListItem
+                  key={row.id}
+                  title={standardLabelText(row)}
+                  meta={meta}
+                  actions={
+                    <Group gap="xs" wrap="nowrap">
+                      {row.has_fm_group ? (
+                        <AppButton size="sm" onClick={() => void openStandardFmModal(row)}>
+                          FM-grupper
+                        </AppButton>
+                      ) : null}
+                      <AppActionsMenu
+                        items={[
+                          createEditAction({
+                            key: "edit-standard",
+                            onClick: () => openStandardEditModal(row),
+                          }),
+                          createDeleteAction({
+                            key: "delete-standard",
+                            onClick: () => void deleteStandardRow(row),
+                          }),
+                        ]}
+                      />
+                    </Group>
+                  }
                 />
-                <button
-                  className="btn primary small"
-                  type="button"
-                  disabled={addingJointType}
-                  onClick={() => void addJointType()}
-                >
+              );
+            }}
+          />
+
+          <WeldingAdminListPanel
+            title="NDT-metoder"
+            helperText="NDT-metoder brukes i sertifikater og rapporter."
+            listState={ndtMethods}
+            emptyMessage="Ingen NDT-metoder."
+            form={
+              <Group align="flex-end" gap="sm" wrap="wrap">
+                <Box flex={1} miw={320}>
+                  <SimpleGrid cols={{ base: 1, md: 2, xl: 4 }} spacing="sm">
+                    <AppTextInput placeholder="Kode... (f.eks RT)" value={ndtCode} onChange={setNdtCode} />
+                    <AppTextInput placeholder="Navn..." value={ndtLabel} onChange={setNdtLabel} />
+                    <AppTextInput
+                      placeholder="Beskrivelse..."
+                      value={ndtDescription}
+                      onChange={setNdtDescription}
+                    />
+                    <AppNativeSelect value={ndtStandardId} onChange={setNdtStandardId}>
+                      <option value="">Standard (valgfritt)...</option>
+                      {standardOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </AppNativeSelect>
+                  </SimpleGrid>
+                </Box>
+                <AppButton tone="primary" size="sm" disabled={addingNdtMethod} onClick={() => void addNdtMethod()}>
                   Legg til
-                </button>
-              </div>
-              <div className="muted" style={{ fontSize: 12 }}>
-                Brukes i dropdown for fugetype i WPS/WPQR.
-              </div>
+                </AppButton>
+              </Group>
+            }
+            renderItem={(row) => {
+              const meta = [row.description, row.standard ? standardLabelText(row.standard) : null]
+                .filter(Boolean)
+                .join(" - ");
+              return (
+                <WeldingListItem
+                  key={row.id}
+                  title={`${row.code} - ${row.label}`}
+                  meta={meta}
+                  actions={
+                    <AppActionsMenu
+                      items={[
+                        createEditAction({
+                          key: "edit-ndt",
+                          onClick: () => openNdtMethodEditModal(row),
+                        }),
+                        createDeleteAction({
+                          key: "delete-ndt",
+                          onClick: () => void deleteNdtMethodRow(row),
+                        }),
+                      ]}
+                    />
+                  }
+                />
+              );
+            }}
+          />
 
-              <div className="settings-list">
-                {jointTypes.loading ? <div className="muted">Laster...</div> : null}
-                {!jointTypes.loading && jointTypes.error ? <div className="err">Feil: {jointTypes.error}</div> : null}
-                {!jointTypes.loading && !jointTypes.error && jointTypes.rows.length === 0 ? (
-                  <div className="muted">Ingen sveisefuger.</div>
-                ) : null}
-                {!jointTypes.loading && !jointTypes.error
-                  ? jointTypes.rows.map((row) => (
-                      <div key={row.id} className="settings-item">
-                        <div className="settings-item__title">{row.label}</div>
-                        <div className="settings-item__meta"></div>
-                        <div className="settings-item__actions">
-                          <button
-                            className="iconbtn small"
-                            type="button"
-                            title="Endre"
-                            onClick={() => openJointTypeEditModal(row)}
-                          >
-                            <PencilIcon />
-                          </button>
-                          <button
-                            className="iconbtn small danger"
-                            type="button"
-                            title="Slett"
-                            onClick={() => void deleteJointTypeRow(row)}
-                          >
-                            <TrashIcon />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  : null}
-              </div>
-            </div>
-          </WeldingCollapsiblePanel>
+          <WeldingAdminListPanel
+            title="Sveiseprosesser"
+            listState={processes}
+            emptyMessage="Ingen sveiseprosesser."
+            form={
+              <Group align="flex-end" gap="sm" wrap="wrap">
+                <Box flex={1} miw={320}>
+                  <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
+                    <AppTextInput
+                      placeholder="Kode... (f.eks 141)"
+                      value={processCode}
+                      onChange={setProcessCode}
+                    />
+                    <AppTextInput
+                      placeholder="Beskrivelse... (f.eks TIG-sveis)"
+                      value={processLabel}
+                      onChange={setProcessLabel}
+                    />
+                  </SimpleGrid>
+                </Box>
+                <AppButton tone="primary" size="sm" disabled={addingProcess} onClick={() => void addProcess()}>
+                  Legg til
+                </AppButton>
+              </Group>
+            }
+            renderItem={(row) => (
+              <WeldingListItem
+                key={row.id}
+                title={processLabelText(row)}
+                actions={
+                  <AppActionsMenu
+                    items={[
+                      createEditAction({
+                        key: "edit-process",
+                        onClick: () => openProcessEditModal(row),
+                      }),
+                      createDeleteAction({
+                        key: "delete-process",
+                        onClick: () => void deleteProcessRow(row),
+                      }),
+                    ]}
+                  />
+                }
+              />
+            )}
+          />
 
-          <WeldingCollapsiblePanel title="Avanserte innstillinger" meta="Midlertidig legacy">
-            <div className="settings-form">
-              <div className="muted">
-                Sveisesertifikat-scope og materialsporbarhet er neste steg i migreringen.
-              </div>
-              <div className="settings-actions">
-                <Link className="btn small" to="/legacy/company-settings/welding">
-                  Apne legacy-side
-                </Link>
-              </div>
-            </div>
-          </WeldingCollapsiblePanel>
-        </section>
+          <WeldingAdminListPanel
+            title="Sveisefuger"
+            helperText="Brukes i dropdown for fugetype i WPS/WPQR."
+            listState={jointTypes}
+            emptyMessage="Ingen sveisefuger."
+            form={
+              <Group align="flex-end" gap="sm" wrap="wrap">
+                <Box flex={1} miw={320}>
+                  <AppTextInput
+                    placeholder="Ny fugetype... (f.eks BW eller FW)"
+                    value={jointTypeLabel}
+                    onChange={setJointTypeLabel}
+                  />
+                </Box>
+                <AppButton tone="primary" size="sm" disabled={addingJointType} onClick={() => void addJointType()}>
+                  Legg til
+                </AppButton>
+              </Group>
+            }
+            renderItem={(row) => (
+              <WeldingListItem
+                key={row.id}
+                title={row.label}
+                actions={
+                  <AppActionsMenu
+                    items={[
+                      createEditAction({
+                        key: "edit-joint-type",
+                        onClick: () => openJointTypeEditModal(row),
+                      }),
+                      createDeleteAction({
+                        key: "delete-joint-type",
+                        onClick: () => void deleteJointTypeRow(row),
+                      }),
+                    ]}
+                  />
+                }
+              />
+            )}
+          />
 
-        <div ref={modalMountRef}></div>
-      </main>
+        </Stack>
 
-      <AppFooter />
-    </div>
+        <AppModal
+          opened={materialEditModal.opened}
+          onClose={closeMaterialEditModal}
+          title="Endre materiale"
+          busy={materialEditSaving}
+        >
+          <form onSubmit={submitMaterialEditModal}>
+            <AppTextInput
+              label="Materialnavn"
+              value={materialEditModal.name}
+              onChange={(value) =>
+                setMaterialEditModal((current) => ({
+                  ...current,
+                  name: value,
+                }))
+              }
+            />
+            <AppTextInput
+              mt="sm"
+              label="Materialkode"
+              value={materialEditModal.code}
+              onChange={(value) =>
+                setMaterialEditModal((current) => ({
+                  ...current,
+                  code: value,
+                }))
+              }
+            />
+            <AppTextInput
+              mt="sm"
+              label="Materialgruppe"
+              value={materialEditModal.group}
+              onChange={(value) =>
+                setMaterialEditModal((current) => ({
+                  ...current,
+                  group: value,
+                }))
+              }
+            />
+
+            <AppModalActions
+              onCancel={closeMaterialEditModal}
+              cancelDisabled={materialEditSaving}
+              confirmLabel="Lagre"
+              confirmType="submit"
+              confirmLoading={materialEditSaving}
+            />
+          </form>
+        </AppModal>
+
+        <AppModal
+          opened={standardEditModal.opened}
+          onClose={closeStandardEditModal}
+          title="Endre standard"
+          busy={standardEditSaving}
+        >
+          <form onSubmit={submitStandardEditModal}>
+            <AppTextInput
+              label="Standardnavn"
+              value={standardEditModal.label}
+              onChange={(value) =>
+                setStandardEditModal((current) => ({
+                  ...current,
+                  label: value,
+                }))
+              }
+            />
+            <AppTextInput
+              mt="sm"
+              label="Beskrivelse"
+              value={standardEditModal.description}
+              onChange={(value) =>
+                setStandardEditModal((current) => ({
+                  ...current,
+                  description: value,
+                }))
+              }
+            />
+            <AppSelect
+              mt="sm"
+              label="Type"
+              data={standardTypeOptions}
+              value={standardEditModal.type}
+              allowDeselect={false}
+              onChange={(value) =>
+                setStandardEditModal((current) => ({
+                  ...current,
+                  type: value,
+                }))
+              }
+            />
+            <AppSelect
+              mt="sm"
+              label="Revisjon"
+              data={standardRevisionOptions}
+              value={standardEditModal.revision}
+              allowDeselect={false}
+              onChange={(value) =>
+                setStandardEditModal((current) => ({
+                  ...current,
+                  revision: value,
+                }))
+              }
+            />
+
+            <AppModalActions
+              onCancel={closeStandardEditModal}
+              cancelDisabled={standardEditSaving}
+              confirmLabel="Lagre"
+              confirmType="submit"
+              confirmLoading={standardEditSaving}
+            />
+          </form>
+        </AppModal>
+
+        <AppModal
+          opened={fmGroupsModal.opened}
+          onClose={closeFmGroupsModal}
+          title={`FM-grupper - ${fmGroupsModal.standardLabel}`}
+          busy={fmGroupSaving}
+          size="lg"
+        >
+          <Stack gap="md">
+            <Group align="flex-end" gap="sm" wrap="wrap">
+              <Box flex={1} miw={240}>
+                <AppTextInput
+                  placeholder="Ny FM-gruppe..."
+                  value={fmGroupInput}
+                  onChange={setFmGroupInput}
+                />
+              </Box>
+              <AppButton tone="primary" size="sm" disabled={fmGroupSaving} onClick={() => void addFmGroup()}>
+                Legg til
+              </AppButton>
+            </Group>
+
+            <AppAsyncState
+              loading={fmGroupsLoading}
+              error={fmGroupsError}
+              isEmpty={fmGroupsRows.length === 0}
+              emptyMessage="Ingen FM-grupper."
+            >
+              <Stack gap="sm">
+                {fmGroupsRows.map((row) => (
+                  <WeldingListItem
+                    key={row.id}
+                    title={row.label}
+                    actions={
+                      <AppActionsMenu
+                        title={`Handlinger for ${row.label}`}
+                        items={[
+                          createEditAction({
+                            key: `edit-${row.id}`,
+                            onClick: () => openFmGroupEditModal(row),
+                          }),
+                          createDeleteAction({
+                            key: `delete-${row.id}`,
+                            onClick: () => deleteFmGroupRow(row),
+                          }),
+                        ]}
+                      />
+                    }
+                  />
+                ))}
+              </Stack>
+            </AppAsyncState>
+          </Stack>
+
+          <AppModalActions
+            showCancel={false}
+            confirmLabel="Ferdig"
+            confirmTone="neutral"
+            onConfirm={closeFmGroupsModal}
+            confirmDisabled={fmGroupSaving}
+          />
+        </AppModal>
+
+        <AppModal
+          opened={fmGroupEditModal.opened}
+          onClose={closeFmGroupEditModal}
+          title="Endre FM-gruppe"
+          busy={fmGroupEditSaving}
+        >
+          <form onSubmit={submitFmGroupEditModal}>
+            <AppTextInput
+              label="FM-gruppe"
+              value={fmGroupEditModal.label}
+              onChange={(value) =>
+                setFmGroupEditModal((current) => ({
+                  ...current,
+                  label: value,
+                }))
+              }
+            />
+
+            <AppModalActions
+              onCancel={closeFmGroupEditModal}
+              cancelDisabled={fmGroupEditSaving}
+              confirmLabel="Lagre"
+              confirmType="submit"
+              confirmLoading={fmGroupEditSaving}
+            />
+          </form>
+        </AppModal>
+
+        <AppModal
+          opened={ndtMethodEditModal.opened}
+          onClose={closeNdtMethodEditModal}
+          title="Endre NDT-metode"
+          busy={ndtMethodEditSaving}
+        >
+          <form onSubmit={submitNdtMethodEditModal}>
+            <AppTextInput
+              label="Kode"
+              value={ndtMethodEditModal.code}
+              onChange={(value) =>
+                setNdtMethodEditModal((current) => ({
+                  ...current,
+                  code: value,
+                }))
+              }
+            />
+            <AppTextInput
+              mt="sm"
+              label="Navn"
+              value={ndtMethodEditModal.label}
+              onChange={(value) =>
+                setNdtMethodEditModal((current) => ({
+                  ...current,
+                  label: value,
+                }))
+              }
+            />
+            <AppTextInput
+              mt="sm"
+              label="Beskrivelse"
+              value={ndtMethodEditModal.description}
+              onChange={(value) =>
+                setNdtMethodEditModal((current) => ({
+                  ...current,
+                  description: value,
+                }))
+              }
+            />
+            <AppSelect
+              mt="sm"
+              label="Standard (valgfritt)"
+              data={ndtModalStandardOptions}
+              value={ndtMethodEditModal.standardId}
+              searchable={ndtModalStandardOptions.length > 8}
+              nothingFoundMessage="Ingen treff"
+              allowDeselect={false}
+              onChange={(value) =>
+                setNdtMethodEditModal((current) => ({
+                  ...current,
+                  standardId: value,
+                }))
+              }
+            />
+
+            <AppModalActions
+              onCancel={closeNdtMethodEditModal}
+              cancelDisabled={ndtMethodEditSaving}
+              confirmLabel="Lagre"
+              confirmType="submit"
+              confirmLoading={ndtMethodEditSaving}
+            />
+          </form>
+        </AppModal>
+
+        <AppModal
+          opened={processEditModal.opened}
+          onClose={closeProcessEditModal}
+          title="Endre sveiseprosess"
+          busy={processEditSaving}
+        >
+          <form onSubmit={submitProcessEditModal}>
+            <AppTextInput
+              label="Kode"
+              value={processEditModal.code}
+              onChange={(value) =>
+                setProcessEditModal((current) => ({
+                  ...current,
+                  code: value,
+                }))
+              }
+            />
+            <AppTextInput
+              mt="sm"
+              label="Beskrivelse"
+              value={processEditModal.label}
+              onChange={(value) =>
+                setProcessEditModal((current) => ({
+                  ...current,
+                  label: value,
+                }))
+              }
+            />
+
+            <AppModalActions
+              onCancel={closeProcessEditModal}
+              cancelDisabled={processEditSaving}
+              confirmLabel="Lagre"
+              confirmType="submit"
+              confirmLoading={processEditSaving}
+            />
+          </form>
+        </AppModal>
+
+        <AppModal
+          opened={jointTypeEditModal.opened}
+          onClose={closeJointTypeEditModal}
+          title="Endre sveisefuge"
+          busy={jointTypeEditSaving}
+        >
+          <form onSubmit={submitJointTypeEditModal}>
+            <AppTextInput
+              label="Fugetype"
+              value={jointTypeEditModal.label}
+              onChange={(value) =>
+                setJointTypeEditModal((current) => ({
+                  ...current,
+                  label: value,
+                }))
+              }
+            />
+
+            <AppModalActions
+              onCancel={closeJointTypeEditModal}
+              cancelDisabled={jointTypeEditSaving}
+              confirmLabel="Lagre"
+              confirmType="submit"
+              confirmLoading={jointTypeEditSaving}
+            />
+          </form>
+        </AppModal>
+
+        {deleteConfirmModal}
+    </AppPageLayout>
   );
 }

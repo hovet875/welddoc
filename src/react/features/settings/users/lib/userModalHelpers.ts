@@ -1,20 +1,3 @@
-import type { JobTitleRow } from "../../../../../repo/jobTitleRepo";
-import { esc } from "../../../../../utils/dom";
-
-export function renderJobTitleOptions(jobTitles: JobTitleRow[], selected: string | null) {
-  if (jobTitles.length === 0) return `<option value="">Ingen stillinger</option>`;
-
-  return [
-    `<option value="">Velg stilling...</option>`,
-    ...jobTitles.map((jobTitle) => {
-      const isSelected = jobTitle.title === selected ? "selected" : "";
-      const disabled = jobTitle.is_active ? "" : "disabled";
-      const label = jobTitle.is_active ? jobTitle.title : `${jobTitle.title} (inaktiv)`;
-      return `<option value="${esc(jobTitle.title)}" ${isSelected} ${disabled}>${esc(label)}</option>`;
-    }),
-  ].join("");
-}
-
 export async function readFunctionError(err: any) {
   try {
     const ctx = err?.context;

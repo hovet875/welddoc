@@ -1,0 +1,165 @@
+/* Link */
+:where(.legacy-scope) .linkbtn{
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.92);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+
+  display:inline-flex;
+  align-items:center;
+  gap: 6px;
+
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255,255,255,0.35);
+}
+:where(.legacy-scope) .linkbtn:hover{
+  color: #fff;
+  border-bottom-color: rgba(255,255,255,0.65);
+}
+
+/* File pill (generic) */
+:where(.legacy-scope) .file-pill{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:700;
+  border:1px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.85);
+  cursor: pointer;
+  appearance: none;
+}
+
+:where(.legacy-scope) .file-pill:hover{
+  filter: brightness(1.08);
+}
+
+/* Type pill (generic, 10 colors + other) */
+:where(.legacy-scope) .type-pill{
+  appearance:none;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:3px 10px;
+  border-radius:999px;
+  height: 26px;
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:0.3px;
+  border:1px solid transparent;
+  text-decoration:none;
+  backdrop-filter: blur(2px);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+}
+
+:where(.legacy-scope) .type-pill:hover{
+  filter: brightness(1.08);
+}
+
+:where(.legacy-scope) .type-pill.is-muted{
+  opacity: 0.4;
+  filter: saturate(0.7);
+}
+
+:where(.legacy-scope) .type-pill.is-active{
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.35), 0 0 0 3px rgba(255,255,255,0.08);
+}
+
+:where(.legacy-scope) .type-pill.pill-1{ background: rgba(59,130,246,0.22); border-color: rgba(59,130,246,0.55); color:#dbeafe; }
+:where(.legacy-scope) .type-pill.pill-2{ background: rgba(245,158,11,0.24); border-color: rgba(245,158,11,0.58); color:#fef3c7; }
+:where(.legacy-scope) .type-pill.pill-3{ background: rgba(168,85,247,0.22); border-color: rgba(168,85,247,0.55); color:#ede9fe; }
+:where(.legacy-scope) .type-pill.pill-4{ background: rgba(16,185,129,0.22); border-color: rgba(16,185,129,0.55); color:#d1fae5; }
+:where(.legacy-scope) .type-pill.pill-5{ background: rgba(239,68,68,0.22); border-color: rgba(239,68,68,0.55); color:#fee2e2; }
+:where(.legacy-scope) .type-pill.pill-6{ background: rgba(6,182,212,0.22); border-color: rgba(6,182,212,0.55); color:#cffafe; }
+:where(.legacy-scope) .type-pill.pill-7{ background: rgba(249,115,22,0.24); border-color: rgba(249,115,22,0.58); color:#ffedd5; }
+:where(.legacy-scope) .type-pill.pill-8{ background: rgba(99,102,241,0.22); border-color: rgba(99,102,241,0.55); color:#e0e7ff; }
+:where(.legacy-scope) .type-pill.pill-9{ background: rgba(132,204,22,0.24); border-color: rgba(132,204,22,0.58); color:#ecfccb; }
+:where(.legacy-scope) .type-pill.pill-10{ background: rgba(236,72,153,0.22); border-color: rgba(236,72,153,0.55); color:#fce7f3; }
+:where(.legacy-scope) .type-pill.pill-other{ background: rgba(100,116,139,0.22); border-color: rgba(100,116,139,0.55); color:#e2e8f0; }
+:where(.legacy-scope) .type-pill.pill-neutral{ background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.16); color: rgba(255,255,255,0.88); }
+
+/* Status pill (generic) */
+:where(.legacy-scope) .status-pill{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  padding:3px 10px;
+  font-size:12px;
+  font-weight:600;
+  border: 1px solid transparent;
+}
+
+:where(.legacy-scope) .status-pill.ok{
+  background: rgba(34,197,94,0.18); border-color: rgba(34,197,94,0.45); color:#bbf7d0;
+}
+
+:where(.legacy-scope) .status-pill.warn{
+  background: rgba(245,158,11,0.22); border-color: rgba(245,158,11,0.45); color:#fde68a; 
+}
+
+:where(.legacy-scope) .status-pill.manual{
+  background: rgba(14,165,233,0.2); border-color: rgba(14,165,233,0.45); color:#bae6fd;
+}
+
+:where(.legacy-scope) .status-pill.fault{
+background: rgba(239,68,68,0.18); border-color: rgba(239,68,68,0.45); color:#fecaca; 
+}
+
+/* -------------------- Data tables (generic) -------------------- */
+:where(.legacy-scope) .table-scroll{
+  table-layout: auto;
+}
+
+:where(.legacy-scope) .data-table{
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13.5px;
+  table-layout: auto;
+}
+
+:where(.legacy-scope) .data-table thead th{
+  color: rgba(255,255,255,0.78);
+  font-weight: 650;
+  background: rgba(255,255,255,0.02);
+  padding: 11px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  text-align: left;
+}
+
+:where(.legacy-scope) .data-table td{
+  padding: 11px 10px;
+  vertical-align: middle;
+}
+
+:where(.legacy-scope) .data-table tbody tr:hover{
+  background: rgba(255,255,255,0.04);
+}
+
+/* Action column width for icon buttons */
+:where(.legacy-scope) .data-table th:last-child,
+:where(.legacy-scope) .data-table td:last-child{
+  width: 92px;
+}
+
+/* Action cell layout */
+:where(.legacy-scope) .actcell{
+  padding: 9px 10px;
+  text-align: right;
+  vertical-align: middle;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Compact icon button size inside tables */
+:where(.legacy-scope) .actcell .iconbtn{ width: 28px; height: 28px; }
+

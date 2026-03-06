@@ -59,6 +59,20 @@ export type CertFetchResult = {
   ndtCerts: NdtCertRow[];
 };
 
+export type HomeWelderCertStatusRow = Pick<WelderCertRow, "id" | "certificate_no" | "expires_at" | "created_at"> & {
+  profile: Pick<ProfileWelderRow, "display_name" | "welder_no"> | null;
+};
+
+export type HomeNdtCertStatusRow = Pick<
+  NdtCertRow,
+  "id" | "personnel_name" | "company" | "certificate_no" | "ndt_method" | "expires_at" | "created_at"
+>;
+
+export type HomeCertStatusResult = {
+  welderCerts: HomeWelderCertStatusRow[];
+  ndtCerts: HomeNdtCertStatusRow[];
+};
+
 export async function fetchWelders(): Promise<ProfileWelderRow[]> {
   const { data, error } = await supabase
     .from("profiles")
@@ -166,6 +180,39 @@ export async function fetchCertData(): Promise<CertFetchResult> {
     welders: (weldersRes.data ?? []) as ProfileWelderRow[],
     welderCerts: ((welderCertsRes.data ?? []) as unknown as WelderCertRow[]),
     ndtCerts: (ndtRes.data ?? []) as NdtCertRow[],
+  };
+}
+
+export async function fetchHomeCertStatusData(): Promise<HomeCertStatusResult> {
+  const [welderRes, ndtRes] = await Promise.all([
+    supabase
+      .from("welder_certificates")
+      .select(`
+        id,
+        certificate_no,
+        expires_at,
+        created_at,
+        profile:profile_id (
+          display_name,
+          welder_no
+        )
+      `)
+      .order("expires_at", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: false }),
+
+    supabase
+      .from("ndt_certificates")
+      .select("id, personnel_name, company, certificate_no, ndt_method, expires_at, created_at")
+      .order("expires_at", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: false }),
+  ]);
+
+  if (welderRes.error) throw welderRes.error;
+  if (ndtRes.error) throw ndtRes.error;
+
+  return {
+    welderCerts: ((welderRes.data ?? []) as unknown as HomeWelderCertStatusRow[]),
+    ndtCerts: (ndtRes.data ?? []) as HomeNdtCertStatusRow[],
   };
 }
 

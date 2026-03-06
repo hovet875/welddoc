@@ -1,5 +1,12 @@
+import { useEffect, useMemo } from "react";
+import { Alert, Group, Stack } from "@mantine/core";
+import { useForm } from "@mantine/form";
 import type { JobTitleRow } from "../../../../repo/jobTitleRepo";
 import type { SettingsFormState } from "../settings.types";
+import { AppButton } from "@react/ui/AppButton";
+import { AppPanel } from "@react/ui/AppPanel";
+import { AppSelect } from "@react/ui/AppSelect";
+import { AppTextInput } from "@react/ui/AppTextInput";
 
 type SettingsProfileFormProps = {
   isAdmin: boolean;
@@ -30,76 +37,90 @@ export function SettingsProfileForm({
   onSave,
   onResetPassword,
 }: SettingsProfileFormProps) {
+  const disabled = !isAdmin || loading || saving;
+
+  const profileForm = useForm<SettingsFormState>({
+    initialValues: form,
+  });
+
+  useEffect(() => {
+    profileForm.setValues(form);
+  }, [form.displayName, form.jobTitle, form.welderNo]);
+
+  const jobTitleOptions = useMemo(
+    () =>
+      jobTitles.map((jobTitle) => ({
+        value: jobTitle.title,
+        label: jobTitle.is_active ? jobTitle.title : `${jobTitle.title} (inaktiv)`,
+        disabled: !jobTitle.is_active,
+      })),
+    [jobTitles]
+  );
+
   return (
-    <section className="section-grid">
-      <div className="panel">
-        <div className="panel-head">
-          <div className="panel-title">Brukerinfo</div>
-          <div className="panel-meta">{isAdmin ? "Admin" : "Les"}</div>
-        </div>
+    <AppPanel title="Brukerinfo" meta={isAdmin ? "Admin" : "Les"}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!isAdmin) return;
+          onSave();
+        }}
+      >
+        <Stack gap="md">
+          <AppTextInput
+            label="Visningsnavn"
+            value={profileForm.values.displayName}
+            disabled={disabled}
+            onChange={(value) => {
+              profileForm.setFieldValue("displayName", value);
+              onDisplayNameChange(value);
+            }}
+          />
 
-        <div className="panel-body">
-          <div className="settings-form">
-            <div className="settings-row">
-              <label>Visningsnavn</label>
-              <input
-                className="input"
-                type="text"
-                value={form.displayName}
-                disabled={!isAdmin || loading || saving}
-                onChange={(event) => onDisplayNameChange(event.target.value)}
-              />
-            </div>
+          <AppTextInput label="E-post" type="email" value={email} disabled />
 
-            <div className="settings-row">
-              <label>E-post</label>
-              <input className="input" type="email" value={email} disabled />
-            </div>
+          <AppSelect
+            label="Stilling"
+            value={profileForm.values.jobTitle}
+            data={jobTitleOptions}
+            placeholder="Velg stilling..."
+            disabled={disabled}
+            clearable
+            onChange={(value) => {
+              profileForm.setFieldValue("jobTitle", value);
+              onJobTitleChange(value);
+            }}
+          />
 
-            <div className="settings-row">
-              <label>Stilling</label>
-              <select
-                className="select"
-                value={form.jobTitle}
-                disabled={!isAdmin || loading || saving}
-                onChange={(event) => onJobTitleChange(event.target.value)}
-              >
-                <option value="">Velg stilling...</option>
-                {jobTitles.map((jobTitle) => (
-                  <option key={jobTitle.id} value={jobTitle.title} disabled={!jobTitle.is_active}>
-                    {jobTitle.is_active ? jobTitle.title : `${jobTitle.title} (inaktiv)`}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <AppTextInput
+            label="Sveiser ID"
+            inputMode="numeric"
+            value={profileForm.values.welderNo}
+            disabled={disabled}
+            onChange={(value) => {
+              profileForm.setFieldValue("welderNo", value);
+              onWelderNoChange(value);
+            }}
+          />
 
-            <div className="settings-row">
-              <label>Sveiser ID</label>
-              <input
-                className="input"
-                type="text"
-                inputMode="numeric"
-                value={form.welderNo}
-                disabled={!isAdmin || loading || saving}
-                onChange={(event) => onWelderNoChange(event.target.value)}
-              />
-            </div>
+          <Group justify="space-between" align="center" wrap="wrap">
+            <AppButton size="sm" disabled={resettingPassword} onClick={onResetPassword}>
+              {resettingPassword ? "Sender..." : "Bytt passord"}
+            </AppButton>
+            {isAdmin ? (
+              <AppButton tone="primary" type="submit" size="sm" disabled={loading || saving}>
+                {saving ? "Lagrer..." : "Lagre"}
+              </AppButton>
+            ) : null}
+          </Group>
 
-            <div className="settings-actions">
-              <button className="btn" type="button" disabled={resettingPassword} onClick={onResetPassword}>
-                {resettingPassword ? "Sender..." : "Bytt passord"}
-              </button>
-              {isAdmin ? (
-                <button className="btn primary" type="button" disabled={loading || saving} onClick={onSave}>
-                  {saving ? "Lagrer..." : "Lagre"}
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          {!isAdmin ? <div className="muted" style={{ marginTop: 10 }}>Kun admin kan endre.</div> : null}
-        </div>
-      </div>
-    </section>
+          {!isAdmin ? (
+            <Alert color="gray" variant="light">
+              Kun admin kan endre.
+            </Alert>
+          ) : null}
+        </Stack>
+      </form>
+    </AppPanel>
   );
 }

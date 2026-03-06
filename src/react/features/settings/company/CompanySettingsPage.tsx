@@ -1,6 +1,6 @@
+import { Alert } from "@mantine/core";
 import { useAuth } from "../../../auth/AuthProvider";
-import { AppFooter } from "../../../layout/AppFooter";
-import { AppHeader } from "../../../layout/AppHeader";
+import { AppPageLayout } from "../../../layout/AppPageLayout";
 import { CompanySettingsHeader } from "./components/CompanySettingsHeader";
 import { CompanySettingsMenu } from "./components/CompanySettingsMenu";
 import type { CompanySettingsMenuItem } from "./company-settings.types";
@@ -31,39 +31,29 @@ export function CompanySettingsPage() {
 
   if (!isAdmin) {
     return (
-      <div className="shell page-company-settings">
-        <AppHeader displayName={displayName} email={email} />
-        <main className="main">
-          <CompanySettingsHeader
-            title="App-parametere"
-            subtitle="Kun admin har tilgang."
-            backTo="/settings"
-            backLabel="← Tilbake"
-          />
-          <div className="muted" style={{ padding: 16 }}>
-            Kun admin har tilgang.
-          </div>
-        </main>
-        <AppFooter />
-      </div>
+      <AppPageLayout pageClassName="page-company-settings" displayName={displayName} email={email}>
+        <CompanySettingsHeader
+          title="App-parametere"
+          subtitle="Kun admin har tilgang."
+          backTo="/settings"
+          backLabel="<- Tilbake"
+        />
+        <Alert color="gray" variant="light">
+          Kun admin har tilgang.
+        </Alert>
+      </AppPageLayout>
     );
   }
 
   return (
-    <div className="shell page-company-settings">
-      <AppHeader displayName={displayName} email={email} />
-
-      <main className="main">
-        <CompanySettingsHeader
-          title="App-parametere"
-          subtitle="Velg kategori for å administrere parametere."
-          backTo="/settings"
-          backLabel="← Tilbake"
-        />
-        <CompanySettingsMenu items={COMPANY_SETTINGS_MENU_ITEMS} />
-      </main>
-
-      <AppFooter />
-    </div>
+    <AppPageLayout pageClassName="page-company-settings" displayName={displayName} email={email}>
+      <CompanySettingsHeader
+        title="App-parametere"
+        subtitle="Velg kategori for å administrere parametere."
+        backTo="/settings"
+        backLabel="<- Tilbake"
+      />
+      <CompanySettingsMenu items={COMPANY_SETTINGS_MENU_ITEMS} />
+    </AppPageLayout>
   );
 }

@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { openConfirm } from "../../../ui/confirm";
-import { toast } from "../../../ui/toast";
+import { useState } from "react";
 import { supabase } from "../../../services/supabaseClient";
+import { toast } from "@react/ui/notify";
+import { useConfirmModal } from "@react/ui/useConfirmModal";
 import { useAuth } from "../../auth/AuthProvider";
-import { AppFooter } from "../../layout/AppFooter";
-import { AppHeader } from "../../layout/AppHeader";
+import { AppPageLayout } from "../../layout/AppPageLayout";
 import { SettingsHeader } from "./components/SettingsHeader";
 import { SettingsProfileForm } from "./components/SettingsProfileForm";
 import { useSettingsData } from "./hooks/useSettingsData";
@@ -22,25 +21,14 @@ export function SettingsPage() {
   });
 
   const [resettingPassword, setResettingPassword] = useState(false);
-  const modalMountRef = useRef<HTMLDivElement | null>(null);
-  const confirmControllerRef = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    confirmControllerRef.current = controller;
-    return () => {
-      controller.abort();
-      confirmControllerRef.current = null;
-    };
-  }, []);
+  const { openConfirmModal, confirmModal } = useConfirmModal();
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const settingsRedirectPath = `${basePath}/settings`;
 
   const handleResetPassword = () => {
     if (!email) return;
-    const signal = confirmControllerRef.current?.signal;
-    const modalMount = modalMountRef.current;
-    if (!signal || !modalMount) return;
 
-    void openConfirm(modalMount, signal, {
+    openConfirmModal({
       title: "Send nytt passord",
       messageHtml: "Dette sender en e-post med lenke for å bytte passord.",
       confirmLabel: "Send",
@@ -48,7 +36,7 @@ export function SettingsPage() {
         setResettingPassword(true);
         try {
           await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: `${location.origin}/#/settings`,
+            redirectTo: `${location.origin}${settingsRedirectPath}`,
           });
           toast("Sendt e-post for passordbytte.");
         } finally {
@@ -73,30 +61,24 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="shell page-settings">
-      <AppHeader displayName={displayName} email={email} />
+    <AppPageLayout pageClassName="page-settings" displayName={displayName} email={email}>
+      <SettingsHeader isAdmin={isAdmin} />
+      <SettingsProfileForm
+        isAdmin={isAdmin}
+        email={email}
+        loading={loading}
+        saving={saving}
+        resettingPassword={resettingPassword}
+        jobTitles={jobTitles}
+        form={form}
+        onDisplayNameChange={setDisplayName}
+        onJobTitleChange={setJobTitle}
+        onWelderNoChange={setWelderNo}
+        onSave={handleSave}
+        onResetPassword={handleResetPassword}
+      />
 
-      <main className="main">
-        <SettingsHeader isAdmin={isAdmin} />
-        <SettingsProfileForm
-          isAdmin={isAdmin}
-          email={email}
-          loading={loading}
-          saving={saving}
-          resettingPassword={resettingPassword}
-          jobTitles={jobTitles}
-          form={form}
-          onDisplayNameChange={setDisplayName}
-          onJobTitleChange={setJobTitle}
-          onWelderNoChange={setWelderNo}
-          onSave={handleSave}
-          onResetPassword={handleResetPassword}
-        />
-
-        <div ref={modalMountRef}></div>
-      </main>
-
-      <AppFooter />
-    </div>
+      {confirmModal}
+    </AppPageLayout>
   );
 }

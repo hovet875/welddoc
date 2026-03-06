@@ -3,8 +3,10 @@ import { AppRouter } from "../router/AppRouter";
 
 export function ReactApp() {
   return (
-    <AuthProvider>
-      <AppRouter />
-    </AuthProvider>
+    <div className="react-root">
+      <AuthProvider>
+        <AppRouter />
+      </AuthProvider>
+    </div>
   );
 }

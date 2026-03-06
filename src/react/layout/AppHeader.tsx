@@ -1,111 +1,311 @@
-import { useEffect, useRef, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { useCallback, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import {
+  Avatar,
+  Box,
+  Burger,
+  Button,
+  Divider,
+  Drawer,
+  Group,
+  Menu,
+  Paper,
+  Stack,
+  Text,
+  UnstyledButton,
+} from "@mantine/core";
+import {
+  IconChevronRight,
+  IconLogout,
+  IconSettings,
+  IconUser,
+  IconHome2,
+  IconFolder,
+  IconCertificate,
+  IconFileSettings,
+  IconIdBadge2,
+  IconZoomScan,
+} from "@tabler/icons-react";
+import { signOutSafely } from "@react/auth/logout";
 
 type AppHeaderProps = {
   displayName: string;
   email: string;
 };
 
+const NAV_ITEMS = [
+  { to: "/", label: "Hjem", icon: IconHome2 },
+  { to: "/prosjekter", label: "Prosjekter", icon: IconFolder },
+  { to: "/materialsertifikater", label: "Materialsertifikater", icon: IconCertificate },
+  { to: "/wps", label: "Sveiseprosedyrer", icon: IconFileSettings },
+  { to: "/certs", label: "Sveisesertifikater", icon: IconIdBadge2 },
+  { to: "/ndt", label: "NDT", icon: IconZoomScan },
+];
+
 export function AppHeader({ displayName, email }: AppHeaderProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const menuRootRef = useRef<HTMLDivElement | null>(null);
   const location = useLocation();
+  const navigate = useNavigate();
+  const [mobileNavOpened, setMobileNavOpened] = useState(false);
 
-  useEffect(() => {
-    setIsOpen(false);
-  }, [location.pathname]);
+  const isActive = (to: string) => {
+    if (to === "/") return location.pathname === "/";
+    return location.pathname === to || location.pathname.startsWith(`${to}/`);
+  };
 
-  useEffect(() => {
-    const onDocumentClick = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (!target) return;
-      if (menuRootRef.current?.contains(target)) return;
-      setIsOpen(false);
-    };
+  const handleLogout = useCallback(async () => {
+    await signOutSafely("Utlogging feilet");
+    setMobileNavOpened(false);
+    navigate("/login", { replace: true });
+  }, [navigate]);
 
-    const onDocumentKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsOpen(false);
-    };
-
-    document.addEventListener("click", onDocumentClick);
-    document.addEventListener("keydown", onDocumentKeyDown);
-    return () => {
-      document.removeEventListener("click", onDocumentClick);
-      document.removeEventListener("keydown", onDocumentKeyDown);
-    };
+  const closeMobileNav = useCallback(() => {
+    setMobileNavOpened(false);
   }, []);
 
   return (
-    <header className="topbar">
-      <div className="brand">
-        <img className="logo" src="/images/titech-logo-header.png" alt="WeldDoc" />
-      </div>
+    <Box
+      component="header"
+      pb={0}
+      mb="lg"
+      style={{
+        background: "transparent",
+        paddingTop: "env(safe-area-inset-top)",
+      }}
+    >
+      <Paper
+        withBorder
+        radius="xl"
+        px="lg"
+        py="md"
+        style={{
+          background: "rgba(10, 18, 32, 0.55)",
+          borderColor: "rgba(255,255,255,0.10)",
+          boxShadow: "0 14px 40px rgba(0,0,0,0.35)",
+          backdropFilter: "blur(14px)",
+        }}
+      >
+        <Group justify="space-between" align="center" wrap="nowrap" gap="md">
+          <Box
+            component={Link}
+            to="/"
+            aria-label="Gå til startsiden"
+            style={{ display: "inline-flex", flexShrink: 0 }}
+          >
+            <Box
+              component="img"
+              src="/images/titech-logo-header.png"
+              alt="WeldDoc"
+              h={{ base: 54, sm: 96 }}
+              w="auto"
+              style={{ objectFit: "contain" }}
+            />
+          </Box>
 
-      <nav className="nav">
-        <Link className="navlink" to="/">
-          Hjem
-        </Link>
-        <Link className="navlink" to="/prosjekter">
-          Prosjekter
-        </Link>
-        <Link className="navlink" to="/materialsertifikater">
-          Materialsertifikater
-        </Link>
-        <Link className="navlink" to="/wps">
-          Sveiseprosedyrer
-        </Link>
-        <Link className="navlink" to="/certs">
-          Sveisesertifikater
-        </Link>
-        <Link className="navlink" to="/ndt">
-          NDT
-        </Link>
-      </nav>
+          <Group
+            gap="xs"
+            justify="center"
+            align="center"
+            wrap="nowrap"
+            visibleFrom="md"
+            style={{ flex: 1, minWidth: 0 }}
+          >
+            {NAV_ITEMS.map((item) => {
+  const active = isActive(item.to);
+  const Icon = item.icon;
 
-      <div className={`user-section${isOpen ? " is-open" : ""}`} data-user-menu ref={menuRootRef}>
-        <button
-          className="user-avatar"
-          id="user-avatar"
-          aria-label="Brukerprofil"
-          aria-expanded={isOpen ? "true" : "false"}
-          aria-haspopup="menu"
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            setIsOpen((prev) => !prev);
-          }}
-        >
-          <div className="avatar-circle">
-            <svg viewBox="0 0 24 24" className="avatar-icon" aria-hidden="true">
-              <path
-                fill="currentColor"
-                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"
-              />
-            </svg>
-          </div>
-          <div className="user-name">{displayName}</div>
-        </button>
+  return (
+    <Button
+      key={item.to}
+      component={Link}
+      to={item.to}
+      radius="xl"
+      size="sm"
+      variant={active ? "filled" : "light"}
+      color={active ? "brand" : "gray"}
+      leftSection={<Icon size={16} aria-hidden="true" />}
+    >
+      {item.label}
+    </Button>
+  );
+})}
+          </Group>
 
-        <div className="user-menu" role="menu" aria-label="Brukermeny">
-          {email ? (
-            <div className="user-menu__email">
-              <svg viewBox="0 0 24 24" className="user-menu__email-icon" aria-hidden="true">
-                <path
-                  fill="currentColor"
-                  d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"
-                />
-              </svg>
-              <span>{email}</span>
-            </div>
-          ) : null}
-          <Link className="user-menu__item" role="menuitem" to="/settings">
+          <Group justify="flex-end" align="center" gap="sm" style={{ flexShrink: 0 }}>
+            <Box maw={240} visibleFrom="md" style={{ flexShrink: 0 }}>
+              <Menu position="bottom-end" shadow="md">
+                <Menu.Target>
+                  <UnstyledButton id="user-avatar" aria-label="Brukerprofil" style={{ display: "block" }}>
+                    <Paper
+                      withBorder
+                      radius="xl"
+                      px="md"
+                      py="sm"
+                      style={{
+                        minWidth: 132,
+                        background: "linear-gradient(180deg, rgba(17, 26, 46, 0.94), rgba(13, 21, 39, 0.92))",
+                        borderColor: "rgba(122, 162, 255, 0.20)",
+                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 14px 30px rgba(0,0,0,0.22)",
+                        backdropFilter: "blur(14px)",
+                      }}
+                    >
+                      <Stack gap={8} align="center">
+                        <Avatar
+                          color="brand"
+                          variant="light"
+                          radius="xl"
+                          size={44}
+                          style={{
+                            border: "3px solid rgba(69, 168, 239, 0.55)",
+                            boxShadow: "0 0 0 4px rgba(69, 168, 239, 0.10)",
+                          }}
+                        >
+                          <IconUser size={16} aria-hidden="true" />
+                        </Avatar>
+
+                        <Text ta="center" size="sm" fw={600} truncate c="white">
+                          {displayName}
+                        </Text>
+                      </Stack>
+                    </Paper>
+                  </UnstyledButton>
+                </Menu.Target>
+
+                <Menu.Dropdown>
+                  {email ? (
+                    <>
+                      <Menu.Label>{email}</Menu.Label>
+                      <Menu.Divider />
+                    </>
+                  ) : null}
+                  <Menu.Item component={Link} to="/settings" leftSection={<IconSettings size={14} />}>
+                    Innstillinger
+                  </Menu.Item>
+                  <Menu.Item
+                    color="red"
+                    leftSection={<IconLogout size={14} />}
+                    onClick={() => void handleLogout()}
+                  >
+                    Logg ut
+                  </Menu.Item>
+                </Menu.Dropdown>
+              </Menu>
+            </Box>
+
+            <Burger
+              hiddenFrom="md"
+              opened={mobileNavOpened}
+              onClick={() => setMobileNavOpened((opened) => !opened)}
+              aria-label={mobileNavOpened ? "Lukk navigasjon" : "Åpne navigasjon"}
+              color="white"
+            />
+          </Group>
+        </Group>
+      </Paper>
+
+      <Drawer
+        opened={mobileNavOpened}
+        onClose={closeMobileNav}
+        hiddenFrom="md"
+        position="right"
+        size="100%"
+        title="Meny"
+        padding="lg"
+        overlayProps={{ backgroundOpacity: 0.55, blur: 4 }}
+        styles={{
+          content: {
+            background: "linear-gradient(180deg, rgba(9, 16, 28, 0.98), rgba(13, 20, 34, 0.99))",
+          },
+          header: {
+            background: "transparent",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+          },
+          body: {
+            paddingTop: 8,
+          },
+        }}
+      >
+        <Stack gap="md">
+          <Paper
+            withBorder
+            radius="lg"
+            p="md"
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              borderColor: "rgba(255,255,255,0.10)",
+            }}
+          >
+            <Group wrap="nowrap" align="center">
+              <Avatar color="brand" variant="light" radius="xl" size="lg">
+                <IconUser size={18} aria-hidden="true" />
+              </Avatar>
+              <Stack gap={2} style={{ minWidth: 0 }}>
+                <Text size="sm" fw={700} c="white" truncate>
+                  {displayName}
+                </Text>
+                {email ? (
+                  <Text size="xs" c="dimmed" truncate>
+                    {email}
+                  </Text>
+                ) : null}
+              </Stack>
+            </Group>
+          </Paper>
+
+          <Stack gap="xs">
+              {NAV_ITEMS.map((item) => {
+  const active = isActive(item.to);
+  const Icon = item.icon;
+
+  return (
+    <Button
+      key={item.to}
+      component={Link}
+      to={item.to}
+      justify="space-between"
+      variant={active ? "filled" : "light"}
+      color={active ? "brand" : "gray"}
+      radius="lg"
+      size="md"
+      fullWidth
+      leftSection={<Icon size={18} aria-hidden="true" />}
+      rightSection={<IconChevronRight size={16} />}
+      onClick={closeMobileNav}
+    >
+      {item.label}
+    </Button>
+  );
+})}
+          </Stack>
+
+          <Divider color="rgba(255,255,255,0.08)" />
+
+          <Button
+            component={Link}
+            to="/settings"
+            variant="subtle"
+            color="gray"
+            radius="lg"
+            size="md"
+            justify="space-between"
+            leftSection={<IconSettings size={18} />}
+            rightSection={<IconChevronRight size={16} />}
+            onClick={closeMobileNav}
+          >
             Innstillinger
-          </Link>
-          <button className="user-menu__item" role="menuitem" id="logout" type="button">
+          </Button>
+
+          <Button
+            variant="light"
+            color="red"
+            radius="lg"
+            size="md"
+            leftSection={<IconLogout size={18} />}
+            onClick={() => void handleLogout()}
+          >
             Logg ut
-          </button>
-        </div>
-      </div>
-    </header>
+          </Button>
+        </Stack>
+      </Drawer>
+    </Box>
   );
 }

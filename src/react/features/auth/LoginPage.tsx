@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import { Alert, Box, Center, Image, Paper, Stack } from "@mantine/core";
 import { useNavigate } from "react-router-dom";
-import { signIn } from "../../../app/auth";
+import { signIn } from "@/auth/authClient";
+import { AppButton } from "@react/ui/AppButton";
+import { AppCheckbox } from "@react/ui/AppCheckbox";
+import { AppTextInput } from "@react/ui/AppTextInput";
 import { useAuth } from "../../auth/AuthProvider";
+import { IconAlertCircle } from "@tabler/icons-react";
 
 function readRememberMe() {
   try {
@@ -14,7 +19,17 @@ function readRememberMe() {
 }
 
 function formatLoginError(err: unknown) {
-  if (err instanceof Error && err.message) return err.message;
+  if (err instanceof Error && err.message) {
+    switch (err.message) {
+      case "Invalid login credentials":
+        return "Feil e-post eller passord.";
+      case "Email not confirmed":
+        return "Du må bekrefte e-posten din før du kan logge inn.";
+      default:
+        return "Innlogging feilet. Prøv igjen.";
+    }
+  }
+
   return "Innlogging feilet.";
 }
 
@@ -58,70 +73,60 @@ export function LoginPage() {
   };
 
   return (
-    <div className="shell page-login">
-      <main className="main">
-        <div className="loginwrap">
-          <section className="logincard">
-            <div className="loginbrand">
-              <img className="loginlogo-main" src="/images/titech-logo-login.png" alt="WeldDoc" />
-            </div>
+    <Box style={{
+      minHeight: "100dvh",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "16px",
+    }}>
+        <Paper withBorder radius="xl" shadow="xl" p="xl" w="100%" maw={420}>
+          <Stack gap="lg">
+            <Center>
+              <Image src="/images/titech-logo-login.png" alt="WeldDoc" fit="contain" style={{height: "clamp(90px, 12vw, 140px)", width: "auto", maxWidth: "80%",}} />
+            </Center>
 
             <form onSubmit={onSubmit}>
-              <div className="loginrow">
-                <label htmlFor="react-email">E-post</label>
-                <input
+              <Stack gap="md">
+                <AppTextInput
+                  label="E-post"
                   id="react-email"
-                  className="input"
+                  value={email}
+                  onChange={(value) => {
+                    resetErrors();
+                    setEmail(value);
+                  }}
+                  disabled={isSubmitting}
                   type="email"
                   autoComplete="username"
-                  value={email}
-                  onChange={(event) => {
+                />
+
+                <AppTextInput
+                  label="Passord"
+                  id="react-pass"
+                  value={password}
+                  onChange={(value) => {
                     resetErrors();
-                    setEmail(event.target.value);
+                    setPassword(value);
                   }}
                   disabled={isSubmitting}
-                />
-              </div>
-
-              <div className="loginrow">
-                <label htmlFor="react-pass">Passord</label>
-                <input
-                  id="react-pass"
-                  className="input"
                   type="password"
                   autoComplete="current-password"
-                  value={password}
-                  onChange={(event) => {
-                    resetErrors();
-                    setPassword(event.target.value);
-                  }}
-                  disabled={isSubmitting}
                 />
-              </div>
 
-              <div className="loginrow remember">
-                <label className="rememberlabel">
-                  <input
-                    type="checkbox"
-                    checked={remember}
-                    onChange={(event) => setRemember(event.target.checked)}
-                    disabled={isSubmitting}
-                  />
-                  Husk meg
-                </label>
-              </div>
+                <AppCheckbox checked={remember} onChange={setRemember} disabled={isSubmitting} label="Husk meg" />
 
-              <div className="loginactions">
-                <button className="btn primary" type="submit" disabled={isSubmitting}>
+                <AppButton tone="primary" size="sm" type="submit" disabled={isSubmitting}>
                   {isSubmitting ? "Logger inn..." : "Logg inn"}
-                </button>
-              </div>
+                </AppButton>
+              </Stack>
             </form>
 
-            <p className="loginerr">{error}</p>
-          </section>
-        </div>
-      </main>
-    </div>
+            {error ? (
+              <Alert icon={<IconAlertCircle size={18} />} variant="light" color="red">{error}</Alert>
+            ) : null}
+          </Stack>
+        </Paper>
+    </Box>
   );
 }

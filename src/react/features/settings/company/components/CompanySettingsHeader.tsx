@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { AppLinkButton } from "@react/ui/AppLinkButton";
+import { AppSectionHeader } from "@react/ui/AppSectionHeader";
 
 type CompanySettingsHeaderProps = {
   title: string;
@@ -11,18 +12,15 @@ type CompanySettingsHeaderProps = {
 
 export function CompanySettingsHeader({ title, subtitle, backTo, backLabel, actions }: CompanySettingsHeaderProps) {
   return (
-    <section className="section-header">
-      <div>
-        <h1 className="section-title">{title}</h1>
-        <p className="section-subtitle">{subtitle}</p>
-      </div>
-
-      <div className="section-actions">
-        <Link className="btn small" to={backTo}>
-          {backLabel}
-        </Link>
-        {actions}
-      </div>
-    </section>
+    <AppSectionHeader
+      title={title}
+      subtitle={subtitle}
+      actions={
+        <>
+          <AppLinkButton to={backTo}>{backLabel}</AppLinkButton>
+          {actions}
+        </>
+      }
+    />
   );
 }

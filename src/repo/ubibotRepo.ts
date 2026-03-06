@@ -5,10 +5,6 @@ export type UbibotHourlyRow = {
   bucket_start: string;
   temp_avg: number | null;
   rh_avg: number | null;
-  temp_min: number | null;
-  temp_max: number | null;
-  rh_min: number | null;
-  rh_max: number | null;
   samples: number | null;
   inserted_at: string;
 };
@@ -18,35 +14,63 @@ export type UbibotChannelRow = {
   last_bucket_start: string | null;
 };
 
-type ChannelScanRow = {
+const UBIBOT_CHANNEL_CACHE_MS = 5 * 60 * 1000;
+
+type ChannelRpcRow = {
   channel_id: string | null;
-  bucket_start: string | null;
+  last_bucket_start: string | null;
 };
 
-export async function fetchUbibotChannels(opts?: { scanLimit?: number }) {
-  const scanLimit = Math.min(Math.max(opts?.scanLimit ?? 5000, 200), 20000);
-  const { data, error } = await supabase
-    .from("ubibot_hourly")
-    .select("channel_id, bucket_start")
-    .order("bucket_start", { ascending: false })
-    .limit(scanLimit);
-  if (error) throw error;
+let cachedUbibotChannels:
+  | {
+      value: UbibotChannelRow[];
+      expiresAt: number;
+    }
+  | null = null;
+let ubibotChannelsPromise: Promise<UbibotChannelRow[]> | null = null;
 
-  const rows = (data ?? []) as ChannelScanRow[];
-  const byChannel = new Map<string, string | null>();
-  for (const row of rows) {
-    const channelId = String(row.channel_id ?? "").trim();
-    if (!channelId || byChannel.has(channelId)) continue;
-    byChannel.set(channelId, row.bucket_start ?? null);
+function normalizeUbibotChannels(rows: Array<{ channel_id: string | null; last_bucket_start: string | null }>) {
+  return rows
+    .map((row) => ({
+      channel_id: String(row.channel_id ?? "").trim(),
+      last_bucket_start: row.last_bucket_start ?? null,
+    }))
+    .filter((row) => row.channel_id)
+    .map((row) => row satisfies UbibotChannelRow);
+}
+
+async function fetchUbibotChannelsViaRpc() {
+  const { data, error } = await supabase.rpc("list_ubibot_channels");
+  if (error) throw error;
+  return normalizeUbibotChannels((data ?? []) as ChannelRpcRow[]);
+}
+
+export async function fetchUbibotChannels() {
+  if (cachedUbibotChannels && cachedUbibotChannels.expiresAt > Date.now()) {
+    return cachedUbibotChannels.value;
   }
 
-  return Array.from(byChannel.entries()).map(
-    ([channel_id, last_bucket_start]) =>
-      ({
-        channel_id,
-        last_bucket_start,
-      }) satisfies UbibotChannelRow
-  );
+  if (ubibotChannelsPromise) {
+    return ubibotChannelsPromise;
+  }
+
+  const request = (async () => {
+    const channels = await fetchUbibotChannelsViaRpc();
+    cachedUbibotChannels = {
+      value: channels,
+      expiresAt: Date.now() + UBIBOT_CHANNEL_CACHE_MS,
+    };
+
+    return channels;
+  })();
+
+  ubibotChannelsPromise = request;
+
+  try {
+    return await request;
+  } finally {
+    ubibotChannelsPromise = null;
+  }
 }
 
 export async function fetchUbibotHourlyByChannel(
@@ -64,10 +88,6 @@ export async function fetchUbibotHourlyByChannel(
       bucket_start,
       temp_avg,
       rh_avg,
-      temp_min,
-      temp_max,
-      rh_min,
-      rh_max,
       samples,
       inserted_at
     `

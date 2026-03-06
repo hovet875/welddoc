@@ -1,3 +1,5 @@
+import { LineChart } from "@mantine/charts";
+import { Alert, Stack, Text } from "@mantine/core";
 import type { UbibotChartModel } from "../types";
 
 type UbibotChartProps = {
@@ -7,93 +9,63 @@ type UbibotChartProps = {
 export function UbibotChart({ model }: UbibotChartProps) {
   switch (model.kind) {
     case "error":
-      return <div className="err">{model.message}</div>;
+      return (
+        <Alert color="red" variant="light">
+          {model.message}
+        </Alert>
+      );
     case "loading":
     case "empty":
-      return <div className="muted">{model.message}</div>;
+      return (
+        <Text c="dimmed" ta="center">
+          {model.message}
+        </Text>
+      );
     case "data":
       return (
-        <>
-          <div className="ub-nowtemp">
-            Gjennomsnittlig målt luftfuktighet <strong>{model.avgRhLabel}</strong>
-          </div>
+        <Stack gap="xs">
+          <Text c="dimmed" size="sm" ta="center">
+            Gjennomsnittlig målt luftfuktighet <Text component="strong" inherit c="textPrimary">{model.avgRhLabel}</Text>
+          </Text>
 
-          <svg
-            viewBox={`0 0 ${model.viewW} ${model.viewH}`}
-            role="img"
-            aria-label="Temperatur og luftfuktighet fra UbiBot"
-          >
-            <g className="ub-grid">
-              {model.yGrid.map((row, index) => (
-                <g key={index}>
-                  <line x1={model.padL} y1={row.y.toFixed(2)} x2={model.viewW - model.padR} y2={row.y.toFixed(2)} />
-                  <text
-                    className="ub-axis-label ub-axis-label-left"
-                    x={model.padL - 10}
-                    y={(row.y + 4).toFixed(2)}
-                    textAnchor="end"
-                  >
-                    {row.tempLabel}
-                  </text>
-                  <text
-                    className="ub-axis-label ub-axis-label-right"
-                    x={model.viewW - model.padR + 10}
-                    y={(row.y + 4).toFixed(2)}
-                    textAnchor="start"
-                  >
-                    {row.rhLabel}
-                  </text>
-                </g>
-              ))}
-            </g>
+          <LineChart
+            h={280}
+            data={model.points}
+            dataKey="label"
+            series={[
+              { name: "temp", label: "Temperatur", color: "orange.4", yAxisId: "left" },
+              { name: "rh", label: "Luftfuktighet", color: "brand.4", yAxisId: "right" },
+            ]}
+            withLegend
+            withDots={false}
+            strokeWidth={2.3}
+            withRightYAxis
+            yAxisProps={{
+              yAxisId: "left",
+              domain: model.tempDomain,
+              width: 60,
+              tickFormatter: (value) => `${Number(value).toFixed(1)}°`,
+            }}
+            rightYAxisProps={{
+              yAxisId: "right",
+              domain: model.rhDomain,
+              width: 60,
+              tickFormatter: (value) => `${Number(value).toFixed(1)}%`,
+            }}
+            valueFormatter={(value) => `${Number(value).toFixed(1)}`}
+            xAxisProps={{ interval: "preserveStartEnd" }}
+          />
 
-            <g className="ub-axis">
-              {model.xTicks.map((tick, index) => (
-                <text
-                  key={index}
-                  className="ub-x-label"
-                  x={tick.x.toFixed(2)}
-                  y={model.viewH - 12}
-                  textAnchor="middle"
-                >
-                  {tick.label}
-                </text>
-              ))}
-            </g>
+          <Text c="dimmed" size="xs" ta="center">
+            Temperatur | min {model.tempMinLabel}° / maks {model.tempMaxLabel}°  •  Luftfuktighet | min {model.rhMinLabel}% / maks {model.rhMaxLabel}%
+          </Text>
 
-            {model.rhPath ? <path className="ub-rh-line" d={model.rhPath} /> : null}
-            {model.tempPath ? <path className="ub-temp-line" d={model.tempPath} /> : null}
-            {model.tempMarker ? (
-              <circle
-                className="ub-point ub-point-temp"
-                cx={model.tempMarker.x.toFixed(2)}
-                cy={model.tempMarker.y.toFixed(2)}
-                r="3.8"
-              />
-            ) : null}
-            {model.rhMarker ? (
-              <circle
-                className="ub-point ub-point-rh"
-                cx={model.rhMarker.x.toFixed(2)}
-                cy={model.rhMarker.y.toFixed(2)}
-                r="3.8"
-              />
-            ) : null}
-          </svg>
-
-          <div className="ub-legend ub-legend-block">
-            <span className="ub-legend-item">
-              <span className="ub-legend-swatch ub-legend-temp"></span>
-              Temperatur | min {model.tempMinLabel}°C / maks {model.tempMaxLabel}°C
-            </span>
-            <span className="ub-legend-item">
-              <span className="ub-legend-swatch ub-legend-rh"></span>
-              Luftfuktighet | min {model.rhMinLabel}% / maks {model.rhMaxLabel}%
-            </span>
-          </div>
-
-          {model.note ? <div className="ub-note muted">{model.note}</div> : null}
-        </>
+          {model.note ? (
+            <Text c="dimmed" size="xs" ta="center">
+              {model.note}
+            </Text>
+          ) : null}
+        </Stack>
       );
   }
 }

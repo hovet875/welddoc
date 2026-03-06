@@ -3,13 +3,12 @@ import { defineConfig } from "vite";
 
 const srcDir = fileURLToPath(new URL("./src", import.meta.url));
 
-export default defineConfig({
+export default defineConfig(() => ({
+  base: "/",
   resolve: {
     alias: [
-      { find: /^@legacy\//, replacement: `${srcDir}/legacy/` },
       { find: /^@react\//, replacement: `${srcDir}/react/` },
-      { find: /^@app\//, replacement: `${srcDir}/app/` },
       { find: /^@\//, replacement: `${srcDir}/` },
     ],
   },
-});
+}));

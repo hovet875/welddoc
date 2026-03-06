@@ -1,4 +1,5 @@
 import { supabase } from "../services/supabaseClient";
+import { getRangeFromPage, normalizePageRequest, type PageResult } from "./pagination";
 
 export type ProjectRow = {
   id: string;
@@ -10,6 +11,17 @@ export type ProjectRow = {
   created_at: string;
 };
 
+export type ProjectListFilters = {
+  status?: "" | "active" | "inactive";
+  customer?: string | null;
+  text?: string | null;
+  isAdmin?: boolean;
+};
+
+function escapeLikeValue(value: string) {
+  return value.replace(/[%_,]/g, (match) => `\\${match}`);
+}
+
 export async function fetchProjects() {
   const { data, error } = await supabase
     .from("projects")
@@ -19,6 +31,62 @@ export async function fetchProjects() {
 
   if (error) throw error;
   return (data ?? []) as ProjectRow[];
+}
+
+export async function fetchProjectPage(input: {
+  page?: number;
+  pageSize?: number;
+  filters?: ProjectListFilters;
+}): Promise<PageResult<ProjectRow>> {
+  const { page, pageSize } = normalizePageRequest(input, { page: 1, pageSize: 25 });
+  const { from, to } = getRangeFromPage(page, pageSize);
+  const filters = input.filters ?? {};
+  const status = String(filters.status ?? "").trim();
+  const customer = String(filters.customer ?? "").trim();
+  const text = String(filters.text ?? "").trim();
+  const isAdmin = filters.isAdmin ?? false;
+
+  let query = supabase
+    .from("projects")
+    .select("id, project_no, work_order, customer, name, is_active, created_at", { count: "exact" });
+
+  if (!isAdmin || status === "active") {
+    query = query.eq("is_active", true);
+  } else if (status === "inactive") {
+    query = query.eq("is_active", false);
+  }
+
+  if (customer) {
+    query = query.eq("customer", customer);
+  }
+
+  if (text) {
+    const escaped = escapeLikeValue(text);
+    const numeric = Number.parseInt(text, 10);
+    const clauses = [
+      `work_order.ilike.%${escaped}%`,
+      `customer.ilike.%${escaped}%`,
+      `name.ilike.%${escaped}%`,
+    ];
+    if (Number.isFinite(numeric) && String(numeric) === text) {
+      clauses.unshift(`project_no.eq.${numeric}`);
+    }
+    query = query.or(clauses.join(","));
+  }
+
+  const { data, error, count } = await query
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (error) throw error;
+
+  return {
+    items: (data ?? []) as ProjectRow[],
+    total: count ?? 0,
+    page,
+    pageSize,
+  };
 }
 
 export async function fetchProjectById(id: string) {

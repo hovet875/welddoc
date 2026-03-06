@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { AppLinkButton } from "@react/ui/AppLinkButton";
+import { AppSectionHeader } from "@react/ui/AppSectionHeader";
 
 type SettingsHeaderProps = {
   isAdmin: boolean;
@@ -6,24 +7,15 @@ type SettingsHeaderProps = {
 
 export function SettingsHeader({ isAdmin }: SettingsHeaderProps) {
   return (
-    <section className="section-header">
-      <div>
-        <h1 className="section-title">Innstillinger</h1>
-        <p className="section-subtitle">Administrer app- og brukerinnstillinger.</p>
-      </div>
-
-      <div className="section-actions">
-        {isAdmin ? (
-          <Link className="btn small" to="/settings/company">
-            App-parametere
-          </Link>
-        ) : null}
-        {isAdmin ? (
-          <Link className="btn small" to="/settings/users">
-            Administrer brukere
-          </Link>
-        ) : null}
-      </div>
-    </section>
+    <AppSectionHeader
+      title="Innstillinger"
+      subtitle="Administrer app- og brukerinnstillinger."
+      actions={
+        <>
+          {isAdmin ? <AppLinkButton to="/settings/company">App-parametere</AppLinkButton> : null}
+          {isAdmin ? <AppLinkButton to="/settings/users">Administrer brukere</AppLinkButton> : null}
+        </>
+      }
+    />
   );
 }

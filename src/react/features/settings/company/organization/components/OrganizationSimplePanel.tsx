@@ -1,8 +1,13 @@
 import { useState } from "react";
-import { toast } from "../../../../../../ui/toast";
+import { Group, Stack, Text } from "@mantine/core";
+import { toast } from "@react/ui/notify";
 import type { OrganizationListState } from "../organization.types";
 import { OrganizationCollapsiblePanel } from "./OrganizationCollapsiblePanel";
-import { PencilIcon, TrashIcon } from "./OrganizationActionIcons";
+import { OrganizationListItem } from "./OrganizationListItem";
+import { AppActionsMenu, createDeleteAction, createEditAction } from "@react/ui/AppActionsMenu";
+import { AppAsyncState } from "@react/ui/AppAsyncState";
+import { AppButton } from "@react/ui/AppButton";
+import { AppTextInput } from "@react/ui/AppTextInput";
 
 type OrganizationSimplePanelProps<T extends { id: string }> = {
   title: string;
@@ -52,51 +57,58 @@ export function OrganizationSimplePanel<T extends { id: string }>({
 
   return (
     <OrganizationCollapsiblePanel title={title} meta="Admin">
-      <div className="settings-form">
-        <div className="settings-row inline">
-          <input
-            className="input"
-            type="text"
+      <Stack gap="md">
+        <Group align="flex-end" gap="sm" wrap="wrap">
+          <AppTextInput
+            style={{ flex: 1, minWidth: "16rem" }}
             placeholder={inputPlaceholder}
             value={inputValue}
-            onChange={(event) => setInputValue(event.target.value)}
+            onChange={setInputValue}
             onKeyDown={(event) => {
               if (event.key !== "Enter") return;
               event.preventDefault();
               void handleAdd();
             }}
           />
-          <button className="btn primary small" type="button" disabled={adding} onClick={() => void handleAdd()}>
+          <AppButton tone="primary" size="sm" disabled={adding} onClick={() => void handleAdd()}>
             {addLabel}
-          </button>
-        </div>
+          </AppButton>
+        </Group>
 
-        {helperText ? <div className="muted" style={{ fontSize: 12 }}>{helperText}</div> : null}
+        {helperText ? (
+          <Text c="dimmed" size="sm">
+            {helperText}
+          </Text>
+        ) : null}
 
-        <div className="settings-list">
-          {listState.loading ? <div className="muted">Laster...</div> : null}
-          {!listState.loading && listState.error ? <div className="err">Feil: {listState.error}</div> : null}
-          {!listState.loading && !listState.error && listState.rows.length === 0 ? (
-            <div className="muted">{emptyText}</div>
-          ) : null}
-          {!listState.loading && !listState.error && listState.rows.length > 0
-            ? listState.rows.map((row) => (
-                <div key={row.id} className="settings-item">
-                  <div className="settings-item__title">{getRowTitle(row)}</div>
-                  <div className="settings-item__meta"></div>
-                  <div className="settings-item__actions">
-                    <button className="iconbtn small" type="button" title="Endre" onClick={() => onEdit(row)}>
-                      <PencilIcon />
-                    </button>
-                    <button className="iconbtn small danger" type="button" title="Slett" onClick={() => onDelete(row)}>
-                      <TrashIcon />
-                    </button>
-                  </div>
-                </div>
-              ))
-            : null}
-        </div>
-      </div>
+        <AppAsyncState
+          loading={listState.loading}
+          error={listState.error}
+          isEmpty={listState.rows.length === 0}
+          emptyMessage={emptyText}
+        >
+          <Stack gap="sm">
+            {listState.rows.map((row) => (
+              <OrganizationListItem
+                key={row.id}
+                title={getRowTitle(row)}
+                actions={
+                  <AppActionsMenu
+                    items={[
+                      createEditAction({
+                        onClick: () => onEdit(row),
+                      }),
+                      createDeleteAction({
+                        onClick: () => onDelete(row),
+                      }),
+                    ]}
+                  />
+                }
+              />
+            ))}
+          </Stack>
+        </AppAsyncState>
+      </Stack>
     </OrganizationCollapsiblePanel>
   );
 }

@@ -1,9 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { toast } from "../../../../../../ui/toast";
+import { Box, Group, SimpleGrid, Stack, Text } from "@mantine/core";
 import type { NdtInspectorRow, NdtSupplierRow } from "../../../../../../repo/ndtSupplierRepo";
+import { toast } from "@react/ui/notify";
+import { AppActionsMenu, createDeleteAction, createEditAction } from "@react/ui/AppActionsMenu";
+import { AppAsyncState } from "@react/ui/AppAsyncState";
+import { AppButton } from "@react/ui/AppButton";
+import { AppNativeSelect } from "@react/ui/AppNativeSelect";
+import { AppTextInput } from "@react/ui/AppTextInput";
 import type { OrganizationListState } from "../organization.types";
-import { PencilIcon, TrashIcon } from "./OrganizationActionIcons";
 import { OrganizationCollapsiblePanel } from "./OrganizationCollapsiblePanel";
+import { OrganizationListItem } from "./OrganizationListItem";
 
 type OrganizationNdtPanelProps = {
   suppliersState: OrganizationListState<NdtSupplierRow>;
@@ -105,139 +111,118 @@ export function OrganizationNdtPanel({
 
   return (
     <OrganizationCollapsiblePanel title="NDT-leverandører og kontrollører" meta="Admin">
-      <div className="settings-form">
-        <div className="settings-row inline">
-          <input
-            className="input"
-            type="text"
+      <Stack gap="md">
+        <Group align="flex-end" gap="sm" wrap="wrap">
+          <AppTextInput
+            style={{ flex: 1, minWidth: "16rem" }}
             placeholder="Ny NDT-leverandør..."
             value={supplierInput}
-            onChange={(event) => setSupplierInput(event.target.value)}
+            onChange={setSupplierInput}
             onKeyDown={(event) => {
               if (event.key !== "Enter") return;
               event.preventDefault();
               void handleAddSupplier();
             }}
           />
-          <button
-            className="btn primary small"
-            type="button"
-            disabled={addingSupplier}
-            onClick={() => void handleAddSupplier()}
-          >
+          <AppButton tone="primary" size="sm" disabled={addingSupplier} onClick={() => void handleAddSupplier()}>
             Legg til leverandør
-          </button>
-        </div>
+          </AppButton>
+        </Group>
 
-        <div className="settings-row inline">
-          <div className="settings-inputs" style={{ gridTemplateColumns: "1fr 1fr" }}>
-            <select
-              className="select"
-              value={selectedSupplierId}
-              onChange={(event) => setSelectedSupplierId(event.target.value)}
-            >
+        <Group align="flex-end" gap="sm" wrap="wrap">
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm" style={{ flex: 1, minWidth: "20rem" }}>
+            <AppNativeSelect value={selectedSupplierId} onChange={setSelectedSupplierId}>
               <option value="">Velg leverandør...</option>
               {suppliers.map((supplier) => (
                 <option key={supplier.id} value={supplier.id}>
                   {supplier.name}
                 </option>
               ))}
-            </select>
-            <input
-              className="input"
-              type="text"
+            </AppNativeSelect>
+            <AppTextInput
               placeholder="Ny kontrollør..."
               value={inspectorInput}
-              onChange={(event) => setInspectorInput(event.target.value)}
+              onChange={setInspectorInput}
               onKeyDown={(event) => {
                 if (event.key !== "Enter") return;
                 event.preventDefault();
                 void handleAddInspector();
               }}
             />
-          </div>
-          <button
-            className="btn primary small"
-            type="button"
-            disabled={addingInspector}
-            onClick={() => void handleAddInspector()}
-          >
+          </SimpleGrid>
+          <AppButton tone="primary" size="sm" disabled={addingInspector} onClick={() => void handleAddInspector()}>
             Legg til kontrollør
-          </button>
-        </div>
+          </AppButton>
+        </Group>
 
-        <div className="settings-list">
-          {isLoading ? <div className="muted">Laster...</div> : null}
-          {!isLoading && error ? <div className="err">Feil: {error}</div> : null}
-          {!isLoading && !error && suppliers.length === 0 ? <div className="muted">Ingen NDT-leverandører.</div> : null}
+        <AppAsyncState
+          loading={isLoading}
+          error={error}
+          isEmpty={suppliers.length === 0}
+          emptyMessage="Ingen NDT-leverandører."
+        >
+          <Stack gap="md">
+            {suppliers.map((supplier) => {
+              const supplierInspectors = inspectorsBySupplier.get(supplier.id) ?? [];
 
-          {!isLoading && !error
-            ? suppliers.map((supplier) => {
-                const supplierInspectors = inspectorsBySupplier.get(supplier.id) ?? [];
+              return (
+                <Box key={supplier.id}>
+                  <Stack gap="xs">
+                    <OrganizationListItem
+                      title={supplier.name}
+                      meta={`${supplierInspectors.length} kontrollører`}
+                      actions={
+                        <AppActionsMenu
+                          items={[
+                            createEditAction({
+                              key: "edit-supplier",
+                              onClick: () => onEditSupplier(supplier),
+                            }),
+                            createDeleteAction({
+                              key: "delete-supplier",
+                              onClick: () => onDeleteSupplier(supplier),
+                            }),
+                          ]}
+                        />
+                      }
+                    />
 
-                return (
-                  <div key={supplier.id} className="settings-subgroup">
-                    <div className="settings-item">
-                      <div className="settings-item__title">{supplier.name}</div>
-                      <div className="settings-item__meta">{supplierInspectors.length} kontrollører</div>
-                      <div className="settings-item__actions">
-                        <button
-                          className="iconbtn small"
-                          type="button"
-                          title="Endre"
-                          onClick={() => onEditSupplier(supplier)}
-                        >
-                          <PencilIcon />
-                        </button>
-                        <button
-                          className="iconbtn small danger"
-                          type="button"
-                          title="Slett"
-                          onClick={() => onDeleteSupplier(supplier)}
-                        >
-                          <TrashIcon />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="settings-sublist">
-                      {supplierInspectors.length === 0 ? (
-                        <div className="muted" style={{ fontSize: 12 }}>
-                          Ingen kontrollører.
-                        </div>
-                      ) : (
-                        supplierInspectors.map((inspector) => (
-                          <div key={inspector.id} className="settings-item settings-item--sub">
-                            <div className="settings-item__title">{inspector.name}</div>
-                            <div className="settings-item__meta">Kontrollør</div>
-                            <div className="settings-item__actions">
-                              <button
-                                className="iconbtn small"
-                                type="button"
-                                title="Endre"
-                                onClick={() => onEditInspector(inspector)}
-                              >
-                                <PencilIcon />
-                              </button>
-                              <button
-                                className="iconbtn small danger"
-                                type="button"
-                                title="Slett"
-                                onClick={() => onDeleteInspector(inspector)}
-                              >
-                                <TrashIcon />
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            : null}
-        </div>
-      </div>
+                    {supplierInspectors.length === 0 ? (
+                      <Text c="dimmed" size="sm" pl="md">
+                        Ingen kontrollører.
+                      </Text>
+                    ) : (
+                      <Stack gap="xs" pl="md">
+                        {supplierInspectors.map((inspector) => (
+                          <OrganizationListItem
+                            key={inspector.id}
+                            title={inspector.name}
+                            meta="Kontrollør"
+                            actions={
+                              <AppActionsMenu
+                                items={[
+                                  createEditAction({
+                                    key: "edit-inspector",
+                                    onClick: () => onEditInspector(inspector),
+                                  }),
+                                  createDeleteAction({
+                                    key: "delete-inspector",
+                                    onClick: () => onDeleteInspector(inspector),
+                                  }),
+                                ]}
+                              />
+                            }
+                          />
+                        ))}
+                      </Stack>
+                    )}
+                  </Stack>
+                </Box>
+              );
+            })}
+          </Stack>
+        </AppAsyncState>
+      </Stack>
     </OrganizationCollapsiblePanel>
   );
 }

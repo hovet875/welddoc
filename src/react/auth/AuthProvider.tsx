@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { getProfileAccess, getSession, signOut } from "../../app/auth";
+import { getProfileAccess, getSession } from "@/auth/authClient";
 import { supabase } from "../../services/supabaseClient";
+import { signOutSafely } from "./logout";
 
 type AccessInfo = Awaited<ReturnType<typeof getProfileAccess>>;
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
@@ -28,11 +29,7 @@ const INITIAL_STATE: AuthState = {
 };
 
 async function safeSignOut() {
-  try {
-    await signOut();
-  } catch (err) {
-    console.warn("Sign out failed", err);
-  }
+  await signOutSafely("Utlogging feilet");
 }
 
 type SyncOptions = {

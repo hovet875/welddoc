@@ -1,5 +1,6 @@
 import { supabase } from "../services/supabaseClient";
 import { createUuid } from "../utils/id";
+import { getRangeFromPage, normalizePageRequest, type PageResult } from "./pagination";
 import {
   createFileRecord,
   createFileLink,
@@ -47,6 +48,231 @@ export type NdtReportRow = {
   file: { id: string; label: string | null; mime_type: string | null; size_bytes: number | null } | null;
   report_welders: NdtReportWelderRow[];
 };
+
+export type NdtReportListFilters = {
+  methodId?: string;
+  projectNo?: string;
+  year?: string;
+  welderId?: string;
+  result?: "" | "ok" | "fault";
+  query?: string;
+};
+
+export type NdtRtStatsRow = Pick<
+  NdtReportRow,
+  "id" | "report_date" | "created_at" | "weld_count" | "defect_count" | "report_welders"
+>;
+
+function ndtReportSelect() {
+  return `
+      id,
+      file_id,
+      method_id,
+      ndt_supplier_id,
+      ndt_inspector_id,
+      weld_count,
+      defect_count,
+      title,
+      customer,
+      report_date,
+      created_by,
+      created_at,
+      method:method_id (
+        id,
+        code,
+        label
+      ),
+      ndt_supplier:ndt_supplier_id (
+        id,
+        name
+      ),
+      ndt_inspector:ndt_inspector_id (
+        id,
+        supplier_id,
+        name
+      ),
+      file:file_id (
+        id,
+        label,
+        mime_type,
+        size_bytes
+      ),
+      report_welders:ndt_report_welders (
+        welder_id,
+        weld_count,
+        defect_count,
+        welder:welder_id (
+          id,
+          display_name,
+          welder_no
+        )
+      )
+    `;
+}
+
+function normalizeNdtFilters(filters?: NdtReportListFilters) {
+  return {
+    methodId: String(filters?.methodId ?? "").trim(),
+    projectNo: String(filters?.projectNo ?? "").trim(),
+    year: String(filters?.year ?? "").trim(),
+    welderId: String(filters?.welderId ?? "").trim(),
+    result: (filters?.result ?? "") as "" | "ok" | "fault",
+    query: String(filters?.query ?? "").trim(),
+  };
+}
+
+async function resolveReportIdsForWelder(welderId: string) {
+  if (!welderId) return null;
+  const { data, error } = await supabase
+    .from("ndt_report_welders")
+    .select("report_id")
+    .eq("welder_id", welderId);
+  if (error) throw error;
+  return Array.from(new Set((data ?? []).map((row: any) => String(row.report_id ?? "").trim()).filter(Boolean)));
+}
+
+function applyNdtReportFilters(query: any, filters: ReturnType<typeof normalizeNdtFilters>) {
+  let next = query;
+
+  if (filters.methodId) next = next.eq("method_id", filters.methodId);
+  if (filters.projectNo) next = next.eq("title", filters.projectNo);
+
+  if (filters.year) {
+    const year = Number(filters.year);
+    if (Number.isFinite(year) && year > 1900) {
+      const start = `${year}-01-01`;
+      const end = `${year + 1}-01-01`;
+      next = next.or(`and(report_date.gte.${start},report_date.lt.${end}),and(report_date.is.null,created_at.gte.${start},created_at.lt.${end})`);
+    }
+  }
+
+  if (filters.result === "ok") {
+    next = next.lte("defect_count", 0);
+  } else if (filters.result === "fault") {
+    next = next.gt("defect_count", 0);
+  }
+
+  if (filters.query) {
+    const escaped = filters.query.replace(/[%,]/g, " ").trim();
+    if (escaped) {
+      next = next.or(`title.ilike.%${escaped}%,customer.ilike.%${escaped}%`);
+    }
+  }
+
+  return next;
+}
+
+export async function fetchNdtReportPage(input: {
+  page: number;
+  pageSize: number;
+  filters?: NdtReportListFilters;
+}): Promise<PageResult<NdtReportRow>> {
+  const filters = normalizeNdtFilters(input.filters);
+  const { page, pageSize } = normalizePageRequest({ page: input.page, pageSize: input.pageSize }, { page: 1, pageSize: 25 });
+  const { from, to } = getRangeFromPage(page, pageSize);
+
+  const welderReportIds = await resolveReportIdsForWelder(filters.welderId);
+  if (filters.welderId && welderReportIds && welderReportIds.length === 0) {
+    return { items: [], total: 0, page, pageSize };
+  }
+
+  let query = supabase
+    .from("ndt_reports")
+    .select(ndtReportSelect(), { count: "exact" })
+    .order("report_date", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  query = applyNdtReportFilters(query, filters);
+  if (welderReportIds && welderReportIds.length > 0) {
+    query = query.in("id", welderReportIds);
+  }
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+
+  return {
+    items: (data ?? []) as unknown as NdtReportRow[],
+    total: Number(count ?? 0),
+    page,
+    pageSize,
+  };
+}
+
+export async function countNdtReports(filters?: NdtReportListFilters) {
+  const normalized = normalizeNdtFilters(filters);
+  const welderReportIds = await resolveReportIdsForWelder(normalized.welderId);
+  if (normalized.welderId && welderReportIds && welderReportIds.length === 0) return 0;
+
+  let query = supabase.from("ndt_reports").select("id", { count: "exact", head: true });
+  query = applyNdtReportFilters(query, normalized);
+  if (welderReportIds && welderReportIds.length > 0) {
+    query = query.in("id", welderReportIds);
+  }
+
+  const { error, count } = await query;
+  if (error) throw error;
+  return Number(count ?? 0);
+}
+
+export async function fetchNdtReportYears() {
+  const { data, error } = await supabase.from("ndt_reports").select("report_date, created_at");
+  if (error) throw error;
+
+  const years = new Set<string>();
+  for (const row of data ?? []) {
+    const source = String((row as any).report_date ?? (row as any).created_at ?? "").trim();
+    if (!source) continue;
+    const year = new Date(source).getFullYear();
+    if (!Number.isFinite(year)) continue;
+    years.add(String(year));
+  }
+
+  return Array.from(years).sort((a, b) => Number(b) - Number(a));
+}
+
+export async function fetchNdtRtStatsRows(filters?: NdtReportListFilters): Promise<NdtRtStatsRow[]> {
+  const normalized = normalizeNdtFilters(filters);
+  const welderReportIds = await resolveReportIdsForWelder(normalized.welderId);
+  if (normalized.welderId && welderReportIds && welderReportIds.length === 0) return [];
+
+  const { data: rtMethods, error: methodError } = await supabase
+    .from("parameter_ndt_methods")
+    .select("id")
+    .eq("code", "RT");
+  if (methodError) throw methodError;
+  const rtMethodIds = (rtMethods ?? []).map((row: any) => String(row.id ?? "").trim()).filter(Boolean);
+  if (!rtMethodIds.length) return [];
+
+  let query = supabase
+    .from("ndt_reports")
+    .select(
+      `
+      id,
+      report_date,
+      created_at,
+      weld_count,
+      defect_count,
+      report_welders:ndt_report_welders (
+        welder_id,
+        weld_count,
+        defect_count
+      )
+    `
+    )
+    .in("method_id", rtMethodIds)
+    .order("report_date", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false });
+
+  query = applyNdtReportFilters(query, { ...normalized, methodId: "", result: normalized.result, query: "" });
+  if (welderReportIds && welderReportIds.length > 0) {
+    query = query.in("id", welderReportIds);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as unknown as NdtRtStatsRow[];
+}
 
 export async function fetchNdtMethods(opts?: { includeInactive?: boolean }) {
   let q = supabase

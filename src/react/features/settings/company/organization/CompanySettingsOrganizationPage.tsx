@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useMemo, useState, type FormEvent } from "react";
+import { Text, Stack } from "@mantine/core";
 import {
   createCustomer,
   deleteCustomer as removeCustomer,
@@ -27,13 +28,16 @@ import {
   updateSupplier as renameSupplier,
   type SupplierRow,
 } from "../../../../../repo/supplierRepo";
-import { openConfirmDelete } from "../../../../../ui/confirm";
-import { modalSaveButton, openModal, renderModal } from "../../../../../ui/modal";
-import { toast } from "../../../../../ui/toast";
+import { toast } from "@react/ui/notify";
 import { esc } from "../../../../../utils/dom";
 import { useAuth } from "../../../../auth/AuthProvider";
-import { AppFooter } from "../../../../layout/AppFooter";
-import { AppHeader } from "../../../../layout/AppHeader";
+import { AppPageLayout } from "../../../../layout/AppPageLayout";
+import { AppModalActions } from "../../../../ui/AppModalActions";
+import { AppModal } from "../../../../ui/AppModal";
+import { AppSelect } from "@react/ui/AppSelect";
+import { AppRefreshIconButton } from "@react/ui/AppRefreshIconButton";
+import { AppTextInput } from "@react/ui/AppTextInput";
+import { useDeleteConfirmModal } from "@react/ui/useDeleteConfirmModal";
 import { CompanySettingsHeader } from "../components/CompanySettingsHeader";
 import { OrganizationNdtPanel } from "./components/OrganizationNdtPanel";
 import { OrganizationSimplePanel } from "./components/OrganizationSimplePanel";
@@ -52,6 +56,38 @@ type OpenNameEditModalArgs = {
   successMessage?: string;
 };
 
+type NameEditModalState = {
+  opened: boolean;
+  title: string;
+  fieldLabel: string;
+  value: string;
+  successMessage: string;
+  onSave: ((value: string) => Promise<void>) | null;
+};
+
+const NAME_EDIT_MODAL_INITIAL_STATE: NameEditModalState = {
+  opened: false,
+  title: "",
+  fieldLabel: "",
+  value: "",
+  successMessage: "Oppdatert.",
+  onSave: null,
+};
+
+type NdtInspectorEditModalState = {
+  opened: boolean;
+  rowId: string;
+  supplierId: string;
+  name: string;
+};
+
+const NDT_INSPECTOR_MODAL_INITIAL_STATE: NdtInspectorEditModalState = {
+  opened: false,
+  rowId: "",
+  supplierId: "",
+  name: "",
+};
+
 export function CompanySettingsOrganizationPage() {
   const { access, session } = useAuth();
   const displayName = access?.displayName ?? "Bruker";
@@ -61,69 +97,57 @@ export function CompanySettingsOrganizationPage() {
   const { jobTitles, customers, suppliers, ndtSuppliers, ndtInspectors, reloadAll, reloadJobTitles, reloadCustomers, reloadSuppliers, reloadNdt } =
     useOrganizationData({ enabled: isAdmin });
 
-  const modalMountRef = useRef<HTMLDivElement | null>(null);
-  const controllerRef = useRef<AbortController | null>(null);
+  const [nameEditModal, setNameEditModal] = useState<NameEditModalState>(NAME_EDIT_MODAL_INITIAL_STATE);
+  const [nameEditSaving, setNameEditSaving] = useState(false);
+  const [ndtInspectorModal, setNdtInspectorModal] = useState<NdtInspectorEditModalState>(
+    NDT_INSPECTOR_MODAL_INITIAL_STATE
+  );
+  const [ndtInspectorSaving, setNdtInspectorSaving] = useState(false);
+  const { confirmDelete: openDeleteConfirmModal, deleteConfirmModal } = useDeleteConfirmModal();
 
-  useEffect(() => {
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    return () => {
-      controller.abort();
-      controllerRef.current = null;
-    };
+  const closeNameEditModal = useCallback(() => {
+    setNameEditModal(NAME_EDIT_MODAL_INITIAL_STATE);
+    setNameEditSaving(false);
   }, []);
 
   const openNameEditModal = useCallback(
     ({ title, fieldLabel, initialValue, onSave, successMessage = "Oppdatert." }: OpenNameEditModalArgs) => {
-      const mount = modalMountRef.current;
-      const signal = controllerRef.current?.signal;
-      if (!mount || !signal) return;
-
-      const modalHtml = renderModal(
+      setNameEditModal({
+        opened: true,
         title,
-        `
-          <div class="modalgrid">
-            <div class="field" style="grid-column:1 / -1;">
-              <label>${esc(fieldLabel)}</label>
-              <input data-f="value" class="input" type="text" value="${esc(initialValue)}" />
-            </div>
-          </div>
-        `,
-        "Lagre"
-      );
+        fieldLabel,
+        value: initialValue,
+        successMessage,
+        onSave,
+      });
 
-      const handle = openModal(mount, modalHtml, signal);
-      const save = modalSaveButton(handle.root);
-
-      save.addEventListener(
-        "click",
-        async () => {
-          try {
-            save.disabled = true;
-            save.textContent = "Lagrer...";
-
-            const input = handle.root.querySelector<HTMLInputElement>("[data-f=value]");
-            const nextValue = (input?.value ?? "").trim();
-            if (!nextValue) {
-              toast("Feltet kan ikke være tomt.");
-              return;
-            }
-
-            await onSave(nextValue);
-            handle.close();
-            toast(successMessage);
-          } catch (err) {
-            console.error(err);
-            toast(readErrorMessage(err, "Kunne ikke oppdatere."));
-          } finally {
-            save.disabled = false;
-            save.textContent = "Lagre";
-          }
-        },
-        { signal }
-      );
     },
     []
+  );
+
+  const submitNameEditModal = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const nextValue = nameEditModal.value.trim();
+      if (!nextValue) {
+        toast("Feltet kan ikke være tomt.");
+        return;
+      }
+      if (!nameEditModal.onSave) return;
+
+      try {
+        setNameEditSaving(true);
+        await nameEditModal.onSave(nextValue);
+        closeNameEditModal();
+        toast(nameEditModal.successMessage);
+      } catch (err) {
+        console.error(err);
+        toast(readErrorMessage(err, "Kunne ikke oppdatere."));
+      } finally {
+        setNameEditSaving(false);
+      }
+    },
+    [closeNameEditModal, nameEditModal]
   );
 
   const addJobTitle = useCallback(
@@ -258,85 +282,64 @@ export function CompanySettingsOrganizationPage() {
 
   const editNdtInspector = useCallback(
     (row: NdtInspectorRow) => {
-      const mount = modalMountRef.current;
-      const signal = controllerRef.current?.signal;
-      if (!mount || !signal) return;
+      setNdtInspectorModal({
+        opened: true,
+        rowId: row.id,
+        supplierId: row.supplier_id ?? "",
+        name: row.name,
+      });
 
-      const supplierOptions = [
-        `<option value="">Velg leverandør...</option>`,
-        ...ndtSuppliers.rows.map((supplier) => {
-          const selected = supplier.id === row.supplier_id ? "selected" : "";
-          return `<option value="${esc(supplier.id)}" ${selected}>${esc(supplier.name)}</option>`;
-        }),
-      ].join("");
-
-      const modalHtml = renderModal(
-        "Endre kontrollør",
-        `
-          <div class="modalgrid">
-            <div class="field" style="grid-column:1 / -1;">
-              <label>Leverandør</label>
-              <select data-f="supplier_id" class="select">${supplierOptions}</select>
-            </div>
-            <div class="field" style="grid-column:1 / -1;">
-              <label>Kontrollør</label>
-              <input data-f="name" class="input" type="text" value="${esc(row.name)}" />
-            </div>
-          </div>
-        `,
-        "Lagre"
-      );
-
-      const handle = openModal(mount, modalHtml, signal);
-      const save = modalSaveButton(handle.root);
-
-      save.addEventListener(
-        "click",
-        async () => {
-          try {
-            save.disabled = true;
-            save.textContent = "Lagrer...";
-
-            const supplierId =
-              (handle.root.querySelector<HTMLSelectElement>("[data-f=supplier_id]")?.value ?? "").trim();
-            const name = (handle.root.querySelector<HTMLInputElement>("[data-f=name]")?.value ?? "").trim();
-
-            if (!supplierId) {
-              toast("Velg leverandør.");
-              return;
-            }
-            if (!name) {
-              toast("Skriv inn kontrollør.");
-              return;
-            }
-
-            await updateNdtInspectorRecord(row.id, { supplier_id: supplierId, name });
-            await reloadNdt();
-            handle.close();
-            toast("Oppdatert.");
-          } catch (err) {
-            console.error(err);
-            toast(readErrorMessage(err, "Kunne ikke oppdatere kontrollør."));
-          } finally {
-            save.disabled = false;
-            save.textContent = "Lagre";
-          }
-        },
-        { signal }
-      );
     },
-    [ndtSuppliers.rows, reloadNdt]
+    []
+  );
+
+  const closeNdtInspectorModal = useCallback(() => {
+    setNdtInspectorModal(NDT_INSPECTOR_MODAL_INITIAL_STATE);
+    setNdtInspectorSaving(false);
+  }, []);
+
+  const submitNdtInspectorModal = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const supplierId = ndtInspectorModal.supplierId.trim();
+      const name = ndtInspectorModal.name.trim();
+
+      if (!supplierId) {
+        toast("Velg leverandør.");
+        return;
+      }
+      if (!name) {
+        toast("Skriv inn kontrollør.");
+        return;
+      }
+      if (!ndtInspectorModal.rowId) return;
+
+      try {
+        setNdtInspectorSaving(true);
+        await updateNdtInspectorRecord(ndtInspectorModal.rowId, { supplier_id: supplierId, name });
+        await reloadNdt();
+        closeNdtInspectorModal();
+        toast("Oppdatert.");
+      } catch (err) {
+        console.error(err);
+        toast(readErrorMessage(err, "Kunne ikke oppdatere kontrollør."));
+      } finally {
+        setNdtInspectorSaving(false);
+      }
+    },
+    [closeNdtInspectorModal, ndtInspectorModal, reloadNdt]
   );
 
   const confirmDelete = useCallback(
     (title: string, messageHtml: string, onConfirm: () => Promise<void>, onDone: () => Promise<void>) => {
-      const mount = modalMountRef.current;
-      const signal = controllerRef.current?.signal;
-      if (!mount || !signal) return;
-
-      void openConfirmDelete(mount, signal, { title, messageHtml, onConfirm, onDone });
+      openDeleteConfirmModal({
+        title,
+        messageHtml,
+        onConfirm,
+        onDone,
+      });
     },
-    []
+    [openDeleteConfirmModal]
   );
 
   const deleteJobTitle = useCallback(
@@ -424,6 +427,15 @@ export function CompanySettingsOrganizationPage() {
     [confirmDelete, reloadNdt]
   );
 
+  const ndtSupplierOptions = useMemo(
+    () =>
+      ndtSuppliers.rows.map((supplier) => ({
+        value: supplier.id,
+        label: supplier.name,
+      })),
+    [ndtSuppliers.rows]
+  );
+
   const isRefreshing = useMemo(
     () =>
       jobTitles.loading ||
@@ -436,42 +448,37 @@ export function CompanySettingsOrganizationPage() {
 
   if (!isAdmin) {
     return (
-      <div className="shell page-company-settings">
-        <AppHeader displayName={displayName} email={email} />
-        <main className="main">
+      <AppPageLayout pageClassName="page-company-settings" displayName={displayName} email={email}>
           <CompanySettingsHeader
             title="App-parametere - Organisasjon"
             subtitle="Kun admin har tilgang."
             backTo="/settings/company"
             backLabel="← App-parametere"
           />
-          <div className="muted" style={{ padding: 16 }}>
+          <div className="muted app-muted-block">
             Kun admin har tilgang.
           </div>
-        </main>
-        <AppFooter />
-      </div>
+      </AppPageLayout>
     );
   }
 
   return (
-    <div className="shell page-company-settings">
-      <AppHeader displayName={displayName} email={email} />
-
-      <main className="main">
-        <CompanySettingsHeader
+    <AppPageLayout pageClassName="page-company-settings" displayName={displayName} email={email}>
+      <CompanySettingsHeader
           title="App-parametere - Organisasjon"
           subtitle="Stillinger, kunder, leverandører og NDT-kontrollører."
           backTo="/settings/company"
           backLabel="← App-parametere"
           actions={
-            <button className="btn small" type="button" disabled={isRefreshing} onClick={() => void reloadAll()}>
-              Oppdater
-            </button>
+            <AppRefreshIconButton
+              onClick={() => void reloadAll()}
+              disabled={isRefreshing}
+              loading={isRefreshing}
+            />
           }
         />
 
-        <section className="section-grid">
+        <Stack gap="md">
           <OrganizationSimplePanel
             title="Stillinger"
             inputPlaceholder="Ny stilling..."
@@ -519,12 +526,89 @@ export function CompanySettingsOrganizationPage() {
             onEditInspector={editNdtInspector}
             onDeleteInspector={deleteNdtInspector}
           />
-        </section>
+        </Stack>
 
-        <div ref={modalMountRef}></div>
-      </main>
+        <AppModal
+          opened={nameEditModal.opened}
+          onClose={closeNameEditModal}
+          title={nameEditModal.title}
+          busy={nameEditSaving}
+        >
+          <form onSubmit={submitNameEditModal}>
+            <AppTextInput
+              label={nameEditModal.fieldLabel}
+              value={nameEditModal.value}
+              onChange={(nextValue) => {
+                setNameEditModal((current) => ({
+                  ...current,
+                  value: nextValue,
+                }));
+              }}
+              autoFocus
+            />
+            <AppModalActions
+              onCancel={closeNameEditModal}
+              cancelDisabled={nameEditSaving}
+              confirmLabel="Lagre"
+              confirmType="submit"
+              confirmLoading={nameEditSaving}
+            />
+          </form>
+        </AppModal>
 
-      <AppFooter />
-    </div>
+        <AppModal
+          opened={ndtInspectorModal.opened}
+          onClose={closeNdtInspectorModal}
+          title="Endre kontrollør"
+          busy={ndtInspectorSaving}
+        >
+          <form onSubmit={submitNdtInspectorModal}>
+            <AppSelect
+              label="Leverandør"
+              placeholder={ndtSupplierOptions.length > 0 ? "Velg leverandør..." : "Ingen leverandører"}
+              data={ndtSupplierOptions}
+              value={ndtInspectorModal.supplierId}
+              onChange={(value) =>
+                setNdtInspectorModal((current) => ({
+                  ...current,
+                  supplierId: value,
+                }))
+              }
+              allowDeselect={false}
+              searchable={ndtSupplierOptions.length > 8}
+              nothingFoundMessage="Ingen treff"
+            />
+
+            <AppTextInput
+              mt="sm"
+              label="Kontrollør"
+              value={ndtInspectorModal.name}
+              onChange={(nextValue) => {
+                setNdtInspectorModal((current) => ({
+                  ...current,
+                  name: nextValue,
+                }));
+              }}
+            />
+
+            {ndtSupplierOptions.length === 0 ? (
+              <Text c="dimmed" size="sm" mt="xs">
+                Legg til minst én leverandør før du redigerer kontrollør.
+              </Text>
+            ) : null}
+
+            <AppModalActions
+              onCancel={closeNdtInspectorModal}
+              cancelDisabled={ndtInspectorSaving}
+              confirmLabel="Lagre"
+              confirmType="submit"
+              confirmLoading={ndtInspectorSaving}
+            />
+          </form>
+        </AppModal>
+
+        {deleteConfirmModal}
+    </AppPageLayout>
   );
 }
+
