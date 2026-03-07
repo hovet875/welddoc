@@ -498,7 +498,7 @@ export function QuickWeldDrawer({ opened, currentUserId, onClose }: QuickWeldDra
         onClose();
       }}
       title="Hurtigregistrer sveis"
-      size="min(940px, 100vw)"
+      size="min(600px, 100vw)"
       position="right"
       busy={submitting}
     >

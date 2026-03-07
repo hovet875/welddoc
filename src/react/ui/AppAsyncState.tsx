@@ -7,6 +7,7 @@ type AppAsyncStateProps = {
   error: string | null;
   isEmpty: boolean;
   loadingMessage?: ReactNode;
+  showLoadingState?: boolean;
   emptyMessage?: ReactNode;
   errorTitle?: ReactNode;
   children?: ReactNode;
@@ -18,6 +19,7 @@ export function AppAsyncState({
   isEmpty,
   emptyMessage,
   loadingMessage = "Laster data...",
+  showLoadingState = true,
   errorTitle = "Feil",
   children,
 }: AppAsyncStateProps) {
@@ -40,16 +42,17 @@ export function AppAsyncState({
   }
 
   if (loading && showLoading) {
-  return (
-    <Center py="xl">
-      <Stack align="center" gap="xs">
-        <Loader size="sm" />
-        <Text c="dimmed">{loadingMessage}</Text>
-      </Stack>
-    </Center>
-  );
-}
- if (loading) return null;
+    if (!showLoadingState) return null;
+    return (
+      <Center py="xl">
+        <Stack align="center" gap="xs">
+          <Loader size="sm" />
+          <Text c="dimmed">{loadingMessage}</Text>
+        </Stack>
+      </Center>
+    );
+  }
+  if (loading) return null;
 
   if (isEmpty) {
     return emptyMessage ? <Text c="dimmed">{emptyMessage}</Text> : null;

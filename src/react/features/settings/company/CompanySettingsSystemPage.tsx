@@ -1,8 +1,10 @@
-import { Alert, SimpleGrid, Text } from "@mantine/core";
+import { Alert, SimpleGrid } from "@mantine/core";
 import { useAuth } from "../../../auth/AuthProvider";
 import { AppPageLayout } from "../../../layout/AppPageLayout";
 import { AppPanel } from "../../../ui/AppPanel";
 import { CompanySettingsHeader } from "./components/CompanySettingsHeader";
+import { CompanySystemAppConfigPanel } from "./system/components/CompanySystemAppConfigPanel";
+import { CompanySystemRolesPanel } from "./system/components/CompanySystemRolesPanel";
 
 export function CompanySettingsSystemPage() {
   const { access, session } = useAuth();
@@ -36,12 +38,12 @@ export function CompanySettingsSystemPage() {
       />
 
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-        <AppPanel title="Roller / Rettigheter" meta="Kommer">
-          <Text c="dimmed">Rolle- og rettighetsstyring kommer.</Text>
+        <AppPanel title="Roller / Rettigheter" meta="Planlagt">
+          <CompanySystemRolesPanel />
         </AppPanel>
 
-        <AppPanel title="App-konfig" meta="Kommer">
-          <Text c="dimmed">App-konfigurasjon kommer.</Text>
+        <AppPanel title="Database" meta="Supabase-bruk">
+          <CompanySystemAppConfigPanel />
         </AppPanel>
       </SimpleGrid>
     </AppPageLayout>

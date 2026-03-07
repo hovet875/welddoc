@@ -51,7 +51,7 @@ export function CompanySettingsPage() {
         title="App-parametere"
         subtitle="Velg kategori for å administrere parametere."
         backTo="/settings"
-        backLabel="<- Tilbake"
+        backLabel="Tilbake"
       />
       <CompanySettingsMenu items={COMPANY_SETTINGS_MENU_ITEMS} />
     </AppPageLayout>

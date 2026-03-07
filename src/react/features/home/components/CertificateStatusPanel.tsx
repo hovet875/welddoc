@@ -154,6 +154,7 @@ export function CertificateStatusPanel() {
         error={error}
         isEmpty={total === 0}
         loadingMessage="Laster sertifikatstatus..."
+        showLoadingState={false}
         emptyMessage="Ingen sertifikater tilgjengelig."
       >
         <Stack gap="sm">

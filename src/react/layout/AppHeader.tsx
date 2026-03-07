@@ -27,6 +27,7 @@ import {
   IconZoomScan,
 } from "@tabler/icons-react";
 import { signOutSafely } from "@react/auth/logout";
+import { preloadRouteForPath } from "@react/router/routePreload";
 
 type AppHeaderProps = {
   displayName: string;
@@ -62,6 +63,10 @@ export function AppHeader({ displayName, email }: AppHeaderProps) {
     setMobileNavOpened(false);
   }, []);
 
+  const prefetch = useCallback((to: string) => {
+    void preloadRouteForPath(to);
+  }, []);
+
   return (
     <Box
       component="header"
@@ -88,6 +93,9 @@ export function AppHeader({ displayName, email }: AppHeaderProps) {
           <Box
             component={Link}
             to="/"
+            onMouseEnter={() => prefetch("/")}
+            onFocus={() => prefetch("/")}
+            onTouchStart={() => prefetch("/")}
             aria-label="Gå til startsiden"
             style={{ display: "inline-flex", flexShrink: 0 }}
           >
@@ -118,6 +126,9 @@ export function AppHeader({ displayName, email }: AppHeaderProps) {
       key={item.to}
       component={Link}
       to={item.to}
+      onMouseEnter={() => prefetch(item.to)}
+      onFocus={() => prefetch(item.to)}
+      onTouchStart={() => prefetch(item.to)}
       radius="xl"
       size="sm"
       variant={active ? "filled" : "light"}
@@ -177,7 +188,14 @@ export function AppHeader({ displayName, email }: AppHeaderProps) {
                       <Menu.Divider />
                     </>
                   ) : null}
-                  <Menu.Item component={Link} to="/settings" leftSection={<IconSettings size={14} />}>
+                  <Menu.Item
+                    component={Link}
+                    to="/settings"
+                    leftSection={<IconSettings size={14} />}
+                    onMouseEnter={() => prefetch("/settings")}
+                    onFocus={() => prefetch("/settings")}
+                    onTouchStart={() => prefetch("/settings")}
+                  >
                     Innstillinger
                   </Menu.Item>
                   <Menu.Item
@@ -261,6 +279,9 @@ export function AppHeader({ displayName, email }: AppHeaderProps) {
       key={item.to}
       component={Link}
       to={item.to}
+      onMouseEnter={() => prefetch(item.to)}
+      onFocus={() => prefetch(item.to)}
+      onTouchStart={() => prefetch(item.to)}
       justify="space-between"
       variant={active ? "filled" : "light"}
       color={active ? "brand" : "gray"}
@@ -282,6 +303,9 @@ export function AppHeader({ displayName, email }: AppHeaderProps) {
           <Button
             component={Link}
             to="/settings"
+            onMouseEnter={() => prefetch("/settings")}
+            onFocus={() => prefetch("/settings")}
+            onTouchStart={() => prefetch("/settings")}
             variant="subtle"
             color="gray"
             radius="lg"

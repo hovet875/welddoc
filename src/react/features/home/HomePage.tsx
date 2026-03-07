@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Grid, Stack } from "@mantine/core";
+import { Suspense, lazy, useState } from "react";
+import { Center, Grid, Loader, Stack } from "@mantine/core";
 import { useAuth } from "../../auth/AuthProvider";
 import { AppPageLayout } from "../../layout/AppPageLayout";
 import { CertificateStatusPanel } from "./components/CertificateStatusPanel";
@@ -7,7 +7,10 @@ import { HomeHero } from "./components/HomeHero";
 import { QuickTraceabilityDrawer } from "./components/QuickTraceabilityDrawer";
 import { QuickWeldDrawer } from "./components/QuickWeldDrawer";
 import { RecentProjectsPanel } from "./components/RecentProjectsPanel";
-import { UbibotCard } from "./components/UbibotCard";
+
+const UbibotCard = lazy(() =>
+  import("./components/UbibotCard").then((m) => ({ default: m.UbibotCard }))
+);
 
 export function HomePage() {
   const { access, session } = useAuth();
@@ -33,7 +36,15 @@ export function HomePage() {
             <CertificateStatusPanel />
           </Grid.Col>
           <Grid.Col span={12}>
-            <UbibotCard />
+            <Suspense
+              fallback={
+                <Center py="md">
+                  <Loader size="sm" />
+                </Center>
+              }
+            >
+              <UbibotCard />
+            </Suspense>
           </Grid.Col>
         </Grid>
 

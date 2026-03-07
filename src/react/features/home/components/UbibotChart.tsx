@@ -1,6 +1,7 @@
 import { LineChart } from "@mantine/charts";
 import { Alert, Stack, Text } from "@mantine/core";
 import type { UbibotChartModel } from "../types";
+import "@mantine/charts/styles.css";
 
 type UbibotChartProps = {
   model: UbibotChartModel;
@@ -15,6 +16,7 @@ export function UbibotChart({ model }: UbibotChartProps) {
         </Alert>
       );
     case "loading":
+      return null;
     case "empty":
       return (
         <Text c="dimmed" ta="center">

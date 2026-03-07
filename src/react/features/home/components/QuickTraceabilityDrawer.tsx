@@ -341,7 +341,7 @@ export function QuickTraceabilityDrawer({ opened, onClose }: QuickTraceabilityDr
         onClose();
       }}
       title="Hurtigregistrer sporbarhet"
-      size="min(900px, 100vw)"
+      size="min(600px, 100vw)"
       position="right"
       busy={submitting}
     >

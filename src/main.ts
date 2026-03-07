@@ -1,6 +1,5 @@
 import "@mantine/core/styles.css";
 import "@mantine/dates/styles.css";
-import "@mantine/charts/styles.css";
 import "@mantine/dropzone/styles.css";
 import "./styles/index.css";
 import { formatErrorMessage } from "./utils/error";
@@ -73,6 +72,9 @@ try {
   }
 
   registerServiceWorker();
+
+  const { preloadRouteForPath } = await import("./react/router/routePreload");
+  void preloadRouteForPath(window.location.pathname);
 
   const { mountReactApp } = await import("./react/app/mount");
   document.getElementById("boot-loader")?.remove();

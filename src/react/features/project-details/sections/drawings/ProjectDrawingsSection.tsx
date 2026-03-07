@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 import { Group, Text } from "@mantine/core";
-import { PDFDocument } from "pdf-lib";
 import { createSignedUrlForFileRef } from "@/repo/fileRepo";
 import {
   createProjectDrawingWithFile,
@@ -100,6 +99,7 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
     if (selectedRows.length === 0) return;
     try {
       setPrintingBulk(true);
+      const { PDFDocument } = await import("pdf-lib");
       const merged = await PDFDocument.create();
 
       for (const row of selectedRows) {

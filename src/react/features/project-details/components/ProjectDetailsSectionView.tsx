@@ -1,13 +1,36 @@
+import { Suspense, lazy } from "react";
+import { Text } from "@mantine/core";
 import type { ProjectDetailsSectionKey } from "../projectDetails.types";
 import type { ProjectRow } from "@/repo/projectRepo";
-import { ProjectDocumentationPackageSection } from "../sections/documentation-package/ProjectDocumentationPackageSection";
-import { ProjectDocumentsSection } from "../sections/documents/ProjectDocumentsSection";
-import { ProjectDrawingsSection } from "../sections/drawings/ProjectDrawingsSection";
-import { ProjectOverviewSection } from "../sections/overview/ProjectOverviewSection";
-import { ProjectPressureTestSection } from "../sections/pressure-test/ProjectPressureTestSection";
-import { ProjectTraceabilitySection } from "../sections/traceability/ProjectTraceabilitySection";
-import { ProjectWeldLogSection } from "../sections/weld-log/ProjectWeldLogSection";
-import { ProjectWorkOrderSection } from "../sections/work-order/ProjectWorkOrderSection";
+
+const ProjectDocumentationPackageSection = lazy(() =>
+  import("../sections/documentation-package/ProjectDocumentationPackageSection").then((m) => ({
+    default: m.ProjectDocumentationPackageSection,
+  }))
+);
+const ProjectDocumentsSection = lazy(() =>
+  import("../sections/documents/ProjectDocumentsSection").then((m) => ({ default: m.ProjectDocumentsSection }))
+);
+const ProjectDrawingsSection = lazy(() =>
+  import("../sections/drawings/ProjectDrawingsSection").then((m) => ({ default: m.ProjectDrawingsSection }))
+);
+const ProjectOverviewSection = lazy(() =>
+  import("../sections/overview/ProjectOverviewSection").then((m) => ({ default: m.ProjectOverviewSection }))
+);
+const ProjectPressureTestSection = lazy(() =>
+  import("../sections/pressure-test/ProjectPressureTestSection").then((m) => ({
+    default: m.ProjectPressureTestSection,
+  }))
+);
+const ProjectTraceabilitySection = lazy(() =>
+  import("../sections/traceability/ProjectTraceabilitySection").then((m) => ({ default: m.ProjectTraceabilitySection }))
+);
+const ProjectWeldLogSection = lazy(() =>
+  import("../sections/weld-log/ProjectWeldLogSection").then((m) => ({ default: m.ProjectWeldLogSection }))
+);
+const ProjectWorkOrderSection = lazy(() =>
+  import("../sections/work-order/ProjectWorkOrderSection").then((m) => ({ default: m.ProjectWorkOrderSection }))
+);
 
 type ProjectDetailsSectionViewProps = {
   section: ProjectDetailsSectionKey;
@@ -16,21 +39,23 @@ type ProjectDetailsSectionViewProps = {
   project: ProjectRow;
 };
 
+function SectionPendingFallback() {
+  return <Text c="dimmed">Laster seksjon...</Text>;
+}
+
 export function ProjectDetailsSectionView({ section, projectId, isAdmin, project }: ProjectDetailsSectionViewProps) {
-  if (section === "oversikt") {
-    return <ProjectOverviewSection projectId={projectId} />;
-  }
-
-  if (section === "arbeidsordre") {
-    return <ProjectWorkOrderSection projectId={projectId} isAdmin={isAdmin} />;
-  }
-
-  if (section === "tegninger") return <ProjectDrawingsSection projectId={projectId} isAdmin={isAdmin} />;
-  if (section === "sporbarhet") return <ProjectTraceabilitySection projectId={projectId} isAdmin={isAdmin} project={project} />;
-  if (section === "sveiselogg") return <ProjectWeldLogSection projectId={projectId} isAdmin={isAdmin} project={project} />;
-  if (section === "dokumenter") return <ProjectDocumentsSection />;
-  if (section === "trykktest") return <ProjectPressureTestSection />;
-  if (section === "dokumentasjonspakke") return <ProjectDocumentationPackageSection />;
-
-  return null;
+  return (
+    <Suspense fallback={<SectionPendingFallback />}>
+      {section === "oversikt" ? <ProjectOverviewSection projectId={projectId} /> : null}
+      {section === "arbeidsordre" ? <ProjectWorkOrderSection projectId={projectId} isAdmin={isAdmin} /> : null}
+      {section === "tegninger" ? <ProjectDrawingsSection projectId={projectId} isAdmin={isAdmin} /> : null}
+      {section === "sporbarhet" ? (
+        <ProjectTraceabilitySection projectId={projectId} isAdmin={isAdmin} project={project} />
+      ) : null}
+      {section === "sveiselogg" ? <ProjectWeldLogSection projectId={projectId} isAdmin={isAdmin} project={project} /> : null}
+      {section === "dokumenter" ? <ProjectDocumentsSection /> : null}
+      {section === "trykktest" ? <ProjectPressureTestSection /> : null}
+      {section === "dokumentasjonspakke" ? <ProjectDocumentationPackageSection /> : null}
+    </Suspense>
+  );
 }

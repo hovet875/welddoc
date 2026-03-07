@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Button } from "@mantine/core";
 import { Link } from "react-router-dom";
+import { preloadRouteForPath } from "@react/router/routePreload";
 
 type AppLinkButtonTone = "neutral" | "primary" | "danger";
 
@@ -24,7 +25,16 @@ const LINK_BUTTON_TONE_CONFIG: Record<
 export function AppLinkButton({ to, children, tone = "neutral", size = "xs", fullWidth = false }: AppLinkButtonProps) {
   const toneConfig = LINK_BUTTON_TONE_CONFIG[tone];
   return (
-    <Button component={Link} to={to} size={size} fullWidth={fullWidth} {...toneConfig}>
+    <Button
+      component={Link}
+      to={to}
+      size={size}
+      fullWidth={fullWidth}
+      onMouseEnter={() => void preloadRouteForPath(to)}
+      onFocus={() => void preloadRouteForPath(to)}
+      onTouchStart={() => void preloadRouteForPath(to)}
+      {...toneConfig}
+    >
       {children}
     </Button>
   );

@@ -1,5 +1,4 @@
 import { supabase } from "../services/supabaseClient";
-import { PDFDocument } from "pdf-lib";
 import { createUuid } from "../utils/id";
 import {
   createFileRecord,
@@ -101,6 +100,7 @@ export async function createPlaceholderProjectDrawing(input: {
   drawing_no: string;
   revision?: string | null;
 }) {
+  const { PDFDocument } = await import("pdf-lib");
   const pdf = await PDFDocument.create();
   pdf.addPage([595.28, 841.89]);
   const bytes = await pdf.save();

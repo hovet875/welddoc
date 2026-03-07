@@ -93,6 +93,7 @@ export function RecentProjectsPanel({ isAdmin }: RecentProjectsPanelProps) {
         error={error}
         isEmpty={rows.length === 0}
         loadingMessage="Laster prosjekter..."
+        showLoadingState={false}
         emptyMessage="Ingen nylige prosjekter."
       >
         <Stack gap="sm">
