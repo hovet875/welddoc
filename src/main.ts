@@ -2,7 +2,9 @@ import "@mantine/core/styles.css";
 import "@mantine/dates/styles.css";
 import "@mantine/dropzone/styles.css";
 import "./styles/index.css";
+import { registerSW } from "virtual:pwa-register";
 import { formatErrorMessage } from "./utils/error";
+import { PWA_NEED_REFRESH_EVENT, PWA_OFFLINE_READY_EVENT } from "./pwa/events";
 
 const IS_DEV = Boolean(import.meta.env.DEV);
 
@@ -28,8 +30,21 @@ function registerServiceWorker() {
   }
 
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch((err) => {
-      console.warn("Service worker registration failed", err);
+    const updateServiceWorker = registerSW({
+      immediate: true,
+      onNeedRefresh() {
+        window.dispatchEvent(
+          new CustomEvent(PWA_NEED_REFRESH_EVENT, {
+            detail: { updateServiceWorker },
+          })
+        );
+      },
+      onOfflineReady() {
+        window.dispatchEvent(new Event(PWA_OFFLINE_READY_EVENT));
+      },
+      onRegisterError(error) {
+        console.warn("Service worker registration failed", error);
+      },
     });
   });
 }

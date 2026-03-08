@@ -1,6 +1,7 @@
 import { Paper, Tabs } from "@mantine/core";
 import { useNavigate } from "react-router-dom";
 import type { ProjectDetailsSection, ProjectDetailsSectionKey } from "../projectDetails.types";
+import { routePath } from "@react/router/routes";
 import {
   IconLayoutDashboard,
   IconClipboardList,
@@ -41,7 +42,7 @@ export function ProjectDetailsMenu({ projectId, sections, activeSection }: Proje
         value={value}
         onChange={(nextValue) => {
           if (!nextValue) return;
-          navigate(`/prosjekter/${projectId}/${nextValue}`);
+          navigate(routePath.projectDetailsSection(projectId, nextValue));
         }}
         variant="pills"
       >

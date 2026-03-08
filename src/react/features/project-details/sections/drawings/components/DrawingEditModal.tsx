@@ -2,12 +2,13 @@ import { useEffect } from "react";
 import { useForm } from "@mantine/form";
 import { Group, Stack, Text, TextInput } from "@mantine/core";
 import { validatePdfFile } from "@/utils/format";
+import { AppNumberInput } from "@react/ui/AppNumberInput";
 import { AppModal } from "@react/ui/AppModal";
 import { AppModalActions } from "@react/ui/AppModalActions";
 import { AppPdfDropzone } from "@react/ui/AppPdfDropzone";
 import { AppSelect } from "@react/ui/AppSelect";
 import { notifyError } from "@react/ui/notify";
-import { REVISION_OPTIONS } from "../lib/drawingsUtils";
+import { normalizeButtWeldCountInput, parseButtWeldCount, REVISION_OPTIONS } from "../lib/drawingsUtils";
 import type { ProjectDrawingRow } from "../types";
 
 type DrawingEditModalProps = {
@@ -15,12 +16,13 @@ type DrawingEditModalProps = {
   row: ProjectDrawingRow | null;
   saving: boolean;
   onClose: () => void;
-  onSubmit: (values: { drawingNo: string; revision: string; file: File | null }) => Promise<void>;
+  onSubmit: (values: { drawingNo: string; revision: string; buttWeldCount: number; file: File | null }) => Promise<void>;
 };
 
 type DrawingEditValues = {
   drawingNo: string;
   revision: string;
+  buttWeldCount: string;
   file: File | null;
 };
 
@@ -29,6 +31,7 @@ export function DrawingEditModal({ opened, row, saving, onClose, onSubmit }: Dra
     initialValues: {
       drawingNo: "",
       revision: "A",
+      buttWeldCount: "0",
       file: null,
     },
   });
@@ -38,6 +41,7 @@ export function DrawingEditModal({ opened, row, saving, onClose, onSubmit }: Dra
     form.setValues({
       drawingNo: row.drawing_no,
       revision: (row.revision || "A").trim() || "A",
+      buttWeldCount: String(Math.max(0, Math.trunc(Number(row.butt_weld_count ?? 0) || 0))),
       file: null,
     });
     form.resetDirty();
@@ -59,9 +63,16 @@ export function DrawingEditModal({ opened, row, saving, onClose, onSubmit }: Dra
       }
     }
 
+    const buttWeldCount = parseButtWeldCount(form.values.buttWeldCount);
+    if (buttWeldCount == null) {
+      notifyError("Buttsveiser må være et heltall lik eller større enn 0.");
+      return;
+    }
+
     await onSubmit({
       drawingNo: nextDrawingNo,
       revision: form.values.revision,
+      buttWeldCount,
       file: form.values.file,
     });
   };
@@ -82,6 +93,13 @@ export function DrawingEditModal({ opened, row, saving, onClose, onSubmit }: Dra
             data={REVISION_OPTIONS.map((option) => ({ value: option, label: option }))}
             searchable={false}
             allowDeselect={false}
+          />
+          <AppNumberInput
+            label="Buttsveiser"
+            value={form.values.buttWeldCount}
+            onChange={(value) => form.setFieldValue("buttWeldCount", normalizeButtWeldCountInput(value))}
+            min={0}
+            placeholder="f.eks. 12"
           />
         </Group>
 

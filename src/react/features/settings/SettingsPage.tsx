@@ -7,6 +7,7 @@ import { AppPageLayout } from "../../layout/AppPageLayout";
 import { SettingsHeader } from "./components/SettingsHeader";
 import { SettingsProfileForm } from "./components/SettingsProfileForm";
 import { useSettingsData } from "./hooks/useSettingsData";
+import { ROUTES } from "@react/router/routes";
 
 export function SettingsPage() {
   const { access, session, refresh } = useAuth();
@@ -23,7 +24,7 @@ export function SettingsPage() {
   const [resettingPassword, setResettingPassword] = useState(false);
   const { openConfirmModal, confirmModal } = useConfirmModal();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-  const settingsRedirectPath = `${basePath}/settings`;
+  const settingsRedirectPath = `${basePath}${ROUTES.settings}`;
 
   const handleResetPassword = () => {
     if (!email) return;

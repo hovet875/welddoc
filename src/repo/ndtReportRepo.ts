@@ -7,6 +7,7 @@ import {
   createSignedUrlForFileRef,
   deleteFileLink,
   deleteFileRecord,
+  deleteFileRecordIfOrphan,
   uploadFileToIdPath,
 } from "./fileRepo";
 
@@ -594,7 +595,8 @@ export async function deleteNdtReport(reportId: string, fileId: string | null) {
   const { error } = await supabase.from("ndt_reports").delete().eq("id", reportId);
   if (error) throw error;
   if (fileId) {
-    await deleteFileRecord(fileId);
+    await deleteFileLink("ndt_report", reportId);
+    await deleteFileRecordIfOrphan(fileId);
   }
 }
 

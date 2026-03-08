@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { PublicOnlyRoute, RequireAuthRoute } from "@react/router/RouteGuards";
+import { ROUTE_PATTERNS, ROUTES } from "@react/router/routes";
 import {
   loadCertsPage,
   loadCompanySettingsOrganizationPage,
@@ -56,17 +57,6 @@ const CompanySettingsWeldingPage = lazy(() =>
 const UsersPage = lazy(() => loadUsersPage().then((m) => ({ default: m.UsersPage })));
 const WpsPage = lazy(() => loadWpsPage().then((m) => ({ default: m.WpsPage })));
 
-const LEGACY_REDIRECTS = [
-  { from: "/users", to: "/settings/users" },
-  { from: "/company-settings", to: "/settings/company" },
-  { from: "/company-settings/organization", to: "/settings/company/organization" },
-  { from: "/company-settings/welding", to: "/settings/company/welding" },
-  { from: "/company-settings/system", to: "/settings/company/system" },
-  { from: "/react", to: "/" },
-  { from: "/react/home", to: "/" },
-  { from: "/react/prosjekter", to: "/prosjekter" },
-] as const;
-
 export function AppRouter() {
   const location = useLocation();
   const suspenseFallback = null;
@@ -79,16 +69,15 @@ export function AppRouter() {
     <Suspense fallback={suspenseFallback}>
       <Routes>
         <Route element={<PublicOnlyRoute />}>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/react-login" element={<Navigate to="/login" replace />} />
+          <Route path={ROUTES.login} element={<LoginPage />} />
         </Route>
 
         <Route element={<RequireAuthRoute />}>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/prosjekter" element={<ProjectsPage />} />
-          <Route path="/prosjekter/:projectId" element={<ProjectDetailsPage />} />
-          <Route path="/prosjekter/:projectId/:section" element={<ProjectDetailsPage />} />
-          <Route path="/materialsertifikater" element={<MaterialCertsPage />} />
+          <Route path={ROUTES.home} element={<HomePage />} />
+          <Route path={ROUTES.projects} element={<ProjectsPage />} />
+          <Route path={ROUTE_PATTERNS.projectDetails} element={<ProjectDetailsPage />} />
+          <Route path={ROUTE_PATTERNS.projectDetailsSection} element={<ProjectDetailsPage />} />
+          <Route path={ROUTES.materialCerts} element={<MaterialCertsPage />} />
           {MIGRATION_PLACEHOLDERS.map((route) => (
             <Route
               key={route.path}
@@ -96,22 +85,18 @@ export function AppRouter() {
               element={<MigrationPlaceholderPage title={route.title} subtitle={route.subtitle} />}
             />
           ))}
-          <Route path="/wps" element={<WpsPage />} />
-          <Route path="/certs" element={<CertsPage />} />
-          <Route path="/ndt" element={<NdtPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/settings/users" element={<UsersPage />} />
-          <Route path="/settings/company" element={<CompanySettingsPage />} />
-          <Route path="/settings/company/system" element={<CompanySettingsSystemPage />} />
-          <Route path="/settings/company/organization" element={<CompanySettingsOrganizationPage />} />
-          <Route path="/settings/company/welding" element={<CompanySettingsWeldingPage />} />
-
-          {LEGACY_REDIRECTS.map((route) => (
-            <Route key={route.from} path={route.from} element={<Navigate to={route.to} replace />} />
-          ))}
+          <Route path={ROUTES.wps} element={<WpsPage />} />
+          <Route path={ROUTES.certs} element={<CertsPage />} />
+          <Route path={ROUTES.ndt} element={<NdtPage />} />
+          <Route path={ROUTES.settings} element={<SettingsPage />} />
+          <Route path={ROUTES.settingsUsers} element={<UsersPage />} />
+          <Route path={ROUTES.settingsCompany} element={<CompanySettingsPage />} />
+          <Route path={ROUTES.settingsCompanySystem} element={<CompanySettingsSystemPage />} />
+          <Route path={ROUTES.settingsCompanyOrganization} element={<CompanySettingsOrganizationPage />} />
+          <Route path={ROUTES.settingsCompanyWelding} element={<CompanySettingsWeldingPage />} />
         </Route>
 
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to={ROUTES.home} replace />} />
       </Routes>
     </Suspense>
   );

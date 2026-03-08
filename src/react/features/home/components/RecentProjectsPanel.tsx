@@ -4,6 +4,7 @@ import { fetchProjectPage, type ProjectRow } from "@/repo/projectRepo";
 import { AppAsyncState } from "@react/ui/AppAsyncState";
 import { AppLinkButton } from "@react/ui/AppLinkButton";
 import { AppPanel } from "@react/ui/AppPanel";
+import { ROUTES, routePath } from "@react/router/routes";
 
 const CREATED_AT_FMT = new Intl.DateTimeFormat("nb-NO", {
   dateStyle: "short",
@@ -83,7 +84,7 @@ export function RecentProjectsPanel({ isAdmin }: RecentProjectsPanelProps) {
       meta="10 siste aktive prosjekter med direkte lenke inn i prosjektet."
       style={{ height: "100%", width: "100%" }}
       actions={
-        <AppLinkButton to="/prosjekter" size="xs">
+        <AppLinkButton to={ROUTES.projects} size="xs">
           Se alle
         </AppLinkButton>
       }
@@ -116,7 +117,7 @@ export function RecentProjectsPanel({ isAdmin }: RecentProjectsPanelProps) {
                     </Stack>
                   </Grid.Col>
                   <Grid.Col span={{ base: 12, sm: 3 }}>
-                    <AppLinkButton to={`/prosjekter/${row.id}`} size="xs" fullWidth>
+                    <AppLinkButton to={routePath.projectDetails(row.id)} size="xs" fullWidth>
                       Vis
                     </AppLinkButton>
                   </Grid.Col>

@@ -28,6 +28,7 @@ import {
 } from "@tabler/icons-react";
 import { signOutSafely } from "@react/auth/logout";
 import { preloadRouteForPath } from "@react/router/routePreload";
+import { ROUTES } from "@react/router/routes";
 
 type AppHeaderProps = {
   displayName: string;
@@ -35,12 +36,12 @@ type AppHeaderProps = {
 };
 
 const NAV_ITEMS = [
-  { to: "/", label: "Hjem", icon: IconHome2 },
-  { to: "/prosjekter", label: "Prosjekter", icon: IconFolder },
-  { to: "/materialsertifikater", label: "Materialsertifikater", icon: IconCertificate },
-  { to: "/wps", label: "Sveiseprosedyrer", icon: IconFileSettings },
-  { to: "/certs", label: "Sveisesertifikater", icon: IconIdBadge2 },
-  { to: "/ndt", label: "NDT", icon: IconZoomScan },
+  { to: ROUTES.home, label: "Hjem", icon: IconHome2 },
+  { to: ROUTES.projects, label: "Prosjekter", icon: IconFolder },
+  { to: ROUTES.materialCerts, label: "Materialsertifikater", icon: IconCertificate },
+  { to: ROUTES.wps, label: "Sveiseprosedyrer", icon: IconFileSettings },
+  { to: ROUTES.certs, label: "Sveisesertifikater", icon: IconIdBadge2 },
+  { to: ROUTES.ndt, label: "NDT", icon: IconZoomScan },
 ];
 
 export function AppHeader({ displayName, email }: AppHeaderProps) {
@@ -49,14 +50,14 @@ export function AppHeader({ displayName, email }: AppHeaderProps) {
   const [mobileNavOpened, setMobileNavOpened] = useState(false);
 
   const isActive = (to: string) => {
-    if (to === "/") return location.pathname === "/";
+    if (to === ROUTES.home) return location.pathname === ROUTES.home;
     return location.pathname === to || location.pathname.startsWith(`${to}/`);
   };
 
   const handleLogout = useCallback(async () => {
     await signOutSafely("Utlogging feilet");
     setMobileNavOpened(false);
-    navigate("/login", { replace: true });
+    navigate(ROUTES.login, { replace: true });
   }, [navigate]);
 
   const closeMobileNav = useCallback(() => {
@@ -92,10 +93,10 @@ export function AppHeader({ displayName, email }: AppHeaderProps) {
         <Group justify="space-between" align="center" wrap="nowrap" gap="md">
           <Box
             component={Link}
-            to="/"
-            onMouseEnter={() => prefetch("/")}
-            onFocus={() => prefetch("/")}
-            onTouchStart={() => prefetch("/")}
+            to={ROUTES.home}
+            onMouseEnter={() => prefetch(ROUTES.home)}
+            onFocus={() => prefetch(ROUTES.home)}
+            onTouchStart={() => prefetch(ROUTES.home)}
             aria-label="Gå til startsiden"
             style={{ display: "inline-flex", flexShrink: 0 }}
           >
@@ -190,11 +191,11 @@ export function AppHeader({ displayName, email }: AppHeaderProps) {
                   ) : null}
                   <Menu.Item
                     component={Link}
-                    to="/settings"
+                    to={ROUTES.settings}
                     leftSection={<IconSettings size={14} />}
-                    onMouseEnter={() => prefetch("/settings")}
-                    onFocus={() => prefetch("/settings")}
-                    onTouchStart={() => prefetch("/settings")}
+                    onMouseEnter={() => prefetch(ROUTES.settings)}
+                    onFocus={() => prefetch(ROUTES.settings)}
+                    onTouchStart={() => prefetch(ROUTES.settings)}
                   >
                     Innstillinger
                   </Menu.Item>
@@ -302,10 +303,10 @@ export function AppHeader({ displayName, email }: AppHeaderProps) {
 
           <Button
             component={Link}
-            to="/settings"
-            onMouseEnter={() => prefetch("/settings")}
-            onFocus={() => prefetch("/settings")}
-            onTouchStart={() => prefetch("/settings")}
+            to={ROUTES.settings}
+            onMouseEnter={() => prefetch(ROUTES.settings)}
+            onFocus={() => prefetch(ROUTES.settings)}
+            onTouchStart={() => prefetch(ROUTES.settings)}
             variant="subtle"
             color="gray"
             radius="lg"

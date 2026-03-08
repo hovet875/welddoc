@@ -5,6 +5,7 @@ import { AppPanel } from "../../../ui/AppPanel";
 import { CompanySettingsHeader } from "./components/CompanySettingsHeader";
 import { CompanySystemAppConfigPanel } from "./system/components/CompanySystemAppConfigPanel";
 import { CompanySystemRolesPanel } from "./system/components/CompanySystemRolesPanel";
+import { ROUTES } from "@react/router/routes";
 
 export function CompanySettingsSystemPage() {
   const { access, session } = useAuth();
@@ -18,7 +19,7 @@ export function CompanySettingsSystemPage() {
         <CompanySettingsHeader
           title="App-parametere - System"
           subtitle="Kun admin har tilgang."
-          backTo="/settings/company"
+          backTo={ROUTES.settingsCompany}
           backLabel="<- App-parametere"
         />
         <Alert color="gray" variant="light">
@@ -33,7 +34,7 @@ export function CompanySettingsSystemPage() {
       <CompanySettingsHeader
         title="App-parametere - System"
         subtitle="Roller, rettigheter og app-konfigurasjon."
-        backTo="/settings/company"
+        backTo={ROUTES.settingsCompany}
         backLabel="<- App-parametere"
       />
 

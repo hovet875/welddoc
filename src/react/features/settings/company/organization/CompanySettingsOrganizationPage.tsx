@@ -38,6 +38,7 @@ import { AppSelect } from "@react/ui/AppSelect";
 import { AppRefreshIconButton } from "@react/ui/AppRefreshIconButton";
 import { AppTextInput } from "@react/ui/AppTextInput";
 import { useDeleteConfirmModal } from "@react/ui/useDeleteConfirmModal";
+import { ROUTES } from "@react/router/routes";
 import { CompanySettingsHeader } from "../components/CompanySettingsHeader";
 import { OrganizationNdtPanel } from "./components/OrganizationNdtPanel";
 import { OrganizationSimplePanel } from "./components/OrganizationSimplePanel";
@@ -452,7 +453,7 @@ export function CompanySettingsOrganizationPage() {
           <CompanySettingsHeader
             title="App-parametere - Organisasjon"
             subtitle="Kun admin har tilgang."
-            backTo="/settings/company"
+            backTo={ROUTES.settingsCompany}
             backLabel="← App-parametere"
           />
           <div className="muted app-muted-block">
@@ -467,7 +468,7 @@ export function CompanySettingsOrganizationPage() {
       <CompanySettingsHeader
           title="App-parametere - Organisasjon"
           subtitle="Stillinger, kunder, leverandører og NDT-kontrollører."
-          backTo="/settings/company"
+          backTo={ROUTES.settingsCompany}
           backLabel="← App-parametere"
           actions={
             <AppRefreshIconButton
@@ -611,4 +612,3 @@ export function CompanySettingsOrganizationPage() {
     </AppPageLayout>
   );
 }
-

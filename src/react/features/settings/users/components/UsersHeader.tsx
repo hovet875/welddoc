@@ -2,6 +2,7 @@ import { AppButton } from "@react/ui/AppButton";
 import { AppLinkButton } from "@react/ui/AppLinkButton";
 import { AppRefreshIconButton } from "@react/ui/AppRefreshIconButton";
 import { AppSectionHeader } from "@react/ui/AppSectionHeader";
+import { ROUTES } from "@react/router/routes";
 
 type UsersHeaderProps = {
   onRefresh: () => void;
@@ -16,7 +17,7 @@ export function UsersHeader({ onRefresh, onAddUser, refreshing = false }: UsersH
       subtitle="Oversikt over brukere i systemet."
       actions={
         <>
-          <AppLinkButton to="/settings">&larr; Tilbake</AppLinkButton>
+          <AppLinkButton to={ROUTES.settings}>&larr; Tilbake</AppLinkButton>
           <AppButton tone="primary" onClick={onAddUser}>
             Legg til bruker
           </AppButton>

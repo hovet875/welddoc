@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { fetchProjectDrawings, type ProjectDrawingRow } from "@/repo/projectDrawingRepo";
+import {
+  fetchProjectDrawingProgress,
+  fetchProjectDrawings,
+  type ProjectDrawingProgress,
+  type ProjectDrawingRow,
+} from "@/repo/projectDrawingRepo";
 
 export function useProjectDrawingsData(projectId: string) {
   const [rows, setRows] = useState<ProjectDrawingRow[]>([]);
+  const [progressByDrawingId, setProgressByDrawingId] = useState<Map<string, ProjectDrawingProgress>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -11,11 +17,16 @@ export function useProjectDrawingsData(projectId: string) {
     setLoading(true);
     setError(null);
     try {
-      const nextRows = await fetchProjectDrawings(projectId);
+      const [nextRows, nextProgressByDrawingId] = await Promise.all([
+        fetchProjectDrawings(projectId),
+        fetchProjectDrawingProgress(projectId),
+      ]);
       setRows(nextRows);
+      setProgressByDrawingId(nextProgressByDrawingId);
       setSelectedIds((prev) => new Set(Array.from(prev).filter((id) => nextRows.some((row) => row.id === id))));
     } catch (err) {
       console.error(err);
+      setProgressByDrawingId(new Map());
       setError("Klarte ikke å hente tegninger.");
     } finally {
       setLoading(false);
@@ -47,6 +58,7 @@ export function useProjectDrawingsData(projectId: string) {
 
   return {
     rows,
+    progressByDrawingId,
     loading,
     error,
     selectedIds,

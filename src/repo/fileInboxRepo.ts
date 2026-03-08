@@ -1,5 +1,5 @@
 import { supabase } from "../services/supabaseClient";
-import { countFileLinks, deleteFileRecord } from "./fileRepo";
+import { buildFilePath, countFileLinks, deleteFileRecord } from "./fileRepo";
 
 export type FileInboxTarget = "ndt_report" | "material_certificate";
 export type FileInboxStatus = "new" | "processed" | "error";
@@ -17,6 +17,49 @@ export type FileInboxRow = {
   processed_at: string | null;
   file: { id: string; label: string | null; mime_type: string | null; size_bytes: number | null } | null;
 };
+
+function inferExtensionFromPath(pathValue: string) {
+  const normalized = String(pathValue || "");
+  const fileName = normalized.split("/").pop() || normalized;
+  const lastDot = fileName.lastIndexOf(".");
+  if (lastDot <= 0 || lastDot === fileName.length - 1) return "pdf";
+  return fileName.slice(lastDot + 1).toLowerCase();
+}
+
+async function moveInboxFileToCanonicalPath(fileId: string, target: FileInboxTarget) {
+  const { data: fileRow, error: fileErr } = await supabase
+    .from("files")
+    .select("bucket, path")
+    .eq("id", fileId)
+    .maybeSingle();
+  if (fileErr) throw fileErr;
+
+  const bucket = fileRow?.bucket ? String(fileRow.bucket) : "";
+  const currentPath = fileRow?.path ? String(fileRow.path) : "";
+  if (!bucket || !currentPath) return;
+  if (!currentPath.startsWith("inbox/")) return;
+
+  const ext = inferExtensionFromPath(currentPath);
+  const nextPath = buildFilePath(target, fileId, ext);
+  if (nextPath === currentPath) return;
+
+  const { error: moveErr } = await supabase.storage.from(bucket).move(currentPath, nextPath);
+  if (moveErr) {
+    const { data: latestRow, error: latestErr } = await supabase
+      .from("files")
+      .select("path")
+      .eq("id", fileId)
+      .maybeSingle();
+    if (!latestErr && latestRow?.path === nextPath) return;
+    throw moveErr;
+  }
+
+  const { error: updateErr } = await supabase
+    .from("files")
+    .update({ path: nextPath, type: target })
+    .eq("id", fileId);
+  if (updateErr) throw updateErr;
+}
 
 export async function countNewFileInboxByTarget(target: FileInboxTarget) {
   const { count, error } = await supabase
@@ -62,6 +105,18 @@ export async function fetchNewFileInboxByTarget(target: FileInboxTarget, opts?: 
 }
 
 export async function markFileInboxProcessed(id: string) {
+  const { data: inboxRow, error: inboxErr } = await supabase
+    .from("file_inbox")
+    .select("id, file_id, target")
+    .eq("id", id)
+    .maybeSingle();
+  if (inboxErr) throw inboxErr;
+  if (!inboxRow?.id) return;
+
+  if (inboxRow.file_id && inboxRow.target) {
+    await moveInboxFileToCanonicalPath(String(inboxRow.file_id), inboxRow.target as FileInboxTarget);
+  }
+
   const { error } = await supabase
     .from("file_inbox")
     .update({

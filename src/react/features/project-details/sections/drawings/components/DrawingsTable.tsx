@@ -1,4 +1,6 @@
-import { Checkbox, Group, Table, Text } from "@mantine/core";
+import { Badge, Checkbox, Group, Table, Text } from "@mantine/core";
+import { IconEye } from "@tabler/icons-react";
+import type { ProjectDrawingProgress } from "@/repo/projectDrawingRepo";
 import { fmtDate, truncateLabel } from "@/utils/format";
 import {
   AppActionsMenu,
@@ -8,11 +10,13 @@ import {
   type AppActionsMenuItem,
 } from "@react/ui/AppActionsMenu";
 import { AppButton } from "@react/ui/AppButton";
+import { AppStatusBadge } from "@react/ui/AppStatusBadge";
 import type { ProjectDrawingRow } from "../types";
-import { formatFileSize } from "../lib/drawingsUtils";
+import { drawingStatusLabel, drawingStatusTone, formatFileSize, resolveDrawingStatus } from "../lib/drawingsUtils";
 
 type DrawingsTableProps = {
   rows: ProjectDrawingRow[];
+  progressByDrawingId: Map<string, ProjectDrawingProgress>;
   loading: boolean;
   error: string | null;
   isAdmin: boolean;
@@ -28,6 +32,7 @@ type DrawingsTableProps = {
 
 export function DrawingsTable({
   rows,
+  progressByDrawingId,
   loading,
   error,
   isAdmin,
@@ -41,7 +46,7 @@ export function DrawingsTable({
   onDelete,
 }: DrawingsTableProps) {
   return (
-    <Table.ScrollContainer minWidth={900}>
+    <Table.ScrollContainer minWidth={1080}>
       <Table highlightOnHover>
         <Table.Thead>
           <Table.Tr>
@@ -57,36 +62,54 @@ export function DrawingsTable({
             </Table.Th>
             <Table.Th>Tegningsnr.</Table.Th>
             <Table.Th>Filnavn</Table.Th>
+            <Table.Th>Buttsveiser</Table.Th>
             <Table.Th>Dato</Table.Th>
             <Table.Th>Revisjon</Table.Th>
+            <Table.Th>Status</Table.Th>
             <Table.Th style={{ width: 48 }} />
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
           {loading ? (
             <Table.Tr>
-              <Table.Td colSpan={6}>
+              <Table.Td colSpan={8}>
                 <Text c="dimmed">Laster tegninger...</Text>
               </Table.Td>
             </Table.Tr>
           ) : error ? (
             <Table.Tr>
-              <Table.Td colSpan={6}>
+              <Table.Td colSpan={8}>
                 <Text c="red">{error}</Text>
               </Table.Td>
             </Table.Tr>
           ) : rows.length === 0 ? (
             <Table.Tr>
-              <Table.Td colSpan={6}>
+              <Table.Td colSpan={8}>
                 <Text c="dimmed">Ingen tegninger.</Text>
               </Table.Td>
             </Table.Tr>
           ) : (
             rows.map((row) => {
+              const buttWeldCount = Number(row.butt_weld_count ?? 0);
+              const normalizedButtWeldCount =
+                Number.isFinite(buttWeldCount) && buttWeldCount >= 0 ? Math.trunc(buttWeldCount) : null;
+              const revision = (row.revision || "-").trim() || "-";
+              const progress = progressByDrawingId.get(row.id);
+              const status = resolveDrawingStatus({
+                buttWeldCount: normalizedButtWeldCount,
+                progress,
+              });
+              const progressLabel =
+                progress && progress.totalWelds > 0
+                  ? `${progress.completedWelds}/${Math.max(progress.totalWelds, normalizedButtWeldCount ?? 0)} ferdig`
+                  : null;
+
               const actionItems: AppActionsMenuItem[] = [
                 {
                   key: `open-${row.id}`,
-                  label: "Åpne",
+                  label: "Åpne PDF",
+                  icon: <IconEye size={16} />,
+                  disabled: !row.file_id,
                   onClick: () => onOpenPdf(row),
                 },
                 {
@@ -134,8 +157,23 @@ export function DrawingsTable({
                       </Text>
                     ) : null}
                   </Table.Td>
+                  <Table.Td>{normalizedButtWeldCount ?? "-"}</Table.Td>
                   <Table.Td>{fmtDate(row.created_at)}</Table.Td>
-                  <Table.Td>{(row.revision || "-").trim() || "-"}</Table.Td>
+                  <Table.Td>
+                    <Badge variant="light" color="gray" radius="xl">
+                      {revision}
+                    </Badge>
+                  </Table.Td>
+                  <Table.Td>
+                    <Group gap={6}>
+                      <AppStatusBadge tone={drawingStatusTone(status)}>{drawingStatusLabel(status)}</AppStatusBadge>
+                      {progressLabel ? (
+                        <Text size="xs" c="dimmed">
+                          {progressLabel}
+                        </Text>
+                      ) : null}
+                    </Group>
+                  </Table.Td>
                   <Table.Td>
                     <Group justify="flex-end">
                       <AppActionsMenu title={`Handlinger for ${row.drawing_no}`} items={actionItems} />

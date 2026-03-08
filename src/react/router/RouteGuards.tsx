@@ -1,6 +1,7 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { Center, Loader, Stack, Text } from "@mantine/core";
 import { useAuth } from "../auth/AuthProvider";
+import { ROUTES } from "./routes";
 
 function LoadingScreen() {
   return (
@@ -17,7 +18,7 @@ export function RequireAuthRoute() {
   const { status } = useAuth();
 
   if (status === "loading") return <LoadingScreen />;
-  if (status === "unauthenticated") return <Navigate to="/login" replace />;
+  if (status === "unauthenticated") return <Navigate to={ROUTES.login} replace />;
   return <Outlet />;
 }
 
@@ -25,6 +26,6 @@ export function PublicOnlyRoute() {
   const { status } = useAuth();
 
   if (status === "loading") return <LoadingScreen />;
-  if (status === "authenticated") return <Navigate to="/" replace />;
+  if (status === "authenticated") return <Navigate to={ROUTES.home} replace />;
   return <Outlet />;
 }

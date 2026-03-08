@@ -6,6 +6,7 @@ import { AppAsyncState } from "@react/ui/AppAsyncState";
 import { AppLinkButton } from "@react/ui/AppLinkButton";
 import { AppPanel } from "@react/ui/AppPanel";
 import { AppStatusBadge } from "@react/ui/AppStatusBadge";
+import { ROUTES } from "@react/router/routes";
 
 type CertificateListItem = {
   id: string;
@@ -144,7 +145,7 @@ export function CertificateStatusPanel() {
       meta={total > 0 ? `${total} sertifikater overvåkes` : "Ingen sertifikater funnet"}
       style={{ height: "100%", width: "100%" }}
       actions={
-        <AppLinkButton to="/certs" size="xs">
+        <AppLinkButton to={ROUTES.certs} size="xs">
           Vis sertifikater
         </AppLinkButton>
       }

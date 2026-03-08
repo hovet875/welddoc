@@ -54,6 +54,7 @@ import { CompanySettingsHeader } from "../components/CompanySettingsHeader";
 import { useWeldingData } from "./hooks/useWeldingData";
 import { WeldingAdminListPanel } from "./components/WeldingAdminListPanel";
 import { WeldingListItem } from "./components/WeldingListItem";
+import { ROUTES } from "@react/router/routes";
 
 const STANDARD_TYPES = [
   "Sveisesertifisering",
@@ -1014,7 +1015,7 @@ export function CompanySettingsWeldingPage() {
           <CompanySettingsHeader
             title="App-parametere - Teknisk / Sveising"
             subtitle="Kun admin har tilgang."
-            backTo="/settings/company"
+            backTo={ROUTES.settingsCompany}
             backLabel="<- App-parametere"
           />
           <div className="muted app-muted-block">
@@ -1029,7 +1030,7 @@ export function CompanySettingsWeldingPage() {
       <CompanySettingsHeader
           title="App-parametere - Teknisk / Sveising"
           subtitle="Materialer, standarder, NDT-metoder, sveiseprosesser og sveisefuger."
-          backTo="/settings/company"
+          backTo={ROUTES.settingsCompany}
           backLabel="<- App-parametere"
           actions={
             <AppRefreshIconButton

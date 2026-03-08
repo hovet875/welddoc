@@ -1,5 +1,4 @@
 import { supabase } from "../services/supabaseClient";
-import { createUuid } from "../utils/id";
 
 export type TraceabilityTypeRow = {
   code: string;
@@ -210,46 +209,22 @@ export async function createProjectTraceability(input: {
   material_certificate_id?: string | null;
   heat_number?: string | null;
 }) {
-  const { data: latest, error: latestError } = await supabase
-    .from("project_traceability")
-    .select("code_index")
-    .eq("project_id", input.project_id)
-    .eq("type_code", input.type_code)
-    .not("code_index", "is", null)
-    .order("code_index", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (latestError) throw latestError;
-
-  let nextIndex = (latest?.code_index ?? 0) + 1;
-  if (!latest?.code_index) {
-    const { count, error: countError } = await supabase
-      .from("project_traceability")
-      .select("id", { count: "exact", head: true })
-      .eq("project_id", input.project_id)
-      .eq("type_code", input.type_code);
-    if (countError) throw countError;
-    nextIndex = (count ?? 0) + 1;
-  }
-
-  const payload = {
-    id: createUuid(),
-    project_id: input.project_id,
-    type_code: input.type_code,
-    code_index: nextIndex,
-    dn: input.dn ?? null,
-    dn2: input.dn2 ?? null,
-    sch: input.sch ?? null,
-    pressure_class: input.pressure_class ?? null,
-    thickness: input.thickness ?? null,
-    filler_type: input.filler_type ?? null,
-    material_id: input.material_id ?? null,
-    material_certificate_id: input.material_certificate_id ?? null,
-    heat_number: input.heat_number ?? null,
-  };
-  const { error } = await supabase.from("project_traceability").insert(payload);
+  const { data, error } = await supabase.rpc("create_project_traceability_with_next_index", {
+    p_project_id: input.project_id,
+    p_type_code: input.type_code,
+    p_dn: input.dn ?? null,
+    p_dn2: input.dn2 ?? null,
+    p_sch: input.sch ?? null,
+    p_pressure_class: input.pressure_class ?? null,
+    p_thickness: input.thickness ?? null,
+    p_filler_type: input.filler_type ?? null,
+    p_material_id: input.material_id ?? null,
+    p_material_certificate_id: input.material_certificate_id ?? null,
+    p_heat_number: input.heat_number ?? null,
+  });
   if (error) throw error;
-  return payload.id as string;
+  if (!data) throw new Error("Kunne ikke opprette sporbarhet.");
+  return String(data);
 }
 
 export async function updateProjectTraceability(

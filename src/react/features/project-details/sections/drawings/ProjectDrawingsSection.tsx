@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Group, Text } from "@mantine/core";
 import { createSignedUrlForFileRef } from "@/repo/fileRepo";
 import {
@@ -17,10 +17,10 @@ import { AppPdfPreviewModal, type AppPdfPreviewState } from "@react/ui/AppPdfPre
 import { notifyError, notifySuccess, toast } from "@react/ui/notify";
 import { useDeleteConfirmModal } from "@react/ui/useDeleteConfirmModal";
 import { DrawingsTable } from "./components/DrawingsTable";
-import { DrawingsUploadModal } from "./components/DrawingsUploadModal";
+import { DrawingsUploadPanel } from "./components/DrawingsUploadPanel";
 import { DrawingEditModal } from "./components/DrawingEditModal";
 import { useProjectDrawingsData } from "./hooks/useProjectDrawingsData";
-import { createPdfPreviewState, readError } from "./lib/drawingsUtils";
+import { createPdfPreviewState, normalizeButtWeldCountInput, parseButtWeldCount, readError } from "./lib/drawingsUtils";
 import type { ProjectDrawingRow, UploadEntry } from "./types";
 
 type ProjectDrawingsSectionProps = {
@@ -30,14 +30,16 @@ type ProjectDrawingsSectionProps = {
 
 export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSectionProps) {
   const { confirmDelete, deleteConfirmModal } = useDeleteConfirmModal();
-  const { rows, loading, error, selectedIds, selectedRows, allSelected, setSelectedIds, loadRows, toggleAll, toggleOne } =
+  const { rows, progressByDrawingId, loading, error, selectedIds, selectedRows, allSelected, setSelectedIds, loadRows, toggleAll, toggleOne } =
     useProjectDrawingsData(projectId);
 
   const [pdfPreview, setPdfPreview] = useState<AppPdfPreviewState>(() => createPdfPreviewState());
+  const localPreviewUrlRef = useRef<string | null>(null);
 
   const [uploadOpened, setUploadOpened] = useState(false);
   const [uploadEntries, setUploadEntries] = useState<UploadEntry[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const [editOpened, setEditOpened] = useState(false);
   const [editRow, setEditRow] = useState<ProjectDrawingRow | null>(null);
@@ -45,13 +47,39 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
 
   const [printingBulk, setPrintingBulk] = useState(false);
 
-  const closePdfPreview = useCallback(() => {
-    setPdfPreview(createPdfPreviewState());
+  const clearLocalPreviewUrl = useCallback(() => {
+    if (!localPreviewUrlRef.current) return;
+    URL.revokeObjectURL(localPreviewUrlRef.current);
+    localPreviewUrlRef.current = null;
   }, []);
 
-  const openPdfPreview = useCallback(async (fileId: string | null, title: string) => {
-    if (!fileId) {
+  useEffect(() => {
+    return () => {
+      clearLocalPreviewUrl();
+    };
+  }, [clearLocalPreviewUrl]);
+
+  const closePdfPreview = useCallback(() => {
+    clearLocalPreviewUrl();
+    setPdfPreview(createPdfPreviewState());
+  }, [clearLocalPreviewUrl]);
+
+  const openPdfPreview = useCallback(async (refOrUrl: string | null, title: string) => {
+    if (!refOrUrl) {
       toast("Ingen PDF er koblet til denne tegningen.");
+      return;
+    }
+
+    if (refOrUrl.startsWith("blob:")) {
+      clearLocalPreviewUrl();
+      localPreviewUrlRef.current = refOrUrl;
+      setPdfPreview({
+        opened: true,
+        title,
+        url: refOrUrl,
+        loading: false,
+        error: null,
+      });
       return;
     }
 
@@ -64,7 +92,8 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
     });
 
     try {
-      const url = await createSignedUrlForFileRef(fileId, { expiresSeconds: 120 });
+      clearLocalPreviewUrl();
+      const url = await createSignedUrlForFileRef(refOrUrl, { expiresSeconds: 120 });
       setPdfPreview({
         opened: true,
         title,
@@ -82,7 +111,7 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
         error: readError(err, "Kunne ikke åpne PDF."),
       });
     }
-  }, []);
+  }, [clearLocalPreviewUrl]);
 
   const printSingle = useCallback(async (row: ProjectDrawingRow) => {
     if (!row.file_id) return;
@@ -178,7 +207,7 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
     setEditRow(null);
   }, [savingEdit]);
 
-  const submitEdit = useCallback(async (values: { drawingNo: string; revision: string; file: File | null }) => {
+  const submitEdit = useCallback(async (values: { drawingNo: string; revision: string; buttWeldCount: number; file: File | null }) => {
     if (!editRow) return;
 
     try {
@@ -186,6 +215,7 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
       await updateProjectDrawing(editRow.id, {
         drawing_no: values.drawingNo,
         revision: values.revision,
+        butt_weld_count: values.buttWeldCount,
       });
       if (values.file && editRow.file_id) {
         await updateProjectDrawingFile(editRow.file_id, values.file);
@@ -202,13 +232,14 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
     }
   }, [editRow, loadRows]);
 
-  const closeUploadModal = useCallback(() => {
+  const clearUploadQueue = useCallback(() => {
     if (uploading) return;
-    setUploadOpened(false);
     setUploadEntries([]);
+    setUploadError(null);
   }, [uploading]);
 
   const addFilesToQueue = useCallback((files: File[]) => {
+    setUploadError(null);
     const additions: UploadEntry[] = [];
 
     for (const file of files) {
@@ -224,6 +255,7 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
         file,
         drawingNo: base,
         revision: "A",
+        buttWeldCount: "0",
       });
     }
 
@@ -233,18 +265,26 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
 
   const submitUpload = useCallback(async () => {
     if (uploadEntries.length === 0) {
-      notifyError("Legg til minst én PDF før opplasting.");
+      const message = "Legg til minst én PDF før opplasting.";
+      setUploadError(message);
+      notifyError(message);
       return;
     }
 
     try {
+      setUploadError(null);
       setUploading(true);
       const duplicateFiles: string[] = [];
+      let uploadedCount = 0;
 
       for (const entry of uploadEntries) {
         const drawingNo = entry.drawingNo.trim();
         if (!drawingNo) {
           throw new Error("Tegningsnr kan ikke være tomt.");
+        }
+        const buttWeldCount = parseButtWeldCount(entry.buttWeldCount);
+        if (buttWeldCount == null) {
+          throw new Error(`Buttsveiser for ${entry.file.name} må være et heltall lik eller større enn 0.`);
         }
 
         try {
@@ -252,8 +292,10 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
             project_id: projectId,
             drawing_no: drawingNo,
             revision: (entry.revision || "A").trim() || "A",
+            butt_weld_count: buttWeldCount,
             file: entry.file,
           });
+          uploadedCount += 1;
         } catch (err) {
           const message = readError(err, "Klarte ikke å laste opp tegning.");
           if (message.toLowerCase().includes("finnes allerede i systemet")) {
@@ -265,16 +307,22 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
       }
 
       if (duplicateFiles.length > 0) {
-        notifyError(`Følgende filer finnes allerede i systemet: ${duplicateFiles.join(", ")}`);
+        const duplicateMessage = `Følgende filer finnes allerede i systemet: ${duplicateFiles.join(", ")}`;
+        setUploadError(duplicateMessage);
+        notifyError(duplicateMessage);
       }
 
       await loadRows();
       setUploadOpened(false);
       setUploadEntries([]);
-      notifySuccess("Tegninger lastet opp.");
+      if (uploadedCount > 0) {
+        notifySuccess(`${uploadedCount} tegning(er) lastet opp.`);
+      }
     } catch (err) {
       console.error(err);
-      notifyError(readError(err, "Klarte ikke å laste opp tegninger."));
+      const message = readError(err, "Klarte ikke å laste opp tegninger.");
+      setUploadError(message);
+      notifyError(message);
     } finally {
       setUploading(false);
     }
@@ -288,19 +336,53 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
     setUploadEntries((prev) => prev.map((item) => (item.id === entryId ? { ...item, revision: revision as UploadEntry["revision"] } : item)));
   }, []);
 
+  const handleChangeUploadButtWeldCount = useCallback((entryId: string, buttWeldCount: string) => {
+    const normalized = normalizeButtWeldCountInput(buttWeldCount);
+    setUploadEntries((prev) => prev.map((item) => (item.id === entryId ? { ...item, buttWeldCount: normalized } : item)));
+  }, []);
+
   const handleRemoveUploadEntry = useCallback((entryId: string) => {
     setUploadEntries((prev) => prev.filter((item) => item.id !== entryId));
   }, []);
 
+  const previewUploadEntry = useCallback((entry: UploadEntry) => {
+    const url = URL.createObjectURL(entry.file);
+    void openPdfPreview(url, entry.file.name);
+  }, [openPdfPreview]);
+
   return (
     <>
+      {isAdmin ? (
+        <DrawingsUploadPanel
+          opened={uploadOpened}
+          uploading={uploading}
+          entries={uploadEntries}
+          error={uploadError}
+          onDrop={addFilesToQueue}
+          onReject={() => notifyError("Kun PDF er tillatt, maks 25 MB.")}
+          onPreview={previewUploadEntry}
+          onChangeDrawingNo={handleChangeUploadDrawingNo}
+          onChangeRevision={handleChangeUploadRevision}
+          onChangeButtWeldCount={handleChangeUploadButtWeldCount}
+          onRemove={handleRemoveUploadEntry}
+          onClear={clearUploadQueue}
+          onSubmit={() => {
+            void submitUpload();
+          }}
+        />
+      ) : null}
+
       <AppPanel
         title="Tegninger"
         meta="Oversikt over tegninger tilhørende prosjekt"
         actions={
           isAdmin ? (
-            <AppButton tone="primary" size="sm" onClick={() => setUploadOpened(true)}>
-              Last opp tegninger
+            <AppButton tone="primary" size="sm" onClick={() => setUploadOpened((current) => !current)}>
+              {uploadOpened
+                ? "Skjul opplasting"
+                : uploadEntries.length > 0
+                  ? `Legg til filer (${uploadEntries.length} i kø)`
+                  : "Legg til filer"}
             </AppButton>
           ) : null
         }
@@ -323,6 +405,7 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
 
         <DrawingsTable
           rows={rows}
+          progressByDrawingId={progressByDrawingId}
           loading={loading}
           error={error}
           isAdmin={isAdmin}
@@ -340,21 +423,6 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
           onDelete={requestDelete}
         />
       </AppPanel>
-
-      <DrawingsUploadModal
-        opened={uploadOpened}
-        uploading={uploading}
-        entries={uploadEntries}
-        onClose={closeUploadModal}
-        onDrop={addFilesToQueue}
-        onReject={() => notifyError("Kun PDF er tillatt, maks 25 MB.")}
-        onChangeDrawingNo={handleChangeUploadDrawingNo}
-        onChangeRevision={handleChangeUploadRevision}
-        onRemove={handleRemoveUploadEntry}
-        onSubmit={() => {
-          void submitUpload();
-        }}
-      />
 
       <DrawingEditModal
         opened={editOpened}

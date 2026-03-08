@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { ReactApp } from "./App";
 import { ReactErrorBoundary } from "./ReactErrorBoundary";
+import { PwaUpdateNotifier } from "./PwaUpdateNotifier";
 import { MantineProvider } from "@mantine/core";
 import { mantineTheme } from "../ui/mantineTheme";
 import { Notifications } from "@mantine/notifications";
@@ -21,6 +22,7 @@ export function mountReactApp(host: HTMLElement) {
     <StrictMode>
       <MantineProvider theme={mantineTheme} forceColorScheme={SCHEME} cssVariablesSelector=".react-root">
         <Notifications position="top-right" zIndex={10000} limit={4} />
+        <PwaUpdateNotifier />
         <ReactErrorBoundary>
           <BrowserRouter basename={APP_BASENAME}>
             <ReactApp />

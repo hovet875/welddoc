@@ -4,6 +4,7 @@ import { AppAsyncState } from "@react/ui/AppAsyncState";
 import { AppLinkButton } from "@react/ui/AppLinkButton";
 import { AppPaginationToolbar } from "@react/ui/AppPaginationToolbar";
 import { AppStatusBadge } from "@react/ui/AppStatusBadge";
+import { routePath } from "@react/router/routes";
 import type { ProjectRow } from "../projects.types";
 
 type ProjectsTableProps = {
@@ -59,7 +60,7 @@ export function ProjectsTable({
             {rows.map((row) => (
               <Table.Tr key={row.id}>
                 <Table.Td>
-                  <AppLinkButton to={`/prosjekter/${row.id}`} size="xs">
+                  <AppLinkButton to={routePath.projectDetails(row.id)} size="xs">
                     {row.project_no}
                   </AppLinkButton>
                 </Table.Td>

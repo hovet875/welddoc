@@ -1,3 +1,5 @@
+import { ROUTES } from "@react/router/routes";
+
 type RouteLoader = () => Promise<unknown>;
 
 export const loadLoginPage = () => import("@react/features/auth/LoginPage");
@@ -22,10 +24,10 @@ export const loadMigrationPlaceholderPage = () =>
 
 function normalizePath(path: string) {
   let normalized = path.trim();
-  if (!normalized) return "/";
+  if (!normalized) return ROUTES.home;
 
   normalized = normalized.replace(/^https?:\/\/[^/]+/i, "");
-  normalized = normalized.split("#")[0]?.split("?")[0] ?? "/";
+  normalized = normalized.split("#")[0]?.split("?")[0] ?? ROUTES.home;
   if (!normalized.startsWith("/")) normalized = `/${normalized}`;
   if (normalized.length > 1 && normalized.endsWith("/")) normalized = normalized.slice(0, -1);
   return normalized;
@@ -35,72 +37,72 @@ function resolveLoaders(path: string): RouteLoader[] {
   const pathname = normalizePath(path);
   const loaders: RouteLoader[] = [];
 
-  if (pathname === "/" || pathname === "/react" || pathname === "/react/home") {
+  if (pathname === ROUTES.home) {
     loaders.push(loadHomePage);
     return loaders;
   }
 
-  if (pathname === "/login" || pathname === "/react-login") {
+  if (pathname === ROUTES.login) {
     loaders.push(loadLoginPage);
     return loaders;
   }
 
-  if (pathname === "/prosjekter") {
+  if (pathname === ROUTES.projects) {
     loaders.push(loadProjectsPage);
     return loaders;
   }
 
-  if (pathname.startsWith("/prosjekter/")) {
+  if (pathname.startsWith(`${ROUTES.projects}/`)) {
     loaders.push(loadProjectDetailsPage);
     return loaders;
   }
 
-  if (pathname === "/materialsertifikater") {
+  if (pathname === ROUTES.materialCerts) {
     loaders.push(loadMaterialCertsPage);
     return loaders;
   }
 
-  if (pathname === "/wps") {
+  if (pathname === ROUTES.wps) {
     loaders.push(loadWpsPage);
     return loaders;
   }
 
-  if (pathname === "/certs") {
+  if (pathname === ROUTES.certs) {
     loaders.push(loadCertsPage);
     return loaders;
   }
 
-  if (pathname === "/ndt") {
+  if (pathname === ROUTES.ndt) {
     loaders.push(loadNdtPage);
     return loaders;
   }
 
-  if (pathname === "/settings") {
+  if (pathname === ROUTES.settings) {
     loaders.push(loadSettingsPage);
     return loaders;
   }
 
-  if (pathname === "/settings/users" || pathname === "/users") {
+  if (pathname === ROUTES.settingsUsers) {
     loaders.push(loadUsersPage);
     return loaders;
   }
 
-  if (pathname === "/settings/company" || pathname === "/company-settings") {
+  if (pathname === ROUTES.settingsCompany) {
     loaders.push(loadCompanySettingsPage);
     return loaders;
   }
 
-  if (pathname === "/settings/company/system" || pathname === "/company-settings/system") {
+  if (pathname === ROUTES.settingsCompanySystem) {
     loaders.push(loadCompanySettingsSystemPage);
     return loaders;
   }
 
-  if (pathname === "/settings/company/organization" || pathname === "/company-settings/organization") {
+  if (pathname === ROUTES.settingsCompanyOrganization) {
     loaders.push(loadCompanySettingsOrganizationPage);
     return loaders;
   }
 
-  if (pathname === "/settings/company/welding" || pathname === "/company-settings/welding") {
+  if (pathname === ROUTES.settingsCompanyWelding) {
     loaders.push(loadCompanySettingsWeldingPage);
     return loaders;
   }

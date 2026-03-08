@@ -8,6 +8,7 @@ import { AppCheckbox } from "@react/ui/AppCheckbox";
 import { AppTextInput } from "@react/ui/AppTextInput";
 import { useAuth } from "../../auth/AuthProvider";
 import { IconAlertCircle } from "@tabler/icons-react";
+import { ROUTES } from "@react/router/routes";
 
 function readRememberMe() {
   try {
@@ -63,7 +64,7 @@ export function LoginPage() {
       await signIn(email.trim(), password);
       await refresh();
       clearMessage();
-      navigate("/", { replace: true });
+      navigate(ROUTES.home, { replace: true });
     } catch (err) {
       console.error(err);
       setError(formatLoginError(err));

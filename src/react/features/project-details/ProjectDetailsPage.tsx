@@ -8,6 +8,7 @@ import { ProjectDetailsMenu } from "./components/ProjectDetailsMenu";
 import { ProjectDetailsSectionView } from "./components/ProjectDetailsSectionView";
 import { useProjectDetailsData } from "./hooks/useProjectDetailsData";
 import { normalizeProjectDetailsSection, PROJECT_DETAILS_SECTIONS } from "./lib/sections";
+import { ROUTES } from "@react/router/routes";
 
 export function ProjectDetailsPage() {
   const params = useParams<{ projectId: string; section?: string }>();
@@ -60,7 +61,7 @@ export function ProjectDetailsPage() {
         subtitle={`${project.customer} · AO ${project.work_order}`}
         actions={
           <>
-            <AppLinkButton to="/prosjekter" size="sm">
+            <AppLinkButton to={ROUTES.projects} size="sm">
               Tilbake
             </AppLinkButton>
           </>

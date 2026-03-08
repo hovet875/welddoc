@@ -2,12 +2,14 @@ import type { ProjectDrawingRow } from "@/repo/projectDrawingRepo";
 import type { AppPdfPreviewState } from "@react/ui/AppPdfPreviewModal";
 
 export type DrawingRevision = "-" | "A" | "B" | "C" | "D" | "E" | "F";
+export type DrawingStatus = "notStarted" | "inProgress" | "done";
 
 export type UploadEntry = {
   id: string;
   file: File;
   drawingNo: string;
   revision: DrawingRevision;
+  buttWeldCount: string;
 };
 
 export type DrawingsDataState = {
