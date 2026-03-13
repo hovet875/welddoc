@@ -4,6 +4,7 @@ import type { ProjectTraceabilityRow, TraceabilityTypeRow } from "@/repo/traceab
 import { AppActionsMenu, createDeleteAction, createEditAction, type AppActionsMenuItem } from "@react/ui/AppActionsMenu";
 import { AppStatusBadge } from "@react/ui/AppStatusBadge";
 import {
+  isFillerTraceabilityRow,
   lookupType,
   renderDimension,
   renderHeatLabel,
@@ -42,7 +43,14 @@ export function TraceabilityTable({ rows, types, isAdmin, onEdit, onDelete, onOp
             const type = row.type ?? lookupType(types, row.type_code);
             const indexSuffix = row.code_index ?? "";
             const codeLabel = `${row.type_code}${indexSuffix}`;
-            const typeLabel = type?.use_filler_type ? row.filler_type ?? "" : row.material?.name ?? "";
+            const fillerLabel = [
+              String(row.filler_manufacturer ?? "").trim(),
+              String(row.filler_type ?? "").trim(),
+              String(row.filler_diameter ?? "").trim() ? `${String(row.filler_diameter ?? "").trim()} mm` : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            const typeLabel = isFillerTraceabilityRow(row) ? fillerLabel : row.material?.name ?? "";
             const status = statusForTraceabilityRow(row);
 
             const menuItems: AppActionsMenuItem[] = [];

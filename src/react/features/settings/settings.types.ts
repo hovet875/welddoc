@@ -15,6 +15,8 @@ export type SettingsFormState = {
 export type SettingsDataState = {
   loading: boolean;
   saving: boolean;
+  error: string | null;
+  canSave: boolean;
   jobTitles: JobTitleRow[];
   form: SettingsFormState;
 };

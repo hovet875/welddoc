@@ -27,7 +27,9 @@ type MaterialCertsPanelProps = {
   filters: MaterialCertPanelFilters;
   onChangeFilters: (next: MaterialCertPanelFilters) => void;
   materialOptions: SelectOption[];
+  fillerManufacturerOptions: SelectOption[];
   fillerTypeOptions: SelectOption[];
+  fillerDiameterOptions: SelectOption[];
   supplierSuggestions: string[];
   rows: MaterialCertificateRow[];
   loading: boolean;
@@ -52,7 +54,9 @@ export const MaterialCertsPanel = memo(function MaterialCertsPanel({
   filters,
   onChangeFilters,
   materialOptions,
+  fillerManufacturerOptions,
   fillerTypeOptions,
+  fillerDiameterOptions,
   supplierSuggestions,
   rows,
   loading,
@@ -117,14 +121,32 @@ export const MaterialCertsPanel = memo(function MaterialCertsPanel({
               searchable
             />
           ) : (
-            <AppSelect
-              value={filters.fillerType}
-              onChange={(value) => setFilter("fillerType", value)}
-              data={fillerTypeOptions}
-              placeholder="Alle typer"
-              clearable
-              searchable
-            />
+            <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
+              <AppSelect
+                value={filters.fillerManufacturer}
+                onChange={(value) => setFilter("fillerManufacturer", value)}
+                data={fillerManufacturerOptions}
+                placeholder="Alle produsenter"
+                clearable
+                searchable
+              />
+              <AppSelect
+                value={filters.fillerType}
+                onChange={(value) => setFilter("fillerType", value)}
+                data={fillerTypeOptions}
+                placeholder="Alle typer"
+                clearable
+                searchable
+              />
+              <AppSelect
+                value={filters.fillerDiameter}
+                onChange={(value) => setFilter("fillerDiameter", value)}
+                data={fillerDiameterOptions}
+                placeholder="Alle diametre"
+                clearable
+                searchable
+              />
+            </SimpleGrid>
           )}
           <AppAutocomplete
             value={filters.supplier}

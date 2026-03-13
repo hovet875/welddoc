@@ -1,0 +1,41 @@
+name: Document Package Worker Smoke
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            workers/document-package-worker/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install worker dependencies
+        run: npm --prefix workers/document-package-worker ci
+
+      - name: Install Playwright Chromium
+        run: npx --prefix workers/document-package-worker playwright install --with-deps chromium
+
+      - name: Build app
+        run: npm run build
+
+      - name: Run worker render smoke
+        run: npm run document-package:smoke

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { Alert, Text, Center, Stack, Loader } from "@mantine/core";
+import { Alert, Center, Group, Loader, Stack, Text } from "@mantine/core";
+import { AppButton } from "./AppButton";
 
 type AppAsyncStateProps = {
   loading: boolean;
@@ -10,6 +11,8 @@ type AppAsyncStateProps = {
   showLoadingState?: boolean;
   emptyMessage?: ReactNode;
   errorTitle?: ReactNode;
+  onRetry?: () => void;
+  retryLabel?: ReactNode;
   children?: ReactNode;
 };
 
@@ -21,6 +24,8 @@ export function AppAsyncState({
   loadingMessage = "Laster data...",
   showLoadingState = true,
   errorTitle = "Feil",
+  onRetry,
+  retryLabel = "Prøv igjen",
   children,
 }: AppAsyncStateProps) {
   const [showLoading, setShowLoading] = useState(false);
@@ -36,7 +41,16 @@ export function AppAsyncState({
   if (error) {
     return (
       <Alert color="red" variant="light" title={errorTitle}>
-        {error}
+        <Stack gap="sm">
+          <Text>{error}</Text>
+          {onRetry ? (
+            <Group>
+              <AppButton tone="neutral" size="xs" onClick={onRetry}>
+                {retryLabel}
+              </AppButton>
+            </Group>
+          ) : null}
+        </Stack>
       </Alert>
     );
   }

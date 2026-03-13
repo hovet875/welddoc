@@ -28,6 +28,7 @@ export type WPQRRow = {
   process: string;
   file_id: string | null;
   created_at: string;
+  file?: { id: string; label: string | null; mime_type: string | null; size_bytes: number | null } | null;
   standard?: { id: string; label: string; revision: number | null; type: string | null } | null;
 };
 
@@ -44,8 +45,18 @@ export type WPSRow = {
   process: string;
   file_id: string | null;
   created_at: string;
+  file?: { id: string; label: string | null; mime_type: string | null; size_bytes: number | null } | null;
   wpqr_id: string | null;
-  wpqr: { id: string; doc_no: string; file_id: string | null; material_id: string | null; materiale: string | null; material: MaterialRef | null; tykkelse: string } | null;
+  wpqr: {
+    id: string;
+    doc_no: string;
+    file_id: string | null;
+    material_id: string | null;
+    materiale: string | null;
+    material: MaterialRef | null;
+    tykkelse: string;
+    file?: { id: string; label: string | null; mime_type: string | null; size_bytes: number | null } | null;
+  } | null;
   standard?: { id: string; label: string; revision: number | null; type: string | null } | null;
 };
 
@@ -88,6 +99,12 @@ export async function fetchWpsData(): Promise<WpsFetchResult> {
         process,
         file_id,
         created_at,
+        file:file_id (
+          id,
+          label,
+          mime_type,
+          size_bytes
+        ),
         standard:standard_id (
           id,
           label,
@@ -118,6 +135,12 @@ export async function fetchWpsData(): Promise<WpsFetchResult> {
         process,
         file_id,
         created_at,
+        file:file_id (
+          id,
+          label,
+          mime_type,
+          size_bytes
+        ),
         standard:standard_id (
           id,
           label,
@@ -135,6 +158,12 @@ export async function fetchWpsData(): Promise<WpsFetchResult> {
           id,
           doc_no,
           file_id,
+          file:file_id (
+            id,
+            label,
+            mime_type,
+            size_bytes
+          ),
           material_id,
           materiale,
           tykkelse,
@@ -221,9 +250,15 @@ export async function createWpqrWithOptionalPdf(base: UpsertWPQRInput, pdfFile: 
 
   if (!pdfFile) return id;
 
+  const fileId = createUuid();
+  let uploadedBucket: string | null = null;
+  let uploadedPath: string | null = null;
+  let fileRecordCreated = false;
+
   try {
-    const fileId = createUuid();
     const { bucket, path, sha256 } = await uploadFileToIdPath("wpqr", fileId, pdfFile);
+    uploadedBucket = bucket;
+    uploadedPath = path;
     await createFileRecord({
       id: fileId,
       bucket,
@@ -233,13 +268,17 @@ export async function createWpqrWithOptionalPdf(base: UpsertWPQRInput, pdfFile: 
       size_bytes: pdfFile.size,
       sha256,
     });
+    fileRecordCreated = true;
     await createFileLink(fileId, "wpqr", id);
     await updateWpqr(id, { file_id: fileId });
     return id;
   } catch (e) {
-    // cleanup: forsøk å slette fil + rad
     try {
-      // best effort
+      if (fileRecordCreated) {
+        await deleteFileRecord(fileId);
+      } else if (uploadedBucket && uploadedPath) {
+        await supabase.storage.from(uploadedBucket).remove([uploadedPath]);
+      }
     } catch {}
     try {
       await supabase.from("wpqr").delete().eq("id", id);
@@ -332,9 +371,15 @@ export async function createWpsWithOptionalPdf(base: UpsertWPSInput, pdfFile: Fi
 
   if (!pdfFile) return id;
 
+  const fileId = createUuid();
+  let uploadedBucket: string | null = null;
+  let uploadedPath: string | null = null;
+  let fileRecordCreated = false;
+
   try {
-    const fileId = createUuid();
     const { bucket, path, sha256 } = await uploadFileToIdPath("wps", fileId, pdfFile);
+    uploadedBucket = bucket;
+    uploadedPath = path;
     await createFileRecord({
       id: fileId,
       bucket,
@@ -344,12 +389,17 @@ export async function createWpsWithOptionalPdf(base: UpsertWPSInput, pdfFile: Fi
       size_bytes: pdfFile.size,
       sha256,
     });
+    fileRecordCreated = true;
     await createFileLink(fileId, "wps", id);
     await updateWps(id, { file_id: fileId });
     return id;
   } catch (e) {
     try {
-      // best effort
+      if (fileRecordCreated) {
+        await deleteFileRecord(fileId);
+      } else if (uploadedBucket && uploadedPath) {
+        await supabase.storage.from(uploadedBucket).remove([uploadedPath]);
+      }
     } catch {}
     try {
       await supabase.from("wps").delete().eq("id", id);

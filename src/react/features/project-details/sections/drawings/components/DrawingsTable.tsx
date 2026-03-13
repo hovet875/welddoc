@@ -117,6 +117,7 @@ export function DrawingsTable({
                     key: `print-${row.id}`,
                     onClick: () => onPrint(row),
                   }),
+                  disabled: !row.file_id,
                 },
               ];
 
@@ -145,17 +146,30 @@ export function DrawingsTable({
                     ) : null}
                   </Table.Td>
                   <Table.Td>
-                    <AppButton tone="neutral" size="xs" onClick={() => onOpenPdf(row)}>
+                    <AppButton tone="neutral" size="xs" onClick={() => onOpenPdf(row)} disabled={!row.file_id}>
                       {row.drawing_no}
                     </AppButton>
                   </Table.Td>
                   <Table.Td>
-                    <Text size="sm">{truncateLabel(row.file?.label || "Tegning", 60)}</Text>
-                    {row.file?.size_bytes ? (
-                      <Text size="xs" c="dimmed">
-                        {formatFileSize(row.file.size_bytes)}
-                      </Text>
-                    ) : null}
+                    {row.is_placeholder ? (
+                      <>
+                        <Badge variant="light" color="yellow" radius="xl">
+                          Midlertidig
+                        </Badge>
+                        <Text size="xs" c="dimmed" mt={4}>
+                          Ingen PDF lastet opp ennå.
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <Text size="sm">{truncateLabel(row.file?.label || "Tegning", 60)}</Text>
+                        {row.file?.size_bytes ? (
+                          <Text size="xs" c="dimmed">
+                            {formatFileSize(row.file.size_bytes)}
+                          </Text>
+                        ) : null}
+                      </>
+                    )}
                   </Table.Td>
                   <Table.Td>{normalizedButtWeldCount ?? "-"}</Table.Td>
                   <Table.Td>{fmtDate(row.created_at)}</Table.Td>

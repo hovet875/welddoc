@@ -22,7 +22,9 @@ export type MaterialCertificateRow = {
   certificate_type: MaterialCertificateType;
   cert_type: string;
   material_id: string | null;
+  filler_manufacturer: string | null;
   filler_type: string | null;
+  filler_diameter: string | null;
   supplier: string | null;
   heat_numbers: string[] | null;
   file_id: string | null;
@@ -35,7 +37,9 @@ export type MaterialCertificateRow = {
 export type MaterialCertificateListFilters = {
   certificateType: MaterialCertificateType;
   materialId?: string | null;
+  fillerManufacturer?: string | null;
   fillerType?: string | null;
+  fillerDiameter?: string | null;
   supplier?: string | null;
   query?: string | null;
 };
@@ -44,35 +48,74 @@ function escapeLikeValue(value: string) {
   return value.replace(/[%_,]/g, (match) => `\\${match}`);
 }
 
+function uniqueIds(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)));
+}
+
+async function resolveMaterialCertificateIdsForQuery(filters: MaterialCertificateListFilters) {
+  const textQuery = String(filters.query ?? "").trim();
+  if (!textQuery) return null;
+
+  const escaped = escapeLikeValue(textQuery);
+  const pattern = `%${escaped}%`;
+
+  const [baseResult, heatResult] = await Promise.all([
+    supabase
+      .from("material_certificates")
+      .select("id")
+      .eq("certificate_type", filters.certificateType)
+      .or(
+        [
+          `supplier.ilike.${pattern}`,
+          `filler_manufacturer.ilike.${pattern}`,
+          `filler_type.ilike.${pattern}`,
+          `filler_diameter.ilike.${pattern}`,
+          `cert_type.ilike.${pattern}`,
+        ].join(",")
+      ),
+    supabase
+      .from("material_certificate_heats")
+      .select("certificate_id")
+      .eq("certificate_type", filters.certificateType)
+      .ilike("heat_number", pattern),
+  ]);
+
+  if (baseResult.error) throw baseResult.error;
+  if (heatResult.error) throw heatResult.error;
+
+  return uniqueIds([
+    ...(baseResult.data ?? []).map((row: any) => row.id),
+    ...(heatResult.data ?? []).map((row: any) => row.certificate_id),
+  ]);
+}
+
 function applyMaterialCertificateFilters(query: any, filters: MaterialCertificateListFilters) {
   let nextQuery = query.eq("certificate_type", filters.certificateType);
 
   const materialId = String(filters.materialId ?? "").trim();
+  const fillerManufacturer = String(filters.fillerManufacturer ?? "").trim();
   const fillerType = String(filters.fillerType ?? "").trim();
+  const fillerDiameter = String(filters.fillerDiameter ?? "").trim();
   const supplier = String(filters.supplier ?? "").trim();
-  const textQuery = String(filters.query ?? "").trim();
 
   if (materialId) {
     nextQuery = nextQuery.eq("material_id", materialId);
+  }
+
+  if (fillerManufacturer) {
+    nextQuery = nextQuery.eq("filler_manufacturer", fillerManufacturer);
   }
 
   if (fillerType) {
     nextQuery = nextQuery.eq("filler_type", fillerType);
   }
 
-  if (supplier) {
-    nextQuery = nextQuery.ilike("supplier", `%${escapeLikeValue(supplier)}%`);
+  if (fillerDiameter) {
+    nextQuery = nextQuery.eq("filler_diameter", fillerDiameter);
   }
 
-  if (textQuery) {
-    const escaped = escapeLikeValue(textQuery);
-    nextQuery = nextQuery.or(
-      [
-        `supplier.ilike.%${escaped}%`,
-        `filler_type.ilike.%${escaped}%`,
-        `cert_type.ilike.%${escaped}%`,
-      ].join(",")
-    );
+  if (supplier) {
+    nextQuery = nextQuery.ilike("supplier", `%${escapeLikeValue(supplier)}%`);
   }
 
   return nextQuery;
@@ -87,7 +130,9 @@ export async function fetchMaterialCertificates() {
       certificate_type,
       cert_type,
       material_id,
+      filler_manufacturer,
       filler_type,
+      filler_diameter,
       supplier,
       heat_numbers,
       file_id,
@@ -118,8 +163,17 @@ export async function fetchMaterialCertificatePage(input: {
 }): Promise<PageResult<MaterialCertificateRow>> {
   const { page, pageSize } = normalizePageRequest(input, { page: 1, pageSize: 25 });
   const { from, to } = getRangeFromPage(page, pageSize);
+  const queryCertificateIds = await resolveMaterialCertificateIdsForQuery(input.filters);
+  if (String(input.filters.query ?? "").trim() && queryCertificateIds && queryCertificateIds.length === 0) {
+    return {
+      items: [],
+      total: 0,
+      page,
+      pageSize,
+    };
+  }
 
-  const query = applyMaterialCertificateFilters(
+  let query = applyMaterialCertificateFilters(
     supabase
       .from("material_certificates")
       .select(
@@ -128,7 +182,9 @@ export async function fetchMaterialCertificatePage(input: {
         certificate_type,
         cert_type,
         material_id,
+        filler_manufacturer,
         filler_type,
+        filler_diameter,
         supplier,
         heat_numbers,
         file_id,
@@ -149,8 +205,13 @@ export async function fetchMaterialCertificatePage(input: {
       ),
     input.filters
   )
-    .order("created_at", { ascending: false })
-    .range(from, to);
+    .order("created_at", { ascending: false });
+
+  if (queryCertificateIds && queryCertificateIds.length > 0) {
+    query = query.in("id", queryCertificateIds);
+  }
+
+  query = query.range(from, to);
 
   const { data, error, count } = await query;
   if (error) throw error;
@@ -198,11 +259,49 @@ export async function fetchMaterialCertificateFillerTypes() {
   ).sort((a, b) => a.localeCompare(b, "nb", { sensitivity: "base" }));
 }
 
+export async function fetchMaterialCertificateFillerManufacturers() {
+  const { data, error } = await supabase
+    .from("material_certificates")
+    .select("filler_manufacturer")
+    .eq("certificate_type", "filler")
+    .not("filler_manufacturer", "is", null)
+    .order("filler_manufacturer", { ascending: true });
+  if (error) throw error;
+
+  return Array.from(
+    new Set(
+      (data ?? [])
+        .map((row) => String(row.filler_manufacturer ?? "").trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b, "nb", { sensitivity: "base" }));
+}
+
+export async function fetchMaterialCertificateFillerDiameters() {
+  const { data, error } = await supabase
+    .from("material_certificates")
+    .select("filler_diameter")
+    .eq("certificate_type", "filler")
+    .not("filler_diameter", "is", null)
+    .order("filler_diameter", { ascending: true });
+  if (error) throw error;
+
+  return Array.from(
+    new Set(
+      (data ?? [])
+        .map((row) => String(row.filler_diameter ?? "").trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b, "nb", { sensitivity: "base", numeric: true }));
+}
+
 export async function createMaterialCertificateWithFile(input: {
   certificate_type: MaterialCertificateType;
   cert_type: string;
   material_id?: string | null;
+  filler_manufacturer?: string | null;
   filler_type?: string | null;
+  filler_diameter?: string | null;
   supplier?: string | null;
   file: File;
 }) {
@@ -228,7 +327,9 @@ export async function createMaterialCertificateWithFile(input: {
       certificate_type: input.certificate_type,
       cert_type: input.cert_type,
       material_id: input.material_id ?? null,
+      filler_manufacturer: input.filler_manufacturer ?? null,
       filler_type: input.filler_type ?? null,
+      filler_diameter: input.filler_diameter ?? null,
       supplier: input.supplier ?? null,
       heat_numbers: [],
       file_id: fileId,
@@ -256,7 +357,9 @@ export async function createMaterialCertificateWithExistingFile(input: {
   certificate_type: MaterialCertificateType;
   cert_type: string;
   material_id?: string | null;
+  filler_manufacturer?: string | null;
   filler_type?: string | null;
+  filler_diameter?: string | null;
   supplier?: string | null;
   file_id: string;
 }) {
@@ -269,7 +372,9 @@ export async function createMaterialCertificateWithExistingFile(input: {
       certificate_type: input.certificate_type,
       cert_type: input.cert_type,
       material_id: input.material_id ?? null,
+      filler_manufacturer: input.filler_manufacturer ?? null,
       filler_type: input.filler_type ?? null,
+      filler_diameter: input.filler_diameter ?? null,
       supplier: input.supplier ?? null,
       heat_numbers: [],
       file_id: input.file_id,
@@ -299,7 +404,9 @@ export type MaterialCertUploadEntry = {
   cert_type: string;
   supplier: string | null;
   material_id: string | null;
+  filler_manufacturer: string | null;
   filler_type: string | null;
+  filler_diameter: string | null;
   heat_numbers: string[];
 };
 
@@ -335,7 +442,9 @@ export async function uploadBatchWithMeta(
               cert_type: entry.cert_type,
               supplier: entry.supplier,
               material_id: entry.material_id,
+              filler_manufacturer: entry.filler_manufacturer,
               filler_type: entry.filler_type,
+              filler_diameter: entry.filler_diameter,
               file_id: existing.id,
             });
           } else {
@@ -347,7 +456,9 @@ export async function uploadBatchWithMeta(
             cert_type: entry.cert_type,
             supplier: entry.supplier,
             material_id: entry.material_id,
+            filler_manufacturer: entry.filler_manufacturer,
             filler_type: entry.filler_type,
+            filler_diameter: entry.filler_diameter,
             file: entry.file,
           });
         }
@@ -361,7 +472,9 @@ export async function uploadBatchWithMeta(
           cert_type: entry.cert_type,
           supplier: entry.supplier,
           material_id: entry.material_id,
+          filler_manufacturer: entry.filler_manufacturer,
           filler_type: entry.filler_type,
+          filler_diameter: entry.filler_diameter,
           file_id: existingFileId,
         });
       }
@@ -390,7 +503,19 @@ export async function uploadBatchWithMeta(
 
 export async function updateMaterialCertificate(
   id: string,
-  patch: Partial<Pick<MaterialCertificateRow, "supplier" | "heat_numbers" | "certificate_type" | "cert_type" | "material_id" | "filler_type">>
+  patch: Partial<
+    Pick<
+      MaterialCertificateRow,
+      | "supplier"
+      | "heat_numbers"
+      | "certificate_type"
+      | "cert_type"
+      | "material_id"
+      | "filler_manufacturer"
+      | "filler_type"
+      | "filler_diameter"
+    >
+  >
 ) {
   const { error } = await supabase.from("material_certificates").update(patch).eq("id", id);
   if (error) throw error;
@@ -433,7 +558,9 @@ export type MaterialCertificateHeatHit = {
   heat_number: string;
   certificate_type: MaterialCertificateType;
   material_id: string | null;
+  filler_manufacturer: string | null;
   filler_type: string | null;
+  filler_diameter: string | null;
   file_id: string | null;
   file_label: string | null;
   created_at: string;
@@ -443,10 +570,12 @@ export async function searchCertificateHeats(params: {
   heat: string;
   certificate_type: MaterialCertificateType;
   material_id?: string | null;
+  filler_manufacturer?: string | null;
   filler_type?: string | null;
+  filler_diameter?: string | null;
   limit?: number;
 }) {
-  const { heat, certificate_type, material_id, filler_type, limit = 30 } = params;
+  const { heat, certificate_type, material_id, filler_manufacturer, filler_type, filler_diameter, limit = 30 } = params;
 
   const q = heat.trim();
   if (!q) return [];
@@ -458,7 +587,7 @@ export async function searchCertificateHeats(params: {
   let query = supabase
     .from("material_certificate_heats")
     .select(
-      "certificate_id, heat_number, certificate_type, material_id, filler_type, file_id, file_label, created_at"
+      "certificate_id, heat_number, certificate_type, material_id, filler_manufacturer, filler_type, filler_diameter, file_id, file_label, created_at"
     )
     .eq("certificate_type", certificate_type)
     .order("created_at", { ascending: false })
@@ -468,6 +597,10 @@ export async function searchCertificateHeats(params: {
     query = query.eq("material_id", material_id as string);
   } else {
     query = query.eq("filler_type", filler_type as string);
+    const manufacturer = String(filler_manufacturer ?? "").trim();
+    const diameter = String(filler_diameter ?? "").trim();
+    if (manufacturer) query = query.eq("filler_manufacturer", manufacturer);
+    if (diameter) query = query.eq("filler_diameter", diameter);
   }
 
   query = query.ilike("heat_number", `%${q}%`);

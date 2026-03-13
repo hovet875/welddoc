@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Group, Stack, Text } from "@mantine/core";
+import { Alert, Group, Stack } from "@mantine/core";
 import { IconEye } from "@tabler/icons-react";
 import { createSignedUrlForFileRef } from "@/repo/fileRepo";
 import {
@@ -16,11 +16,14 @@ import { AppPanel } from "@react/ui/AppPanel";
 import { AppPdfPreviewModal, type AppPdfPreviewState } from "@react/ui/AppPdfPreviewModal";
 import { AppPrintSetupModal } from "@react/ui/AppPrintSetupModal";
 import { notifyError, notifySuccess, toast } from "@react/ui/notify";
+import { openDocumentWindow } from "@react/ui/openDocumentWindow";
 import { useDeleteConfirmModal } from "@react/ui/useDeleteConfirmModal";
 import { TraceabilityEditModal } from "./components/TraceabilityEditModal";
 import { TraceabilityTable } from "./components/TraceabilityTable";
 import { useProjectTraceabilityData } from "./hooks/useProjectTraceabilityData";
-import { printTraceabilityTable } from "./lib/printTraceabilityTable";
+import { printTraceabilityDocument } from "./print/printTraceabilityDocument";
+import { MaterialTraceabilityDocumentPreview } from "./preview/MaterialTraceabilityDocumentPreview";
+import { mapTraceabilityToDocument } from "./preview/mapTraceabilityToDocument";
 import type { TraceabilityPrintOptions, TraceabilitySavePayload } from "./types";
 
 type TraceabilityProject = {
@@ -54,7 +57,7 @@ function createPdfPreviewState(): AppPdfPreviewState {
 export function ProjectTraceabilitySection({ projectId, isAdmin, project }: ProjectTraceabilitySectionProps) {
   const { confirmDelete, deleteConfirmModal } = useDeleteConfirmModal();
 
-  const { loading, error, rows, types, options, materials, reloadRows } = useProjectTraceabilityData(projectId);
+  const { loading, error, rows, types, profiles, options, materials, reloadAll, reloadRows } = useProjectTraceabilityData(projectId);
 
   const [editOpened, setEditOpened] = useState(false);
   const [editRow, setEditRow] = useState<ProjectTraceabilityRow | null>(null);
@@ -181,7 +184,7 @@ export function ProjectTraceabilitySection({ projectId, isAdmin, project }: Proj
   const printTable = useCallback(
     async (printOptions?: TraceabilityPrintOptions) => {
       try {
-        await printTraceabilityTable({ rows, types, project, options: printOptions });
+        await printTraceabilityDocument({ rows, types, project, options: printOptions });
       } catch (err) {
         console.error(err);
         notifyError(err instanceof Error ? err.message : "Klarte ikke å skrive ut sporbarhetsliste.");
@@ -190,18 +193,34 @@ export function ProjectTraceabilitySection({ projectId, isAdmin, project }: Proj
     [project, rows, types]
   );
 
+  const openDocumentPreview = useCallback(async () => {
+    try {
+      const documentData = mapTraceabilityToDocument({
+        project,
+        rows,
+        types,
+      });
+
+      await openDocumentWindow({
+        title: `Materialsporbarhet - ${project.project_no}`,
+        element: <MaterialTraceabilityDocumentPreview data={documentData} />,
+      });
+    } catch (err) {
+      console.error(err);
+      notifyError(err instanceof Error ? err.message : "Klarte ikke a apne dokumentpreview.");
+    }
+  }, [project, rows, types]);
+
   const actionItems = useMemo<AppActionsMenuItem[]>(
     () => [
       {
-        key: "open-first-cert",
-        label: "Åpne første sertifikat",
+        key: "preview-document",
+        label: "Dokumentpreview",
         icon: <IconEye size={16} />,
-        disabled: !rows.some((row) => Boolean(row.cert?.file_id)),
         onClick: () => {
-          const fileId = rows.find((row) => row.cert?.file_id)?.cert?.file_id;
-          if (!fileId) return;
-          void openCertificatePreview(fileId);
+          void openDocumentPreview();
         },
+        disabled: rows.length === 0,
       },
       {
         ...createPrintAction({
@@ -210,7 +229,7 @@ export function ProjectTraceabilitySection({ projectId, isAdmin, project }: Proj
         disabled: rows.length === 0,
       },
     ],
-    [openCertificatePreview, rows]
+    [openDocumentPreview, rows.length]
   );
 
   return (
@@ -233,6 +252,9 @@ export function ProjectTraceabilitySection({ projectId, isAdmin, project }: Proj
           <AppAsyncState
             loading={loading}
             error={error}
+            onRetry={() => {
+              void reloadAll();
+            }}
             isEmpty={!error && !loading && rows.length === 0}
             loadingMessage="Laster sporbarhet..."
             emptyMessage="Ingen sporbarhet registrert."
@@ -252,12 +274,6 @@ export function ProjectTraceabilitySection({ projectId, isAdmin, project }: Proj
               Kun admin kan opprette, endre og slette sporbarhet.
             </Alert>
           ) : null}
-
-          {!loading && !error && rows.length > 0 ? (
-            <Text c="dimmed" size="sm">
-              Tips: Velg heat via søk når sertifikat finnes. Bruk manuell heat kun når sertifikat ikke er tilgjengelig ennå.
-            </Text>
-          ) : null}
         </Stack>
       </AppPanel>
 
@@ -268,6 +284,7 @@ export function ProjectTraceabilitySection({ projectId, isAdmin, project }: Proj
         isAdmin={isAdmin}
         projectId={projectId}
         types={types}
+        profiles={profiles}
         options={options}
         materials={materials}
         onClose={closeEditModal}

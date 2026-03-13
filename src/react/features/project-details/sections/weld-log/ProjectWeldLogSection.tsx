@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Group, Stack, Text } from "@mantine/core";
 import {
   IconCheck,
+  IconEye,
   IconFilePlus,
   IconListCheck,
   IconPlus,
@@ -32,15 +33,18 @@ import { AppPanel } from "@react/ui/AppPanel";
 import { AppPaginationToolbar } from "@react/ui/AppPaginationToolbar";
 import { AppSelect } from "@react/ui/AppSelect";
 import { notifyError, notifySuccess, toast } from "@react/ui/notify";
+import { openDocumentWindow } from "@react/ui/openDocumentWindow";
 import { useDeleteConfirmModal } from "@react/ui/useDeleteConfirmModal";
 import { WeldLogBulkAddModal } from "./components/WeldLogBulkAddModal";
 import { WeldLogEditModal } from "./components/WeldLogEditModal";
 import { WeldLogInfoModal } from "./components/WeldLogInfoModal";
 import { WeldLogTable } from "./components/WeldLogTable";
 import { useProjectWeldLogData } from "./hooks/useProjectWeldLogData";
-import { printWeldLogTable } from "./lib/printWeldLogTable";
 import { reportMatchesField, selectedDrawingLabel, VT_NO_REPORT_VALUE } from "./lib/weldLogUtils";
+import { WeldLogDocumentPreview } from "./preview/WeldLogDocumentPreview";
+import { mapWeldLogToDocument } from "./preview/mapWeldLogToDocument";
 import { WeldLogPrintSetupModal } from "./print";
+import { printWeldLogDocument } from "./print/printWeldLogDocument";
 import type { WeldLogBulkState, WeldLogEditorValues, WeldLogProject, WeldLogStatusFilter } from "./types";
 
 type ProjectWeldLogSectionProps = {
@@ -505,6 +509,43 @@ export function ProjectWeldLogSection({ projectId, isAdmin, project }: ProjectWe
     setPrintSetupOpened(true);
   }, []);
 
+  const selectedDrawingText = useMemo(
+    () => selectedDrawingLabel({ drawingId, drawingMap: drawingById }),
+    [drawingId, drawingById]
+  );
+
+  const openDocumentPreview = useCallback(async () => {
+    if (!logId) {
+      toast("Velg tegning for a vise dokumentpreview.");
+      return;
+    }
+
+    try {
+      const previewRows = await fetchProjectWeldRowsForLog({
+        logId,
+        statusFilter: "all",
+        quickFilter: "all",
+      });
+
+      const documentData = mapWeldLogToDocument({
+        project,
+        drawingLabel: selectedDrawingText,
+        rows: previewRows,
+        reports: data.reports,
+        employees: data.employees,
+        welders: data.welders,
+      });
+
+      await openDocumentWindow({
+        title: `Sveiselogg - ${selectedDrawingText}`,
+        element: <WeldLogDocumentPreview data={documentData} />,
+      });
+    } catch (err) {
+      console.error(err);
+      notifyError(err instanceof Error ? err.message : "Klarte ikke a apne dokumentpreview.");
+    }
+  }, [data.employees, data.reports, data.welders, logId, project, selectedDrawingText]);
+
   const actionItems = useMemo<AppActionsMenuItem[]>(
     () => [
       {
@@ -523,18 +564,22 @@ export function ProjectWeldLogSection({ projectId, isAdmin, project }: ProjectWe
         onClick: openBulkAdd,
       },
       {
+        key: "preview-document",
+        label: "Dokumentpreview",
+        icon: <IconEye size={16} />,
+        disabled: rowsTotal === 0 || !logId,
+      onClick: () => {
+        void openDocumentPreview();
+      },
+      },
+      {
         ...createPrintAction({
           onClick: printRows,
         }),
         disabled: rowsTotal === 0,
       },
     ],
-    [isAdmin, logId, openBulkAdd, printRows, reloadAll, reloadRows, rowsTotal]
-  );
-
-  const selectedDrawingText = useMemo(
-    () => selectedDrawingLabel({ drawingId, drawingMap: drawingById }),
-    [drawingId, drawingById]
+    [isAdmin, logId, openBulkAdd, openDocumentPreview, printRows, reloadAll, reloadRows, rowsTotal]
   );
 
   return (
@@ -616,9 +661,18 @@ export function ProjectWeldLogSection({ projectId, isAdmin, project }: ProjectWe
             </AppButton>
           </Group>
 
+          {!loading && !error && drawingOptions.length === 0 ? (
+            <Alert color="yellow" variant="light">
+              Ingen tegninger finnes på prosjektet ennå. Opprett en tegning eller en midlertidig tegning i Tegninger-seksjonen før du fører sveiselogg.
+            </Alert>
+          ) : null}
+
           <AppAsyncState
             loading={loading || rowsLoading}
             error={error || rowsError}
+            onRetry={() => {
+              void reloadAll();
+            }}
             isEmpty={!error && !loading && rows.length === 0}
             loadingMessage="Laster sveiselogg..."
             emptyMessage="Ingen sveiselogg-rader funnet for valgt tegning."
@@ -794,7 +848,12 @@ export function ProjectWeldLogSection({ projectId, isAdmin, project }: ProjectWe
         onSubmit={submitEdit}
       />
 
-      <WeldLogInfoModal opened={infoOpened} row={infoRow} onClose={() => setInfoOpened(false)} />
+      <WeldLogInfoModal
+        opened={infoOpened}
+        row={infoRow}
+        employees={data.employees}
+        onClose={() => setInfoOpened(false)}
+      />
 
       <WeldLogBulkAddModal
         opened={bulkAddOpened}
@@ -817,7 +876,7 @@ export function ProjectWeldLogSection({ projectId, isAdmin, project }: ProjectWe
               statusFilter: "all",
               quickFilter: "all",
             });
-            await printWeldLogTable({
+            await printWeldLogDocument({
               rows: printRows,
               reports: data.reports,
               employees: data.employees,

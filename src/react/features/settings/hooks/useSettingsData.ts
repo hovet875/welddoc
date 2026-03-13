@@ -13,6 +13,7 @@ type UseSettingsDataResult = SettingsDataState & {
   setDisplayName: (value: string) => void;
   setJobTitle: (value: string) => void;
   setWelderNo: (value: string) => void;
+  reload: () => Promise<void>;
   save: () => Promise<void>;
 };
 
@@ -25,52 +26,77 @@ const EMPTY_FORM: SettingsFormState = {
 export function useSettingsData({ userId, fallbackDisplayName }: UseSettingsDataArgs): UseSettingsDataResult {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [canSave, setCanSave] = useState(false);
   const [jobTitles, setJobTitles] = useState<JobTitleRow[]>([]);
   const [form, setForm] = useState<SettingsFormState>(EMPTY_FORM);
   const loadSeqRef = useRef(0);
+  const hasLoadedProfileRef = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  const reload = useCallback(async () => {
     const seq = ++loadSeqRef.current;
 
     setLoading(true);
+    setError(null);
+    setCanSave(false);
     setForm((prev) => ({ ...prev, displayName: prev.displayName || fallbackDisplayName }));
 
-    void (async () => {
-      try {
-        const [profileResult, titlesResult] = await Promise.all([
-          (async () => {
-            if (!userId) return null;
-            const { data } = await supabase
-              .from("profiles")
-              .select("display_name, welder_no, job_title")
-              .eq("id", userId)
-              .maybeSingle();
-            return (data ?? null) as SettingsProfileRow | null;
-          })(),
-          (async () => {
-            try {
-              return await fetchJobTitles();
-            } catch (err) {
-              console.warn("Feilet \u00e5 hente stillinger", err);
-              return [];
-            }
-          })(),
-        ]);
+    try {
+      const [profileResult, titlesResult] = await Promise.all([
+        (async () => {
+          if (!userId) return null;
+          const { data, error } = await supabase
+            .from("profiles")
+            .select("display_name, welder_no, job_title")
+            .eq("id", userId)
+            .maybeSingle();
+          if (error) throw error;
+          return (data ?? null) as SettingsProfileRow | null;
+        })(),
+        (async () => {
+          try {
+            return await fetchJobTitles();
+          } catch (err) {
+            console.warn("Feilet å hente stillinger", err);
+            return [];
+          }
+        })(),
+      ]);
 
-        if (cancelled || seq !== loadSeqRef.current) return;
-        setJobTitles(titlesResult);
-        setForm(profileToForm(profileResult, fallbackDisplayName));
-      } finally {
-        if (cancelled || seq !== loadSeqRef.current) return;
-        setLoading(false);
+      if (seq !== loadSeqRef.current) return;
+
+      setJobTitles(titlesResult);
+
+      if (!userId) {
+        setForm((prev) => ({ ...prev, displayName: prev.displayName || fallbackDisplayName }));
+        setError("Fant ingen innlogget brukerprofil.");
+        setCanSave(false);
+        return;
       }
-    })();
 
-    return () => {
-      cancelled = true;
-    };
+      if (!profileResult) {
+        setError("Kunne ikke finne brukerprofilen din. Prøv igjen.");
+        setCanSave(false);
+        return;
+      }
+
+      hasLoadedProfileRef.current = true;
+      setForm(profileToForm(profileResult, fallbackDisplayName));
+      setCanSave(true);
+    } catch (err) {
+      if (seq !== loadSeqRef.current) return;
+      console.error(err);
+      setError(err instanceof Error && err.message ? err.message : "Kunne ikke laste brukerprofilen.");
+      setCanSave(false);
+    } finally {
+      if (seq !== loadSeqRef.current) return;
+      setLoading(false);
+    }
   }, [fallbackDisplayName, userId]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
   const setDisplayName = useCallback((value: string) => {
     setForm((prev) => ({ ...prev, displayName: value }));
@@ -86,6 +112,9 @@ export function useSettingsData({ userId, fallbackDisplayName }: UseSettingsData
 
   const save = useCallback(async () => {
     if (!userId) return;
+    if (!hasLoadedProfileRef.current || !canSave) {
+      throw new Error("Brukerprofilen er ikke lastet korrekt. Prøv å laste siden på nytt.");
+    }
 
     setSaving(true);
     try {
@@ -100,16 +129,19 @@ export function useSettingsData({ userId, fallbackDisplayName }: UseSettingsData
     } finally {
       setSaving(false);
     }
-  }, [form.displayName, form.jobTitle, form.welderNo, userId]);
+  }, [canSave, form.displayName, form.jobTitle, form.welderNo, userId]);
 
   return {
     loading,
     saving,
+    error,
+    canSave,
     jobTitles,
     form,
     setDisplayName,
     setJobTitle,
     setWelderNo,
+    reload,
     save,
   };
 }

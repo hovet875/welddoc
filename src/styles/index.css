@@ -1,7 +1,7 @@
 @import "./tokens.css";
 @import "./base.css";
-@import "./legacy/printsetups/traceability.css";
-@import "./legacy/printsetups/weld-log.css";
+@import "../documents/styles/documentBase.css";
+@import "../documents/styles/documentPrint.css";
 
 @import "./components/mantine.css";
 

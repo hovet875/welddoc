@@ -1,0 +1,17 @@
+services:
+  welddoc-document-package-worker:
+    container_name: welddoc-document-package-worker
+    image: welddoc-document-package-worker:latest
+    env_file:
+      - ./.env.synology
+    environment:
+      NODE_ENV: production
+    init: true
+    shm_size: 1gb
+    restart: unless-stopped
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

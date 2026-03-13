@@ -8,14 +8,18 @@ export type SelectOption = {
 
 export type MaterialCertPanelFilters = {
   materialId: string;
+  fillerManufacturer: string;
   fillerType: string;
+  fillerDiameter: string;
   supplier: string;
   query: string;
 };
 
 export const INITIAL_MATERIAL_CERT_FILTERS: MaterialCertPanelFilters = {
   materialId: "",
+  fillerManufacturer: "",
   fillerType: "",
+  fillerDiameter: "",
   supplier: "",
   query: "",
 };
@@ -60,9 +64,11 @@ export function heatNumbersToTags(values: string[] | null | undefined) {
 
 export function hasMaterialCertFilters(type: MaterialCertificateType, filters: MaterialCertPanelFilters) {
   return Boolean(
-    filters.query ||
+      filters.query ||
       filters.supplier ||
-      (type === "material" ? filters.materialId : filters.fillerType)
+      (type === "material"
+        ? filters.materialId
+        : filters.fillerManufacturer || filters.fillerType || filters.fillerDiameter)
   );
 }
 
@@ -95,7 +101,12 @@ export function withCurrentOption(options: SelectOption[], value: string, fallba
 
 export function materialCertProductLabel(row: MaterialCertificateRow) {
   if (row.certificate_type === "filler") {
-    return trimOrEmpty(row.filler_type) || "-";
+    return (
+      [trimOrEmpty(row.filler_manufacturer), trimOrEmpty(row.filler_type), trimOrEmpty(row.filler_diameter)]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || "-"
+    );
   }
   return trimOrEmpty(row.material?.name) || "-";
 }

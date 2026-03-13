@@ -3,17 +3,22 @@ import { fetchMaterials, type MaterialRow } from "@/repo/materialRepo";
 import {
   fetchProjectTraceability,
   fetchTraceabilityOptions,
+  fetchTraceabilityProfiles,
   fetchTraceabilityTypes,
   type ProjectTraceabilityRow,
+  type TraceabilityProfileRow,
   type TraceabilityTypeRow,
 } from "@/repo/traceabilityRepo";
 import type { TraceabilityOptionsByGroup } from "../types";
 
 const EMPTY_OPTIONS: TraceabilityOptionsByGroup = {
   dn: [],
+  od: [],
   sch: [],
   pn: [],
   filler: [],
+  fillerManufacturer: [],
+  fillerDiameter: [],
 };
 
 type UseProjectTraceabilityDataResult = {
@@ -22,6 +27,7 @@ type UseProjectTraceabilityDataResult = {
 
   rows: ProjectTraceabilityRow[];
   types: TraceabilityTypeRow[];
+  profiles: TraceabilityProfileRow[];
   options: TraceabilityOptionsByGroup;
   materials: MaterialRow[];
 
@@ -35,25 +41,34 @@ export function useProjectTraceabilityData(projectId: string): UseProjectTraceab
 
   const [rows, setRows] = useState<ProjectTraceabilityRow[]>([]);
   const [types, setTypes] = useState<TraceabilityTypeRow[]>([]);
+  const [profiles, setProfiles] = useState<TraceabilityProfileRow[]>([]);
   const [options, setOptions] = useState<TraceabilityOptionsByGroup>(EMPTY_OPTIONS);
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
 
   const loadStatic = useCallback(async () => {
-    const [typeRows, dnRows, schRows, pnRows, fillerRows, materialRows] = await Promise.all([
+    const [typeRows, profileRows, dnRows, odRows, schRows, pnRows, fillerRows, fillerManufacturerRows, fillerDiameterRows, materialRows] = await Promise.all([
       fetchTraceabilityTypes(),
+      fetchTraceabilityProfiles(),
       fetchTraceabilityOptions("dn"),
+      fetchTraceabilityOptions("od"),
       fetchTraceabilityOptions("sch"),
       fetchTraceabilityOptions("pn"),
       fetchTraceabilityOptions("filler_type"),
+      fetchTraceabilityOptions("filler_manufacturer"),
+      fetchTraceabilityOptions("filler_diameter"),
       fetchMaterials(),
     ]);
 
     setTypes(typeRows);
+    setProfiles(profileRows);
     setOptions({
       dn: dnRows,
+      od: odRows,
       sch: schRows,
       pn: pnRows,
       filler: fillerRows,
+      fillerManufacturer: fillerManufacturerRows,
+      fillerDiameter: fillerDiameterRows,
     });
     setMaterials(materialRows);
   }, []);
@@ -95,6 +110,7 @@ export function useProjectTraceabilityData(projectId: string): UseProjectTraceab
     error,
     rows,
     types,
+    profiles,
     options,
     materials,
     reloadAll,

@@ -63,6 +63,10 @@ export function DrawingsUploadPanel({
         <Stack gap="sm">
           <AppPdfDropzone onDrop={onDrop} onReject={() => onReject?.()} disabled={uploading} />
 
+          <Text size="sm" c="dimmed">
+            Midlertidige tegninger med samme tegningsnr oppdateres med opplastet PDF i stedet for å opprette en ny rad.
+          </Text>
+
           {error ? (
             <Alert color="red" variant="light" title="Feil">
               {error}

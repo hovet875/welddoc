@@ -8,7 +8,7 @@ import {
   IconRadar,
   IconUser,
 } from "@tabler/icons-react";
-import type { ProjectWeldRow } from "@/repo/weldLogRepo";
+import type { ProjectWeldRow, WeldEmployeeOption } from "@/repo/weldLogRepo";
 import { AppModal } from "@react/ui/AppModal";
 import { AppStatusBadge } from "@react/ui/AppStatusBadge";
 import { formatNorDate, statusLabel } from "../lib/weldLogUtils";
@@ -16,6 +16,7 @@ import { formatNorDate, statusLabel } from "../lib/weldLogUtils";
 type WeldLogInfoModalProps = {
   opened: boolean;
   row: ProjectWeldRow | null;
+  employees: WeldEmployeeOption[];
   onClose: () => void;
 };
 
@@ -51,7 +52,7 @@ function InfoSection({ icon, title, children }: InfoSectionProps) {
   );
 }
 
-export function WeldLogInfoModal({ opened, row, onClose }: WeldLogInfoModalProps) {
+export function WeldLogInfoModal({ opened, row, employees, onClose }: WeldLogInfoModalProps) {
   const status = row ? statusLabel(row.status) : "";
   const componentValue = row
     ? [
@@ -63,6 +64,9 @@ export function WeldLogInfoModal({ opened, row, onClose }: WeldLogInfoModalProps
     : "";
   const welderValue = [row?.welder?.welder_no, row?.welder?.display_name].filter(Boolean).join(" - ");
   const fillerValue = `${row?.filler?.type_code ?? ""}${row?.filler?.code_index ?? ""}`;
+  const vtInspectorValue = row?.visual_inspector
+    ? employees.find((employee) => employee.id === row.visual_inspector)?.displayLabel || row.visual_inspector
+    : "";
 
   return (
     <AppModal opened={opened} onClose={onClose} title={row ? `Sveis ${row.weld_no}` : "Sveisdetaljer"} size="xl">
@@ -96,7 +100,7 @@ export function WeldLogInfoModal({ opened, row, onClose }: WeldLogInfoModalProps
 
           <InfoSection icon={<IconRadar size={14} />} title="Kontroll og NDT">
             <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="md" verticalSpacing="sm">
-              <InfoRow label="VT" value={row?.visual_report?.file?.label ?? row?.visual_inspector ?? ""} />
+              <InfoRow label="VT" value={row?.visual_report?.file?.label || vtInspectorValue} />
               <InfoRow label="PT" value={row?.crack_report?.file?.label ?? ""} />
               <InfoRow label="VOL" value={row?.volumetric_report?.file?.label ?? ""} />
             </SimpleGrid>

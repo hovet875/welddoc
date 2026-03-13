@@ -4,6 +4,7 @@ import { Alert, Button, Group, Paper, Stack, Text, Title } from "@mantine/core";
 
 type ReactErrorBoundaryProps = {
   children: ReactNode;
+  onError?: (error: unknown, errorInfo: unknown) => void;
 };
 
 type ReactErrorBoundaryState = {
@@ -27,6 +28,7 @@ export class ReactErrorBoundary extends Component<ReactErrorBoundaryProps, React
 
   componentDidCatch(error: unknown, errorInfo: unknown) {
     console.error("React error boundary captured an error", error, errorInfo);
+    this.props.onError?.(error, errorInfo);
   }
 
   private handleReload = () => {

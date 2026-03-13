@@ -21,6 +21,7 @@ export type WelderCertRow = {
   pdf_path: string;
   file_id: string | null;
   created_at: string;
+  file?: { id: string; label: string | null; mime_type: string | null; size_bytes: number | null } | null;
 
   // join
   profile: { id: string; display_name: string | null; welder_no: string | null } | null;
@@ -51,6 +52,7 @@ export type NdtCertRow = {
   pdf_path: string;
   file_id: string | null;
   created_at: string;
+  file?: { id: string; label: string | null; mime_type: string | null; size_bytes: number | null } | null;
 };
 
 export type CertFetchResult = {
@@ -150,6 +152,12 @@ export async function fetchCertData(): Promise<CertFetchResult> {
         pdf_path,
         file_id,
         created_at,
+        file:file_id (
+          id,
+          label,
+          mime_type,
+          size_bytes
+        ),
         profile:profile_id (
           id,
           display_name,
@@ -166,7 +174,23 @@ export async function fetchCertData(): Promise<CertFetchResult> {
 
     supabase
       .from("ndt_certificates")
-      .select("id, personnel_name, company, certificate_no, ndt_method, expires_at, pdf_path, file_id, created_at")
+      .select(`
+        id,
+        personnel_name,
+        company,
+        certificate_no,
+        ndt_method,
+        expires_at,
+        pdf_path,
+        file_id,
+        created_at,
+        file:file_id (
+          id,
+          label,
+          mime_type,
+          size_bytes
+        )
+      `)
       .order("ndt_method", { ascending: true })
       .order("expires_at", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false }),
@@ -176,10 +200,21 @@ export async function fetchCertData(): Promise<CertFetchResult> {
   if (welderCertsRes.error) throw welderCertsRes.error;
   if (ndtRes.error) throw ndtRes.error;
 
+  const normalizeJoinedFile = <T extends { file?: unknown }>(row: T) => ({
+    ...row,
+    file: Array.isArray(row.file) ? row.file[0] ?? null : row.file ?? null,
+  });
+
+  const normalizeWelderCert = (row: any) => ({
+    ...normalizeJoinedFile(row),
+    profile: Array.isArray(row?.profile) ? row.profile[0] ?? null : row?.profile ?? null,
+    base_material: Array.isArray(row?.base_material) ? row.base_material[0] ?? null : row?.base_material ?? null,
+  });
+
   return {
     welders: (weldersRes.data ?? []) as ProfileWelderRow[],
-    welderCerts: ((welderCertsRes.data ?? []) as unknown as WelderCertRow[]),
-    ndtCerts: (ndtRes.data ?? []) as NdtCertRow[],
+    welderCerts: (welderCertsRes.data ?? []).map(normalizeWelderCert) as WelderCertRow[],
+    ndtCerts: (ndtRes.data ?? []).map(normalizeJoinedFile) as NdtCertRow[],
   };
 }
 
@@ -362,9 +397,19 @@ async function getFileMeta(fileId: string) {
 
 async function deleteFileRecord(fileId: string) {
   const meta = await getFileMeta(fileId);
-  await supabase.storage.from(meta.bucket).remove([meta.path]);
-  const { error } = await supabase.from("files").delete().eq("id", fileId);
-  if (error) throw error;
+  const { error: deleteError } = await supabase.from("files").delete().eq("id", fileId);
+  if (deleteError) throw deleteError;
+
+  const { error: storageError } = await supabase.storage.from(meta.bucket).remove([meta.path]);
+  if (storageError) {
+    console.error("Storage cleanup failed after deleting file metadata", {
+      fileId,
+      bucket: meta.bucket,
+      path: meta.path,
+      storageError,
+    });
+    throw new Error("Filmetadata ble slettet, men lagringsfilen kunne ikke fjernes. Manuell opprydding kan vaere nodvendig.");
+  }
 }
 
 async function deletePdfIfExists(kind: "welder" | "ndt", pdf_path: string | null) {

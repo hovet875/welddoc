@@ -1,7 +1,8 @@
 import { Suspense, lazy, useEffect } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { PublicOnlyRoute, RequireAuthRoute } from "@react/router/RouteGuards";
+import { PublicOnlyRoute, RequireAuthRoute, RouteLoadingScreen } from "@react/router/RouteGuards";
 import { ROUTE_PATTERNS, ROUTES } from "@react/router/routes";
+import { WorkerDocumentPackageRenderPage } from "@/react/features/worker/WorkerDocumentPackageRenderPage";
 import {
   loadCertsPage,
   loadCompanySettingsOrganizationPage,
@@ -59,7 +60,7 @@ const WpsPage = lazy(() => loadWpsPage().then((m) => ({ default: m.WpsPage })));
 
 export function AppRouter() {
   const location = useLocation();
-  const suspenseFallback = null;
+  const suspenseFallback = <RouteLoadingScreen />;
 
   useEffect(() => {
     void preloadRouteForPath(location.pathname);
@@ -68,6 +69,8 @@ export function AppRouter() {
   return (
     <Suspense fallback={suspenseFallback}>
       <Routes>
+        <Route path={ROUTES.workerDocumentPackageRender} element={<WorkerDocumentPackageRenderPage />} />
+
         <Route element={<PublicOnlyRoute />}>
           <Route path={ROUTES.login} element={<LoginPage />} />
         </Route>

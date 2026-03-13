@@ -30,6 +30,7 @@ type NdtReportsPanelProps = {
   rows: NdtReportRow[];
   loading: boolean;
   error: string | null;
+  onRetry: () => void;
   meta: string;
   hasFilters: boolean;
   isAdmin: boolean;
@@ -54,6 +55,7 @@ export function NdtReportsPanel({
   rows,
   loading,
   error,
+  onRetry,
   meta,
   hasFilters,
   isAdmin,
@@ -124,6 +126,7 @@ export function NdtReportsPanel({
           error={error}
           loading={loading}
           isEmpty={rows.length === 0}
+          onRetry={onRetry}
           emptyMessage={hasFilters ? "Ingen rapporter matcher valgte filtre." : "Ingen NDT-rapporter registrert."}
         >
           <Table.ScrollContainer minWidth={1160}>

@@ -19,7 +19,7 @@ import type { StandardFmGroupRow, StandardRow } from "@/repo/standardRepo";
 import type { WeldJointTypeRow } from "@/repo/weldJointTypeRepo";
 import type { WeldingProcessRow } from "@/repo/weldingProcessRepo";
 import { esc } from "@/utils/dom";
-import { toast } from "@react/ui/notify";
+import { notifyError, notifySuccess } from "@react/ui/notify";
 import { useDeleteConfirmModal } from "@react/ui/useDeleteConfirmModal";
 import type { AppPdfPreviewState } from "@react/ui/AppPdfPreviewModal";
 import type { NdtCertModalSubmit } from "../components/NdtCertModal";
@@ -214,7 +214,7 @@ export function useCertsPageState({
 
   const openPdfPreview = useCallback(async (kind: "welder" | "ndt", ref: string | null, title: string) => {
     if (!ref) {
-      toast("Ingen PDF er koblet til denne raden.");
+      notifyError("Ingen PDF er koblet til denne raden.");
       return;
     }
 
@@ -260,7 +260,7 @@ export function useCertsPageState({
         },
         onDone: async () => {
           await reload();
-          toast("Sveisesertifikat slettet.");
+          notifySuccess("Sveisesertifikat slettet.");
         },
       });
     },
@@ -277,7 +277,7 @@ export function useCertsPageState({
         },
         onDone: async () => {
           await reload();
-          toast("NDT-sertifikat slettet.");
+          notifySuccess("NDT-sertifikat slettet.");
         },
       });
     },
@@ -289,14 +289,14 @@ export function useCertsPageState({
       if (input.mode === "new") {
         if (!input.pdfFile) throw new Error("PDF må lastes opp for å opprette sertifikat.");
         await createWelderCertWithPdf(input.payload, input.pdfFile);
-        toast("Sveisesertifikat opprettet.");
+        notifySuccess("Sveisesertifikat opprettet.");
       } else {
         if (!input.rowId) throw new Error("Mangler sertifikat-id for oppdatering.");
         await updateWelderCertWithPdf(input.rowId, input.payload, {
           pdfFile: input.pdfFile,
           removePdf: input.mode === "renew" ? false : input.removePdf,
         });
-        toast(input.mode === "renew" ? "Sveisesertifikat fornyet." : "Sveisesertifikat oppdatert.");
+        notifySuccess(input.mode === "renew" ? "Sveisesertifikat fornyet." : "Sveisesertifikat oppdatert.");
       }
 
       closeWelderModal();
@@ -310,14 +310,14 @@ export function useCertsPageState({
       if (input.mode === "new") {
         if (!input.pdfFile) throw new Error("PDF må lastes opp for å opprette sertifikat.");
         await createNdtCertWithPdf(input.payload, input.pdfFile);
-        toast("NDT-sertifikat opprettet.");
+        notifySuccess("NDT-sertifikat opprettet.");
       } else {
         if (!input.rowId) throw new Error("Mangler sertifikat-id for oppdatering.");
         await updateNdtCertWithPdf(input.rowId, input.payload, {
           pdfFile: input.pdfFile,
           removePdf: input.mode === "renew" ? false : input.removePdf,
         });
-        toast(input.mode === "renew" ? "NDT-sertifikat fornyet." : "NDT-sertifikat oppdatert.");
+        notifySuccess(input.mode === "renew" ? "NDT-sertifikat fornyet." : "NDT-sertifikat oppdatert.");
       }
 
       closeNdtModal();

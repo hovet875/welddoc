@@ -4,16 +4,18 @@ import type { MaterialCertificateType } from "@/repo/materialCertificateRepo";
 import { AppAutocomplete } from "@react/ui/AppAutocomplete";
 import { AppButton } from "@react/ui/AppButton";
 import { AppSelect } from "@react/ui/AppSelect";
-import { AppTagsInput } from "@react/ui/AppTagsInput";
 import { normalizeHeatNumbers, type SelectOption } from "../lib/materialCertsView";
 import { uploadEntryFileName, type MaterialCertUploadEntryDraft } from "../lib/materialCertsUpload";
 import { withCurrentOption } from "../lib/materialCertsView";
+import { HeatNumbersInput } from "./HeatNumbersInput";
 
 type MaterialCertUploadEntryCardProps = {
   entry: MaterialCertUploadEntryDraft;
   certificateType: MaterialCertificateType;
   materialOptions: SelectOption[];
+  fillerManufacturerOptions: SelectOption[];
   fillerTypeOptions: SelectOption[];
+  fillerDiameterOptions: SelectOption[];
   supplierSuggestions: string[];
   disabled?: boolean;
   onChange: (entryId: string, patch: Partial<MaterialCertUploadEntryDraft>) => void;
@@ -25,14 +27,24 @@ export const MaterialCertUploadEntryCard = memo(function MaterialCertUploadEntry
   entry,
   certificateType,
   materialOptions,
+  fillerManufacturerOptions,
   fillerTypeOptions,
+  fillerDiameterOptions,
   supplierSuggestions,
   disabled = false,
   onChange,
   onPreview,
   onRemove,
 }: MaterialCertUploadEntryCardProps) {
+  const effectiveFillerManufacturerOptions = withCurrentOption(
+    fillerManufacturerOptions,
+    entry.fillerManufacturer
+  );
   const effectiveFillerOptions = withCurrentOption(fillerTypeOptions, entry.fillerType);
+  const effectiveFillerDiameterOptions = withCurrentOption(
+    fillerDiameterOptions,
+    entry.fillerDiameter
+  );
   const sourceLabel = entry.source.kind === "inbox" ? "Inbox" : "Lokal";
 
   return (
@@ -70,15 +82,35 @@ export const MaterialCertUploadEntryCard = memo(function MaterialCertUploadEntry
               disabled={disabled}
             />
           ) : (
-            <AppSelect
-              label="Sveisetilsett-type"
-              value={entry.fillerType}
-              onChange={(value) => onChange(entry.id, { fillerType: value })}
-              data={effectiveFillerOptions}
-              placeholder="Velg type..."
-              searchable
-              disabled={disabled}
-            />
+            <>
+              <AppSelect
+                label="Produsent"
+                value={entry.fillerManufacturer}
+                onChange={(value) => onChange(entry.id, { fillerManufacturer: value })}
+                data={effectiveFillerManufacturerOptions}
+                placeholder="Velg produsent..."
+                searchable
+                disabled={disabled}
+              />
+              <AppSelect
+                label="Sveisetilsett-type"
+                value={entry.fillerType}
+                onChange={(value) => onChange(entry.id, { fillerType: value })}
+                data={effectiveFillerOptions}
+                placeholder="Velg type..."
+                searchable
+                disabled={disabled}
+              />
+              <AppSelect
+                label="Diameter (mm)"
+                value={entry.fillerDiameter}
+                onChange={(value) => onChange(entry.id, { fillerDiameter: value })}
+                data={effectiveFillerDiameterOptions}
+                placeholder="Velg diameter..."
+                searchable
+                disabled={disabled}
+              />
+            </>
           )}
           <AppAutocomplete
             label="Leverandør"
@@ -91,12 +123,12 @@ export const MaterialCertUploadEntryCard = memo(function MaterialCertUploadEntry
           />
         </SimpleGrid>
 
-        <AppTagsInput
+        <HeatNumbersInput
           label="Heat nr."
-          description="Trykk Enter, komma eller lim inn flere verdier. Hver verdi blir eget heat."
+          description="Lim inn ett eller flere heat-numre. Bruk komma eller ny linje mellom verdiene, og legg dem til når du er klar."
           value={entry.heatNumbers}
-          onChange={(value) => onChange(entry.id, { heatNumbers: normalizeHeatNumbers(value) })}
-          placeholder="Legg til heat nr."
+          onChange={(nextValue) => onChange(entry.id, { heatNumbers: normalizeHeatNumbers(nextValue) })}
+          placeholder="Lim inn eller skriv heat-numre..."
           disabled={disabled}
         />
       </Stack>

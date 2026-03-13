@@ -596,6 +596,7 @@ export type WeldEmployeeOption = {
   welder_no: string | null;
   display_name: string | null;
   label: string;
+  displayLabel: string;
 };
 
 export type WeldNdtReportOption = {
@@ -617,11 +618,13 @@ export async function fetchWeldEmployees(): Promise<WeldEmployeeOption[]> {
   return (data ?? []).map((row: any) => {
     const name = String(row.display_name ?? "").trim();
     const no = String(row.welder_no ?? "").trim();
+    const displayLabel = name || no || String(row.id);
     return {
       id: String(row.id),
       display_name: name || null,
       welder_no: no || null,
-      label: [no, name].filter(Boolean).join(" - ") || String(row.id),
+      label: [no, name].filter(Boolean).join(" - ") || displayLabel,
+      displayLabel,
     };
   });
 }

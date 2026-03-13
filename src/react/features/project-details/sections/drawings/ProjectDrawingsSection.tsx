@@ -3,9 +3,10 @@ import { Group, Text } from "@mantine/core";
 import { createSignedUrlForFileRef } from "@/repo/fileRepo";
 import {
   createProjectDrawingWithFile,
+  createPlaceholderProjectDrawing,
   deleteProjectDrawing,
+  saveProjectDrawingFile,
   updateProjectDrawing,
-  updateProjectDrawingFile,
 } from "@/repo/projectDrawingRepo";
 import { esc } from "@/utils/dom";
 import { validatePdfFile } from "@/utils/format";
@@ -19,6 +20,7 @@ import { useDeleteConfirmModal } from "@react/ui/useDeleteConfirmModal";
 import { DrawingsTable } from "./components/DrawingsTable";
 import { DrawingsUploadPanel } from "./components/DrawingsUploadPanel";
 import { DrawingEditModal } from "./components/DrawingEditModal";
+import { DrawingPlaceholderModal } from "./components/DrawingPlaceholderModal";
 import { useProjectDrawingsData } from "./hooks/useProjectDrawingsData";
 import { createPdfPreviewState, normalizeButtWeldCountInput, parseButtWeldCount, readError } from "./lib/drawingsUtils";
 import type { ProjectDrawingRow, UploadEntry } from "./types";
@@ -44,6 +46,8 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
   const [editOpened, setEditOpened] = useState(false);
   const [editRow, setEditRow] = useState<ProjectDrawingRow | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [placeholderOpened, setPlaceholderOpened] = useState(false);
+  const [savingPlaceholder, setSavingPlaceholder] = useState(false);
 
   const [printingBulk, setPrintingBulk] = useState(false);
 
@@ -217,8 +221,12 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
         revision: values.revision,
         butt_weld_count: values.buttWeldCount,
       });
-      if (values.file && editRow.file_id) {
-        await updateProjectDrawingFile(editRow.file_id, values.file);
+      if (values.file) {
+        await saveProjectDrawingFile({
+          drawingId: editRow.id,
+          currentFileId: editRow.file_id,
+          file: values.file,
+        });
       }
       setEditOpened(false);
       setEditRow(null);
@@ -263,6 +271,41 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
     setUploadEntries((prev) => [...prev, ...additions]);
   }, []);
 
+  const submitPlaceholder = useCallback(
+    async (values: { drawingNo: string; revision: string; buttWeldCount: number }) => {
+      try {
+        setSavingPlaceholder(true);
+        await createPlaceholderProjectDrawing({
+          project_id: projectId,
+          drawing_no: values.drawingNo,
+          revision: values.revision,
+          butt_weld_count: values.buttWeldCount,
+        });
+        setPlaceholderOpened(false);
+        await loadRows();
+        notifySuccess("Midlertidig tegning opprettet.");
+      } catch (err) {
+        console.error(err);
+        notifyError(readError(err, "Klarte ikke å opprette midlertidig tegning."));
+      } finally {
+        setSavingPlaceholder(false);
+      }
+    },
+    [loadRows, projectId]
+  );
+
+  const findMatchingPlaceholder = useCallback(
+    (drawingNo: string) => {
+      const normalizedDrawingNo = drawingNo.trim().toLocaleUpperCase("nb-NO");
+      return rows.filter(
+        (row) =>
+          row.is_placeholder &&
+          String(row.drawing_no ?? "").trim().toLocaleUpperCase("nb-NO") === normalizedDrawingNo
+      );
+    },
+    [rows]
+  );
+
   const submitUpload = useCallback(async () => {
     if (uploadEntries.length === 0) {
       const message = "Legg til minst én PDF før opplasting.";
@@ -275,7 +318,9 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
       setUploadError(null);
       setUploading(true);
       const duplicateFiles: string[] = [];
+      const consumedPlaceholderIds = new Set<string>();
       let uploadedCount = 0;
+      let convertedCount = 0;
 
       for (const entry of uploadEntries) {
         const drawingNo = entry.drawingNo.trim();
@@ -288,10 +333,38 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
         }
 
         try {
+          const revision = (entry.revision || "A").trim() || "A";
+          const matchingPlaceholders = findMatchingPlaceholder(drawingNo).filter(
+            (row) => !consumedPlaceholderIds.has(row.id)
+          );
+          if (matchingPlaceholders.length > 1) {
+            throw new Error(
+              `Fant flere midlertidige tegninger med tegningsnr ${drawingNo}. Last opp PDF manuelt fra riktig tegningsrad.`
+            );
+          }
+
+          const placeholder = matchingPlaceholders[0] ?? null;
+          if (placeholder) {
+            await saveProjectDrawingFile({
+              drawingId: placeholder.id,
+              currentFileId: placeholder.file_id,
+              file: entry.file,
+            });
+            await updateProjectDrawing(placeholder.id, {
+              drawing_no: drawingNo,
+              revision,
+              butt_weld_count: buttWeldCount,
+            });
+            consumedPlaceholderIds.add(placeholder.id);
+            uploadedCount += 1;
+            convertedCount += 1;
+            continue;
+          }
+
           await createProjectDrawingWithFile({
             project_id: projectId,
             drawing_no: drawingNo,
-            revision: (entry.revision || "A").trim() || "A",
+            revision,
             butt_weld_count: buttWeldCount,
             file: entry.file,
           });
@@ -316,7 +389,11 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
       setUploadOpened(false);
       setUploadEntries([]);
       if (uploadedCount > 0) {
-        notifySuccess(`${uploadedCount} tegning(er) lastet opp.`);
+        notifySuccess(
+          convertedCount > 0
+            ? `${uploadedCount} tegning(er) behandlet. ${convertedCount} midlertidig(e) tegning(er) ble koblet til PDF.`
+            : `${uploadedCount} tegning(er) lastet opp.`
+        );
       }
     } catch (err) {
       console.error(err);
@@ -326,7 +403,7 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
     } finally {
       setUploading(false);
     }
-  }, [loadRows, projectId, uploadEntries]);
+  }, [findMatchingPlaceholder, loadRows, projectId, uploadEntries]);
 
   const handleChangeUploadDrawingNo = useCallback((entryId: string, drawingNo: string) => {
     setUploadEntries((prev) => prev.map((item) => (item.id === entryId ? { ...item, drawingNo } : item)));
@@ -377,13 +454,18 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
         meta="Oversikt over tegninger tilhørende prosjekt"
         actions={
           isAdmin ? (
-            <AppButton tone="primary" size="sm" onClick={() => setUploadOpened((current) => !current)}>
-              {uploadOpened
-                ? "Skjul opplasting"
-                : uploadEntries.length > 0
-                  ? `Legg til filer (${uploadEntries.length} i kø)`
-                  : "Legg til filer"}
-            </AppButton>
+            <Group gap="xs" wrap="wrap">
+              <AppButton tone="neutral" size="sm" onClick={() => setPlaceholderOpened(true)}>
+                Ny midlertidig tegning
+              </AppButton>
+              <AppButton tone="primary" size="sm" onClick={() => setUploadOpened((current) => !current)}>
+                {uploadOpened
+                  ? "Skjul opplasting"
+                  : uploadEntries.length > 0
+                    ? `Legg til filer (${uploadEntries.length} i kø)`
+                    : "Legg til filer"}
+              </AppButton>
+            </Group>
           ) : null
         }
       >
@@ -430,6 +512,16 @@ export function ProjectDrawingsSection({ projectId, isAdmin }: ProjectDrawingsSe
         saving={savingEdit}
         onClose={closeEditModal}
         onSubmit={submitEdit}
+      />
+
+      <DrawingPlaceholderModal
+        opened={placeholderOpened}
+        saving={savingPlaceholder}
+        onClose={() => {
+          if (savingPlaceholder) return;
+          setPlaceholderOpened(false);
+        }}
+        onSubmit={submitPlaceholder}
       />
 
       <AppPdfPreviewModal preview={pdfPreview} onClose={closePdfPreview} />

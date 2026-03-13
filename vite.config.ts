@@ -20,6 +20,7 @@ export default defineConfig(() => ({
       workbox: {
         cleanupOutdatedCaches: true,
         clientsClaim: true,
+        navigationPreload: false,
         skipWaiting: true,
       },
       devOptions: {

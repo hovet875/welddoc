@@ -18,6 +18,7 @@ type ProjectsTableProps = {
   pageSize: number;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
+  onRetry?: () => void;
   onEdit: (row: ProjectRow) => void;
   onDelete: (row: ProjectRow) => void;
 };
@@ -33,6 +34,7 @@ export function ProjectsTable({
   pageSize,
   onPageChange,
   onPageSizeChange,
+  onRetry,
   onEdit,
   onDelete,
 }: ProjectsTableProps) {
@@ -40,6 +42,7 @@ export function ProjectsTable({
     <AppAsyncState
       loading={loading}
       error={error}
+      onRetry={onRetry}
       isEmpty={rows.length === 0}
       emptyMessage={hasFilters ? "Ingen prosjekter matcher valgte filtre." : "Ingen prosjekter."}
     >

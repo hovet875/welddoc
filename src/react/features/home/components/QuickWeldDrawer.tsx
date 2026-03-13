@@ -79,12 +79,22 @@ function mapTraceabilityOption(row: ProjectTraceabilityRow): TraceabilitySelectO
   const certHeat = String((row.cert?.heat_numbers ?? []).find((value) => String(value ?? "").trim()) ?? "").trim();
   const heat = directHeat || certHeat;
   const dn = String(row.dn ?? "").trim();
+  const od = String(row.od ?? "").trim();
+  const description = String(row.description ?? "").trim();
+  const fillerDescriptor = [
+    String(row.filler_manufacturer ?? "").trim(),
+    String(row.filler_type ?? "").trim(),
+    String(row.filler_diameter ?? "").trim() ? `${String(row.filler_diameter ?? "").trim()} mm` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const dimension = dn ? `DN ${dn}` : od ? `OD ${od}` : description || fillerDescriptor;
 
   const labelParts = [
     componentType ? `Type ${componentType}` : "",
     `Sporbarhet ${traceabilityCode}`,
     `Heat ${heat || "-"}`,
-    dn ? `DN ${dn}` : "",
+    dimension || "",
   ].filter(Boolean);
 
   return {
@@ -278,14 +288,22 @@ export function QuickWeldDrawer({ opened, currentUserId, onClose }: QuickWeldDra
         }
 
         const componentRows = traceabilityRows
-          .filter((row) => row.cert?.certificate_type !== "filler" && !row.type?.use_filler_type)
+          .filter((row) => {
+            const isFiller =
+              row.profile?.certificate_type === "filler" ||
+              Boolean(row.profile?.fields?.some((field) => field.field_key === "filler_type")) ||
+              row.cert?.certificate_type === "filler" ||
+              Boolean(String(row.filler_type ?? "").trim());
+            return !isFiller;
+          })
           .map(mapTraceabilityOption)
           .sort(sortByLabel);
         const fillerRows = traceabilityRows
           .filter(
             (row) =>
+              row.profile?.certificate_type === "filler" ||
+              Boolean(row.profile?.fields?.some((field) => field.field_key === "filler_type")) ||
               row.cert?.certificate_type === "filler" ||
-              row.type?.use_filler_type ||
               Boolean(String(row.filler_type ?? "").trim())
           )
           .map(mapTraceabilityOption)
@@ -703,6 +721,3 @@ export function QuickWeldDrawer({ opened, currentUserId, onClose }: QuickWeldDra
     </AppDrawer>
   );
 }
-
-
-

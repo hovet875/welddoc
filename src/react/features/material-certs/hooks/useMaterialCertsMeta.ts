@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  fetchMaterialCertificateFillerDiameters,
+  fetchMaterialCertificateFillerManufacturers,
   fetchMaterialCertificateFillerTypes,
   fetchMaterialCertificateSupplierNames,
 } from "@/repo/materialCertificateRepo";
@@ -14,6 +16,10 @@ type MaterialCertsMetaState = {
   supplierNames: string[];
   fillerOptions: TraceabilityOptionRow[];
   fillerTypeNames: string[];
+  fillerManufacturerOptions: TraceabilityOptionRow[];
+  fillerManufacturerNames: string[];
+  fillerDiameterOptions: TraceabilityOptionRow[];
+  fillerDiameterNames: string[];
   inboxNewCount: number;
   loading: boolean;
   refreshing: boolean;
@@ -30,6 +36,10 @@ const INITIAL_STATE: MaterialCertsMetaState = {
   supplierNames: [],
   fillerOptions: [],
   fillerTypeNames: [],
+  fillerManufacturerOptions: [],
+  fillerManufacturerNames: [],
+  fillerDiameterOptions: [],
+  fillerDiameterNames: [],
   inboxNewCount: 0,
   loading: true,
   refreshing: false,
@@ -58,12 +68,27 @@ export function useMaterialCertsMeta(isAdmin: boolean): MaterialCertsMetaResult 
     }));
 
     try {
-      const [materials, suppliers, certSupplierNames, fillerOptions, fillerTypeNames, inboxNewCount] = await Promise.all([
+      const [
+        materials,
+        suppliers,
+        certSupplierNames,
+        fillerOptions,
+        fillerManufacturerOptions,
+        fillerDiameterOptions,
+        fillerTypeNames,
+        fillerManufacturerNames,
+        fillerDiameterNames,
+        inboxNewCount,
+      ] = await Promise.all([
         fetchMaterials({ includeInactive: true }),
         fetchSuppliers({ includeInactive: true }),
         fetchMaterialCertificateSupplierNames(),
         fetchTraceabilityOptions("filler_type"),
+        fetchTraceabilityOptions("filler_manufacturer"),
+        fetchTraceabilityOptions("filler_diameter"),
         fetchMaterialCertificateFillerTypes(),
+        fetchMaterialCertificateFillerManufacturers(),
+        fetchMaterialCertificateFillerDiameters(),
         isAdmin ? countNewFileInboxByTarget("material_certificate") : Promise.resolve(0),
       ]);
 
@@ -76,6 +101,12 @@ export function useMaterialCertsMeta(isAdmin: boolean): MaterialCertsMetaResult 
       const fillerNames = Array.from(
         new Set([...fillerOptions.map((row) => row.value.trim()).filter(Boolean), ...fillerTypeNames])
       ).sort((a, b) => a.localeCompare(b, "nb", { sensitivity: "base" }));
+      const fillerManufacturerValues = Array.from(
+        new Set([...fillerManufacturerOptions.map((row) => row.value.trim()).filter(Boolean), ...fillerManufacturerNames])
+      ).sort((a, b) => a.localeCompare(b, "nb", { sensitivity: "base" }));
+      const fillerDiameterValues = Array.from(
+        new Set([...fillerDiameterOptions.map((row) => row.value.trim()).filter(Boolean), ...fillerDiameterNames])
+      ).sort((a, b) => a.localeCompare(b, "nb", { sensitivity: "base", numeric: true }));
 
       hasLoadedRef.current = true;
       setState({
@@ -84,6 +115,10 @@ export function useMaterialCertsMeta(isAdmin: boolean): MaterialCertsMetaResult 
         supplierNames,
         fillerOptions,
         fillerTypeNames: fillerNames,
+        fillerManufacturerOptions,
+        fillerManufacturerNames: fillerManufacturerValues,
+        fillerDiameterOptions,
+        fillerDiameterNames: fillerDiameterValues,
         inboxNewCount,
         loading: false,
         refreshing: false,

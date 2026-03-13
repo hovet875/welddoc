@@ -95,6 +95,48 @@ export async function createFileRecord(input: {
   if (error) throw error;
 }
 
+export async function updateFileRecordById(
+  id: string,
+  input: {
+    bucket: string;
+    path: string;
+    type: string;
+    label?: string | null;
+    mime_type?: string | null;
+    size_bytes?: number | null;
+    sha256?: string | null;
+  }
+) {
+  const { data, error } = await supabase
+    .from("files")
+    .update({
+      bucket: input.bucket,
+      path: input.path,
+      type: input.type,
+      label: input.label ?? null,
+      mime_type: input.mime_type ?? null,
+      size_bytes: input.size_bytes ?? null,
+      sha256: input.sha256 ?? null,
+    })
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  if (data) return;
+
+  await createFileRecord({
+    id,
+    bucket: input.bucket,
+    path: input.path,
+    type: input.type,
+    label: input.label ?? null,
+    mime_type: input.mime_type ?? null,
+    size_bytes: input.size_bytes ?? null,
+    sha256: input.sha256 ?? null,
+  });
+}
+
 export async function createFileLink(fileId: string, entityType: string, entityId: string) {
   const { error } = await supabase.from("file_links").insert({
     file_id: fileId,
@@ -130,9 +172,19 @@ export async function getFileMeta(fileId: string) {
 
 export async function deleteFileRecord(fileId: string) {
   const meta = await getFileMeta(fileId);
-  await supabase.storage.from(meta.bucket).remove([meta.path]);
-  const { error } = await supabase.from("files").delete().eq("id", fileId);
-  if (error) throw error;
+  const { error: deleteError } = await supabase.from("files").delete().eq("id", fileId);
+  if (deleteError) throw deleteError;
+
+  const { error: storageError } = await supabase.storage.from(meta.bucket).remove([meta.path]);
+  if (storageError) {
+    console.error("Storage cleanup failed after deleting file metadata", {
+      fileId,
+      bucket: meta.bucket,
+      path: meta.path,
+      storageError,
+    });
+    throw new Error("Filmetadata ble slettet, men lagringsfilen kunne ikke fjernes. Manuell opprydding kan vaere nodvendig.");
+  }
 }
 
 export async function deleteFileRecordIfOrphan(fileId: string) {

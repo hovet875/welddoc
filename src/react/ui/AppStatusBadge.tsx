@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Badge } from "@mantine/core";
 
-type AppStatusTone = "success" | "warning" | "danger" | "neutral" | "info";
+export type AppStatusTone = "success" | "warning" | "danger" | "neutral" | "info";
 
 type AppStatusBadgeProps = {
   tone?: AppStatusTone;
@@ -22,4 +22,8 @@ export function AppStatusBadge({ tone = "neutral", children }: AppStatusBadgePro
       {children}
     </Badge>
   );
+}
+
+export function appStatusBadgeColor(tone: AppStatusTone) {
+  return STATUS_COLOR_MAP[tone];
 }

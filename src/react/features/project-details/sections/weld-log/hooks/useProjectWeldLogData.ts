@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchWelders, fetchWelderCerts } from "@/repo/certRepo";
-import { createPlaceholderProjectDrawing, fetchProjectDrawings } from "@/repo/projectDrawingRepo";
+import { fetchProjectDrawings } from "@/repo/projectDrawingRepo";
 import { fetchProjectTraceability } from "@/repo/traceabilityRepo";
 import {
   ensureProjectWeldLog,
@@ -73,23 +73,23 @@ export function useProjectWeldLogData(projectId: string, projectNo: number): Use
         fetchWpsData(),
       ]);
 
-      let drawings = drawingsRaw;
-      if (!drawings.length) {
-        const normalizedProjectNo = String(projectNo ?? "").trim();
-        const defaultBase = normalizedProjectNo || "PROSJEKT";
-        await createPlaceholderProjectDrawing({
-          project_id: projectId,
-          drawing_no: `${defaultBase}001`,
-          revision: "-",
-        });
-        drawings = await fetchProjectDrawings(projectId);
-      }
+      const componentRows = traceRows.filter((row) => {
+        const isFiller =
+          row.profile?.certificate_type === "filler" ||
+          Boolean(row.profile?.fields?.some((field) => field.field_key === "filler_type")) ||
+          row.cert?.certificate_type === "filler" ||
+          Boolean(String(row.filler_type ?? "").trim());
+        return !isFiller;
+      });
 
-      const componentRows = traceRows.filter((row) => row.cert?.certificate_type !== "filler" && !row.type?.use_filler_type);
-      const fillerRows = traceRows.filter(
-        (row) =>
-          row.cert?.certificate_type === "filler" || row.type?.use_filler_type || Boolean(String(row.filler_type ?? "").trim())
-      );
+      const fillerRows = traceRows.filter((row) => {
+        return (
+          row.profile?.certificate_type === "filler" ||
+          Boolean(row.profile?.fields?.some((field) => field.field_key === "filler_type")) ||
+          row.cert?.certificate_type === "filler" ||
+          Boolean(String(row.filler_type ?? "").trim())
+        );
+      });
 
       const sortOption = (a: { label: string }, b: { label: string }) =>
         a.label.localeCompare(b.label, "nb", { sensitivity: "base", numeric: true });
@@ -116,7 +116,7 @@ export function useProjectWeldLogData(projectId: string, projectNo: number): Use
       });
 
       setData({
-        drawings,
+        drawings: drawingsRaw,
         logs,
         rows: [],
         reports,

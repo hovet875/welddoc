@@ -17,7 +17,9 @@ type Props = {
   disabled?: boolean;
   certificateType: MaterialCertificateType; // "material" | "filler"
   materialId?: string | null;
+  fillerManufacturer?: string | null;
   fillerType?: string | null;
+  fillerDiameter?: string | null;
 
   // når user velger et heat-treff:
   onPick: (hit: MaterialCertificateHeatHit) => void;
@@ -35,7 +37,7 @@ function detectIOS(): boolean {
   return iOSUA || iPadOS;
 }
 
-export function HeatCertificatePicker({ disabled, certificateType, materialId, fillerType, onPick }: Props) {
+export function HeatCertificatePicker({ disabled, certificateType, materialId, fillerManufacturer, fillerType, fillerDiameter, onPick }: Props) {
   const combobox = useCombobox({ onDropdownClose: () => combobox.resetSelectedOption() });
   const inputRef = useRef<HTMLInputElement | null>(null);
   const isMobile = useMediaQuery("(max-width: 768px)");
@@ -87,7 +89,9 @@ export function HeatCertificatePicker({ disabled, certificateType, materialId, f
           heat: q,
           certificate_type: certificateType,
           material_id: materialId ?? null,
+          filler_manufacturer: fillerManufacturer ?? null,
           filler_type: fillerType ?? null,
+          filler_diameter: fillerDiameter ?? null,
           limit: 30,
         });
         if (!cancelled) setHits(res);
@@ -102,7 +106,7 @@ export function HeatCertificatePicker({ disabled, certificateType, materialId, f
     return () => {
       cancelled = true;
     };
-  }, [debounced, canSearch, certificateType, materialId, fillerType]);
+  }, [debounced, canSearch, certificateType, materialId, fillerManufacturer, fillerType, fillerDiameter]);
 
   const placeholder = !canSearch
     ? certificateType === "material"

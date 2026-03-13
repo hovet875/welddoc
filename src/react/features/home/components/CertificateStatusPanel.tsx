@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Group, Paper, SimpleGrid, Stack, Text } from "@mantine/core";
 import { fetchHomeCertStatusData, type HomeNdtCertStatusRow, type HomeWelderCertStatusRow } from "@/repo/certRepo";
 import { getCertStatus, statusLabel, statusTone, type CertStatus } from "@react/features/certs/lib/certsView";
@@ -105,35 +105,37 @@ export function CertificateStatusPanel() {
   const [ndtCerts, setNdtCerts] = useState<HomeNdtCertStatusRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const requestRef = useRef(0);
 
-  useEffect(() => {
-    let cancelled = false;
+  const reloadData = useCallback(async () => {
+    const requestId = ++requestRef.current;
 
-    void (async () => {
+    try {
       setLoading(true);
       setError(null);
-
-      try {
-        const result = await fetchHomeCertStatusData();
-        if (cancelled) return;
-        setWelderCerts(result.welderCerts);
-        setNdtCerts(result.ndtCerts);
-      } catch (err) {
-        if (cancelled) return;
-        setWelderCerts([]);
-        setNdtCerts([]);
-        setError(err instanceof Error && err.message ? err.message : "Kunne ikke laste sertifikatstatus.");
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+      const result = await fetchHomeCertStatusData();
+      if (requestId !== requestRef.current) return;
+      setWelderCerts(result.welderCerts);
+      setNdtCerts(result.ndtCerts);
+    } catch (err) {
+      if (requestId !== requestRef.current) return;
+      setWelderCerts([]);
+      setNdtCerts([]);
+      setError(err instanceof Error && err.message ? err.message : "Kunne ikke laste sertifikatstatus.");
+    } finally {
+      if (requestId === requestRef.current) {
+        setLoading(false);
       }
-    })();
+    }
+  }, []);
+
+  useEffect(() => {
+    void reloadData();
 
     return () => {
-      cancelled = true;
+      requestRef.current += 1;
     };
-  }, []);
+  }, [reloadData]);
 
   const statusCounts = useMemo(() => buildStatusCounts(welderCerts, ndtCerts), [welderCerts, ndtCerts]);
   const criticalItems = useMemo(() => buildItems(welderCerts, ndtCerts), [welderCerts, ndtCerts]);
@@ -153,6 +155,9 @@ export function CertificateStatusPanel() {
       <AppAsyncState
         loading={loading}
         error={error}
+        onRetry={() => {
+          void reloadData();
+        }}
         isEmpty={total === 0}
         loadingMessage="Laster sertifikatstatus..."
         showLoadingState={false}

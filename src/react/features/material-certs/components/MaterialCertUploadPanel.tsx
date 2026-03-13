@@ -30,7 +30,9 @@ type MaterialCertUploadPanelProps = {
   opened: boolean;
   materials: MaterialRow[];
   supplierSuggestions: string[];
+  fillerManufacturerOptions: SelectOption[];
   fillerTypeOptions: SelectOption[];
+  fillerDiameterOptions: SelectOption[];
   onOpenPdf: (refOrUrl: string, title: string) => void;
   onUploaded: () => Promise<void>;
   onInboxCountChange?: () => Promise<void> | void;
@@ -45,7 +47,9 @@ export function MaterialCertUploadPanel({
   opened,
   materials,
   supplierSuggestions,
+  fillerManufacturerOptions,
   fillerTypeOptions,
+  fillerDiameterOptions,
   onOpenPdf,
   onUploaded,
   onInboxCountChange,
@@ -61,7 +65,9 @@ export function MaterialCertUploadPanel({
       certificateType: "material" as MaterialCertificateType,
       certType: "3.1",
       defaultMaterialId: "",
+      defaultFillerManufacturer: "",
       defaultFillerType: "",
+      defaultFillerDiameter: "",
       defaultSupplier: "",
     },
   });
@@ -81,10 +87,18 @@ export function MaterialCertUploadPanel({
   const defaults = useMemo<MaterialCertUploadDefaults>(
     () => ({
       materialId: values.defaultMaterialId,
+      fillerManufacturer: values.defaultFillerManufacturer,
       fillerType: values.defaultFillerType,
+      fillerDiameter: values.defaultFillerDiameter,
       supplier: values.defaultSupplier,
     }),
-    [values.defaultFillerType, values.defaultMaterialId, values.defaultSupplier]
+    [
+      values.defaultFillerDiameter,
+      values.defaultFillerManufacturer,
+      values.defaultFillerType,
+      values.defaultMaterialId,
+      values.defaultSupplier,
+    ]
   );
   const defaultsRef = useRef<MaterialCertUploadDefaults>(defaults);
 
@@ -228,7 +242,11 @@ export function MaterialCertUploadPanel({
           cert_type: certType,
           supplier: trimOrEmpty(entry.supplier) || null,
           material_id: certificateType === "material" ? trimOrEmpty(entry.materialId) || null : null,
+          filler_manufacturer:
+            certificateType === "filler" ? trimOrEmpty(entry.fillerManufacturer) || null : null,
           filler_type: certificateType === "filler" ? trimOrEmpty(entry.fillerType) || null : null,
+          filler_diameter:
+            certificateType === "filler" ? trimOrEmpty(entry.fillerDiameter) || null : null,
           heat_numbers: normalizeHeatNumbers(entry.heatNumbers),
         })),
         (index: number, total: number) => {
@@ -321,15 +339,35 @@ export function MaterialCertUploadPanel({
                 searchable
               />
             ) : (
-              <AppSelect
-                label="Standard sveisetilsett-type"
-                value={values.defaultFillerType}
-                onChange={(value) => form.setFieldValue("defaultFillerType", value)}
-                data={fillerTypeOptions}
-                placeholder="Ikke satt"
-                clearable
-                searchable
-              />
+              <>
+                <AppSelect
+                  label="Standard produsent"
+                  value={values.defaultFillerManufacturer}
+                  onChange={(value) => form.setFieldValue("defaultFillerManufacturer", value)}
+                  data={fillerManufacturerOptions}
+                  placeholder="Ikke satt"
+                  clearable
+                  searchable
+                />
+                <AppSelect
+                  label="Standard sveisetilsett-type"
+                  value={values.defaultFillerType}
+                  onChange={(value) => form.setFieldValue("defaultFillerType", value)}
+                  data={fillerTypeOptions}
+                  placeholder="Ikke satt"
+                  clearable
+                  searchable
+                />
+                <AppSelect
+                  label="Standard diameter (mm)"
+                  value={values.defaultFillerDiameter}
+                  onChange={(value) => form.setFieldValue("defaultFillerDiameter", value)}
+                  data={fillerDiameterOptions}
+                  placeholder="Ikke satt"
+                  clearable
+                  searchable
+                />
+              </>
             )}
             <AppAutocomplete
               label="Standard leverandør"
@@ -360,7 +398,9 @@ export function MaterialCertUploadPanel({
                 entry={entry}
                 certificateType={certificateType}
                 materialOptions={materialOptions}
+                fillerManufacturerOptions={fillerManufacturerOptions}
                 fillerTypeOptions={fillerTypeOptions}
+                fillerDiameterOptions={fillerDiameterOptions}
                 supplierSuggestions={supplierSuggestions}
                 disabled={uploading}
                 onChange={updateEntry}

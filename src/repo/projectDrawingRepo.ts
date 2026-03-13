@@ -5,16 +5,18 @@ import {
   createFileLink,
   createSignedUrlForFileRef,
   deleteFileRecord,
+  updateFileRecordById,
   uploadFileToIdPath,
 } from "./fileRepo";
 
 export type ProjectDrawingRow = {
   id: string;
   project_id: string;
-  file_id: string;
+  file_id: string | null;
   drawing_no: string;
   revision: string;
   butt_weld_count: number;
+  is_placeholder: boolean;
   created_by: string | null;
   created_at: string;
   file: { id: string; label: string | null; mime_type: string | null; size_bytes: number | null } | null;
@@ -36,6 +38,7 @@ export async function fetchProjectDrawings(projectId: string) {
       drawing_no,
       revision,
       butt_weld_count,
+      is_placeholder,
       created_by,
       created_at,
       file:file_id (
@@ -84,6 +87,7 @@ export async function createProjectDrawingWithFile(input: {
       drawing_no: input.drawing_no,
       revision: input.revision,
       butt_weld_count: input.butt_weld_count,
+      is_placeholder: false,
     });
     if (error) throw error;
     inserted = true;
@@ -110,20 +114,18 @@ export async function createPlaceholderProjectDrawing(input: {
   revision?: string | null;
   butt_weld_count?: number | null;
 }) {
-  const { PDFDocument } = await import("pdf-lib");
-  const pdf = await PDFDocument.create();
-  pdf.addPage([595.28, 841.89]);
-  const bytes = await pdf.save();
-  const blob = new Blob([new Uint8Array(bytes)], { type: "application/pdf" });
-  const file = new File([blob], `${input.drawing_no}.pdf`, { type: "application/pdf" });
-
-  return createProjectDrawingWithFile({
+  const drawingId = createUuid();
+  const { error } = await supabase.from("project_drawings").insert({
+    id: drawingId,
     project_id: input.project_id,
+    file_id: null,
     drawing_no: input.drawing_no,
     revision: input.revision ?? "-",
     butt_weld_count: Math.max(0, Math.trunc(Number(input.butt_weld_count ?? 0) || 0)),
-    file,
+    is_placeholder: true,
   });
+  if (error) throw error;
+  return drawingId;
 }
 
 export async function updateProjectDrawing(
@@ -141,22 +143,86 @@ export async function updateProjectDrawing(
   if (error) throw error;
 }
 
-export async function updateProjectDrawingFile(fileId: string, file: File) {
-  const { bucket, path, sha256 } = await uploadFileToIdPath("project_drawing", fileId, file, {
-    allowExistingFileId: fileId,
-  });
-  const { error } = await supabase
-    .from("files")
-    .update({
+export async function saveProjectDrawingFile(input: {
+  drawingId: string;
+  currentFileId?: string | null;
+  file: File;
+}) {
+  const currentFileId = String(input.currentFileId ?? "").trim() || null;
+
+  if (currentFileId) {
+    const { bucket, path, sha256 } = await uploadFileToIdPath("project_drawing", currentFileId, input.file, {
+      allowExistingFileId: currentFileId,
+    });
+    await updateFileRecordById(currentFileId, {
       bucket,
       path,
-      label: file.name,
-      mime_type: file.type || "application/pdf",
-      size_bytes: file.size,
+      type: "project_drawing",
+      label: input.file.name,
+      mime_type: input.file.type || "application/pdf",
+      size_bytes: input.file.size,
       sha256,
-    })
-    .eq("id", fileId);
-  if (error) throw error;
+    });
+    const { error } = await supabase
+      .from("project_drawings")
+      .update({
+        file_id: currentFileId,
+        is_placeholder: false,
+      })
+      .eq("id", input.drawingId);
+    if (error) throw error;
+    return currentFileId;
+  }
+
+  const fileId = createUuid();
+  let fileRecordCreated = false;
+  let drawingUpdated = false;
+
+  try {
+    const { bucket, path, sha256 } = await uploadFileToIdPath("project_drawing", fileId, input.file);
+    await createFileRecord({
+      id: fileId,
+      bucket,
+      path,
+      type: "project_drawing",
+      label: input.file.name,
+      mime_type: input.file.type || "application/pdf",
+      size_bytes: input.file.size,
+      sha256,
+    });
+    fileRecordCreated = true;
+
+    const { error: updateError } = await supabase
+      .from("project_drawings")
+      .update({
+        file_id: fileId,
+        is_placeholder: false,
+      })
+      .eq("id", input.drawingId);
+    if (updateError) throw updateError;
+    drawingUpdated = true;
+
+    await createFileLink(fileId, "project_drawing", input.drawingId);
+    return fileId;
+  } catch (error) {
+    if (drawingUpdated) {
+      try {
+        await supabase
+          .from("project_drawings")
+          .update({
+            file_id: null,
+            is_placeholder: true,
+          })
+          .eq("id", input.drawingId);
+      } catch {}
+    }
+    if (fileRecordCreated) {
+      try {
+        await deleteFileRecord(fileId);
+      } catch {}
+    }
+    throw error;
+  }
 }
 
 export async function deleteProjectDrawing(drawingId: string, fileId: string | null) {

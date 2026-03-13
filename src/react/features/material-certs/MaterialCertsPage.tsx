@@ -5,7 +5,7 @@ import { AppPageLayout } from "@react/layout/AppPageLayout";
 import { AppPdfPreviewModal, type AppPdfPreviewState } from "@react/ui/AppPdfPreviewModal";
 import { AppRefreshIconButton } from "@react/ui/AppRefreshIconButton";
 import { AppSectionHeader } from "@react/ui/AppSectionHeader";
-import { notifySuccess, toast } from "@react/ui/notify";
+import { notifyError, notifySuccess } from "@react/ui/notify";
 import { useDeleteConfirmModal } from "@react/ui/useDeleteConfirmModal";
 import { AppButton } from "@react/ui/AppButton";
 import { createSignedUrlForFileRef } from "@/repo/fileRepo";
@@ -83,11 +83,13 @@ export function MaterialCertsPage() {
   const fillerServerFilters = useMemo(
     () => ({
       certificateType: "filler" as const,
+      fillerManufacturer: fillerFilters.fillerManufacturer,
       fillerType: fillerFilters.fillerType,
+      fillerDiameter: fillerFilters.fillerDiameter,
       supplier: fillerSupplier,
       query: fillerQuery,
     }),
-    [fillerFilters.fillerType, fillerQuery, fillerSupplier]
+    [fillerFilters.fillerDiameter, fillerFilters.fillerManufacturer, fillerFilters.fillerType, fillerQuery, fillerSupplier]
   );
 
   const materialList = useMaterialCertList({
@@ -134,7 +136,7 @@ export function MaterialCertsPage() {
   const openPdfPreview = useCallback(
     async (refOrUrl: string | null, title: string) => {
       if (!refOrUrl) {
-        toast("Ingen PDF er koblet til denne raden.");
+        notifyError("Ingen PDF er koblet til denne raden.");
         return;
       }
 
@@ -257,6 +259,8 @@ export function MaterialCertsPage() {
 
   const materialOptions = useMemo(() => buildMaterialOptions(meta.materials), [meta.materials]);
   const fillerTypeOptions = useMemo(() => buildSimpleOptions(meta.fillerTypeNames), [meta.fillerTypeNames]);
+  const fillerManufacturerOptions = useMemo(() => buildSimpleOptions(meta.fillerManufacturerNames), [meta.fillerManufacturerNames]);
+  const fillerDiameterOptions = useMemo(() => buildSimpleOptions(meta.fillerDiameterNames), [meta.fillerDiameterNames]);
 
   return (
     <AppPageLayout pageClassName="page-material-certs-react" displayName={displayName} email={email}>
@@ -288,7 +292,9 @@ export function MaterialCertsPage() {
           opened={uploadOpen}
           materials={meta.materials}
           supplierSuggestions={meta.supplierNames}
+          fillerManufacturerOptions={fillerManufacturerOptions}
           fillerTypeOptions={fillerTypeOptions}
+          fillerDiameterOptions={fillerDiameterOptions}
           onOpenPdf={(refOrUrl, title) => {
             void openPdfPreview(refOrUrl, title);
           }}
@@ -309,7 +315,9 @@ export function MaterialCertsPage() {
           });
         }}
         materialOptions={materialOptions}
+        fillerManufacturerOptions={fillerManufacturerOptions}
         fillerTypeOptions={fillerTypeOptions}
+        fillerDiameterOptions={fillerDiameterOptions}
         supplierSuggestions={meta.supplierNames}
         rows={materialList.rows}
         loading={meta.loading || materialList.loading}
@@ -350,7 +358,9 @@ export function MaterialCertsPage() {
           });
         }}
         materialOptions={materialOptions}
+        fillerManufacturerOptions={fillerManufacturerOptions}
         fillerTypeOptions={fillerTypeOptions}
+        fillerDiameterOptions={fillerDiameterOptions}
         supplierSuggestions={meta.supplierNames}
         rows={fillerList.rows}
         loading={meta.loading || fillerList.loading}
@@ -384,7 +394,9 @@ export function MaterialCertsPage() {
         row={editRow}
         materials={meta.materials}
         supplierSuggestions={meta.supplierNames}
+        fillerManufacturerNames={meta.fillerManufacturerNames}
         fillerTypeNames={meta.fillerTypeNames}
+        fillerDiameterNames={meta.fillerDiameterNames}
         onClose={closeEditModal}
         onSubmit={submitEdit}
         onOpenExistingPdf={(ref, title) => {

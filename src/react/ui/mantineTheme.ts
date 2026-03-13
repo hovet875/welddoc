@@ -284,11 +284,11 @@ export const mantineTheme = createTheme({
         size: "sm",
         variant: "filled",
         autosize: true,
+        minRows: 3,
       },
       styles: {
         input: {
           ...FIELD_INPUT_STYLES,
-          minHeight: "108px",
           lineHeight: 1.5,
         },
       },

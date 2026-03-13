@@ -55,7 +55,9 @@ export function ProjectDetailsSectionView({ section, projectId, isAdmin, project
       {section === "sveiselogg" ? <ProjectWeldLogSection projectId={projectId} isAdmin={isAdmin} project={project} /> : null}
       {section === "dokumenter" ? <ProjectDocumentsSection /> : null}
       {section === "trykktest" ? <ProjectPressureTestSection /> : null}
-      {section === "dokumentasjonspakke" ? <ProjectDocumentationPackageSection /> : null}
+      {section === "dokumentasjonspakke" ? (
+        <ProjectDocumentationPackageSection projectId={projectId} isAdmin={isAdmin} project={project} />
+      ) : null}
     </Suspense>
   );
 }

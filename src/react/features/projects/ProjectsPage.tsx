@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useDebouncedValue } from "@mantine/hooks";
 import { deleteProject, fetchProjectPage } from "@/repo/projectRepo";
 import { useAuth } from "@react/auth/AuthProvider";
@@ -12,7 +12,12 @@ import { ProjectsHeader } from "./components/ProjectsHeader";
 import { ProjectsTable } from "./components/ProjectsTable";
 import { useProjectsData } from "./hooks/useProjectsData";
 import { buildCustomerFilterOptions } from "./lib/projectFilters";
-import type { ProjectRow, ProjectsModalMode, ProjectStatusFilter } from "./projects.types";
+import type {
+  ProjectRow,
+  ProjectsFilters as ProjectsFilterState,
+  ProjectsModalMode,
+  ProjectStatusFilter,
+} from "./projects.types";
 
 type ProjectsModalState = {
   opened: boolean;
@@ -26,6 +31,60 @@ const INITIAL_MODAL_STATE: ProjectsModalState = {
   row: null,
 };
 
+type ProjectsQueryState = ProjectsFilterState & {
+  page: number;
+  pageSize: number;
+  reloadKey: number;
+};
+
+type ProjectsQueryAction =
+  | { type: "setStatus"; value: ProjectStatusFilter }
+  | { type: "setCustomer"; value: string }
+  | { type: "setText"; value: string }
+  | { type: "setPage"; value: number }
+  | { type: "setPageSize"; value: number }
+  | { type: "reload" }
+  | { type: "reloadFromFirstPage" };
+
+const INITIAL_QUERY_STATE: ProjectsQueryState = {
+  status: "",
+  customer: "",
+  text: "",
+  page: 1,
+  pageSize: 10,
+  reloadKey: 0,
+};
+
+function projectsQueryReducer(state: ProjectsQueryState, action: ProjectsQueryAction): ProjectsQueryState {
+  switch (action.type) {
+    case "setStatus":
+      if (state.status === action.value && state.page === 1) return state;
+      return { ...state, status: action.value, page: 1 };
+    case "setCustomer":
+      if (state.customer === action.value && state.page === 1) return state;
+      return { ...state, customer: action.value, page: 1 };
+    case "setText":
+      if (state.text === action.value && state.page === 1) return state;
+      return { ...state, text: action.value, page: 1 };
+    case "setPage": {
+      const nextPage = Number.isFinite(action.value) ? Math.max(1, Math.trunc(action.value)) : state.page;
+      if (nextPage === state.page) return state;
+      return { ...state, page: nextPage };
+    }
+    case "setPageSize": {
+      const nextPageSize = Number.isFinite(action.value) ? Math.max(1, Math.trunc(action.value)) : state.pageSize;
+      if (nextPageSize === state.pageSize && state.page === 1) return state;
+      return { ...state, pageSize: nextPageSize, page: 1 };
+    }
+    case "reload":
+      return { ...state, reloadKey: state.reloadKey + 1 };
+    case "reloadFromFirstPage":
+      return { ...state, page: 1, reloadKey: state.reloadKey + 1 };
+    default:
+      return state;
+  }
+}
+
 export function ProjectsPage() {
   const { access, session } = useAuth();
   const displayName = access?.displayName ?? "Bruker";
@@ -34,36 +93,35 @@ export function ProjectsPage() {
 
   const { customers, loading, refreshing, error, reload } = useProjectsData();
 
-  const [statusFilter, setStatusFilter] = useState<ProjectStatusFilter>("");
-  const [customerFilter, setCustomerFilter] = useState("");
-  const [textFilter, setTextFilter] = useState("");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [queryState, dispatchQuery] = useReducer(projectsQueryReducer, INITIAL_QUERY_STATE);
   const [rows, setRows] = useState<ProjectRow[]>([]);
   const [totalRows, setTotalRows] = useState(0);
   const [rowsLoading, setRowsLoading] = useState(true);
   const [rowsError, setRowsError] = useState<string | null>(null);
-  const [rowsReloadKey, setRowsReloadKey] = useState(0);
   const [modalState, setModalState] = useState<ProjectsModalState>(INITIAL_MODAL_STATE);
   const { openConfirmModal, confirmModal } = useConfirmModal();
-  const [debouncedTextFilter] = useDebouncedValue(textFilter, 150);
+  const [debouncedTextFilter] = useDebouncedValue(queryState.text, 150);
+  const rowsRequestRef = useRef(0);
 
-  const effectiveStatusFilter: ProjectStatusFilter = isAdmin ? statusFilter : "active";
+  const effectiveStatusFilter: ProjectStatusFilter = isAdmin ? queryState.status : "active";
 
   const customerFilterOptions = useMemo(
-    () => buildCustomerFilterOptions(customers, customerFilter),
-    [customers, customerFilter]
+    () => buildCustomerFilterOptions(customers, queryState.customer),
+    [customers, queryState.customer]
   );
 
-  const hasFilters = Boolean(effectiveStatusFilter || customerFilter || textFilter);
+  const hasFilters = Boolean(effectiveStatusFilter || queryState.customer || queryState.text);
   const panelMeta = hasFilters ? `${totalRows} treff` : `${totalRows} stk`;
 
   useEffect(() => {
-    setPage(1);
-  }, [effectiveStatusFilter, customerFilter, debouncedTextFilter]);
-
-  useEffect(() => {
     let cancelled = false;
+    const requestId = ++rowsRequestRef.current;
+
+    if (queryState.text !== debouncedTextFilter) {
+      return () => {
+        cancelled = true;
+      };
+    }
 
     async function loadRows() {
       setRowsLoading(true);
@@ -71,32 +129,32 @@ export function ProjectsPage() {
 
       try {
         const result = await fetchProjectPage({
-          page,
-          pageSize,
+          page: queryState.page,
+          pageSize: queryState.pageSize,
           filters: {
             status: effectiveStatusFilter,
-            customer: customerFilter,
+            customer: queryState.customer,
             text: debouncedTextFilter,
             isAdmin,
           },
         });
-        if (cancelled) return;
+        if (cancelled || requestId !== rowsRequestRef.current) return;
 
         const totalPages = Math.max(1, Math.ceil(result.total / result.pageSize));
-        if (result.total > 0 && page > totalPages) {
-          setPage(totalPages);
+        if (result.total > 0 && queryState.page > totalPages) {
+          dispatchQuery({ type: "setPage", value: totalPages });
           return;
         }
 
         setRows(result.items);
         setTotalRows(result.total);
       } catch (err) {
-        if (cancelled) return;
+        if (cancelled || requestId !== rowsRequestRef.current) return;
         setRows([]);
         setTotalRows(0);
         setRowsError(err instanceof Error && err.message ? err.message : "Kunne ikke laste prosjekter.");
       } finally {
-        if (!cancelled) {
+        if (!cancelled && requestId === rowsRequestRef.current) {
           setRowsLoading(false);
         }
       }
@@ -106,11 +164,20 @@ export function ProjectsPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, pageSize, effectiveStatusFilter, customerFilter, debouncedTextFilter, isAdmin, rowsReloadKey]);
+  }, [
+    queryState.page,
+    queryState.pageSize,
+    queryState.customer,
+    queryState.reloadKey,
+    queryState.text,
+    effectiveStatusFilter,
+    debouncedTextFilter,
+    isAdmin,
+  ]);
 
-  const refreshAll = useCallback(async () => {
+  const refreshAll = useCallback(async (options?: { resetPage?: boolean }) => {
     await reload();
-    setRowsReloadKey((current) => current + 1);
+    dispatchQuery({ type: options?.resetPage ? "reloadFromFirstPage" : "reload" });
   }, [reload]);
 
   const openNewModal = () => {
@@ -137,8 +204,7 @@ export function ProjectsPage() {
 
   const handlePageSizeChange = useCallback((nextPageSize: number) => {
     if (!Number.isFinite(nextPageSize) || nextPageSize < 1) return;
-    setPageSize(nextPageSize);
-    setPage(1);
+    dispatchQuery({ type: "setPageSize", value: nextPageSize });
   }, []);
 
   const requestDelete = (row: ProjectRow) => {
@@ -157,7 +223,6 @@ export function ProjectsPage() {
       },
       onDone: async () => {
         await refreshAll();
-        setPage(1);
         toast("Prosjekt slettet.");
       },
     });
@@ -176,12 +241,12 @@ export function ProjectsPage() {
       <ProjectsFilters
         isAdmin={isAdmin}
         status={effectiveStatusFilter}
-        customer={customerFilter}
-        text={textFilter}
+        customer={queryState.customer}
+        text={queryState.text}
         customerOptions={customerFilterOptions}
-        onStatusChange={setStatusFilter}
-        onCustomerChange={setCustomerFilter}
-        onTextChange={setTextFilter}
+        onStatusChange={(value) => dispatchQuery({ type: "setStatus", value })}
+        onCustomerChange={(value) => dispatchQuery({ type: "setCustomer", value })}
+        onTextChange={(value) => dispatchQuery({ type: "setText", value })}
       />
 
       <AppPanel title="Prosjekter" meta={panelMeta}>
@@ -191,15 +256,18 @@ export function ProjectsPage() {
           error={error || rowsError}
           hasFilters={hasFilters}
           isAdmin={isAdmin}
-          page={page}
+          page={queryState.page}
           totalRows={totalRows}
-          pageSize={pageSize}
+          pageSize={queryState.pageSize}
           onPageChange={(nextPage) => {
             startTransition(() => {
-              setPage(nextPage);
+              dispatchQuery({ type: "setPage", value: nextPage });
             });
           }}
           onPageSizeChange={handlePageSizeChange}
+          onRetry={() => {
+            void refreshAll();
+          }}
           onEdit={openEditModal}
           onDelete={requestDelete}
         />
@@ -212,8 +280,7 @@ export function ProjectsPage() {
         customers={customers}
         onClose={closeModal}
         onSaved={async () => {
-          await refreshAll();
-          setPage(1);
+          await refreshAll({ resetPage: true });
         }}
         onCustomersRefresh={reload}
       />

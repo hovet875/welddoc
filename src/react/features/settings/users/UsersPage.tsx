@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { SimpleGrid, Text } from "@mantine/core";
+import { getAccessToken } from "@/auth/authClient";
 import { toast } from "@react/ui/notify";
 import { supabase } from "../../../../services/supabaseClient";
 import { useAuth } from "../../../auth/AuthProvider";
@@ -110,13 +111,6 @@ export function UsersPage() {
 
   const setFormField = <K extends keyof UserFormState>(field: K, value: UserFormState[K]) => {
     setForm((previous) => ({ ...previous, [field]: value }));
-  };
-
-  const getAccessToken = async () => {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-    if (!token) throw new Error("Mangler tilgangstoken. Logg inn på nytt.");
-    return token;
   };
 
   const submitModal = () => {

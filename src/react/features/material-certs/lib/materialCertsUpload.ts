@@ -11,14 +11,18 @@ export type MaterialCertUploadEntryDraft = {
   id: string;
   source: MaterialCertUploadSource;
   materialId: string;
+  fillerManufacturer: string;
   fillerType: string;
+  fillerDiameter: string;
   supplier: string;
   heatNumbers: string[];
 };
 
 export type MaterialCertUploadDefaults = {
   materialId: string;
+  fillerManufacturer: string;
   fillerType: string;
+  fillerDiameter: string;
   supplier: string;
 };
 
@@ -51,7 +55,9 @@ export function createUploadEntryFromFile(
     id: createUuid(),
     source: { kind: "local", file },
     materialId: certificateType === "material" ? defaults.materialId : "",
+    fillerManufacturer: certificateType === "filler" ? defaults.fillerManufacturer : "",
     fillerType: certificateType === "filler" ? defaults.fillerType : "",
+    fillerDiameter: certificateType === "filler" ? defaults.fillerDiameter : "",
     supplier: defaults.supplier,
     heatNumbers: [],
   };
@@ -79,7 +85,9 @@ export function mergeInboxUploadEntries(
         : {};
 
     const suggestedMaterialId = readString(meta.material_id);
+    const suggestedFillerManufacturer = readString(meta.filler_manufacturer);
     const suggestedFillerType = readString(meta.filler_type);
+    const suggestedFillerDiameter = readString(meta.filler_diameter);
     const suggestedSupplier = readString(meta.supplier);
     const suggestedHeats = readStringArray(meta.heat_numbers);
 
@@ -94,9 +102,15 @@ export function mergeInboxUploadEntries(
       materialId:
         current?.materialId ??
         (certificateType === "material" ? suggestedMaterialId || defaults.materialId : ""),
+      fillerManufacturer:
+        current?.fillerManufacturer ??
+        (certificateType === "filler" ? suggestedFillerManufacturer || defaults.fillerManufacturer : ""),
       fillerType:
         current?.fillerType ??
         (certificateType === "filler" ? suggestedFillerType || defaults.fillerType : ""),
+      fillerDiameter:
+        current?.fillerDiameter ??
+        (certificateType === "filler" ? suggestedFillerDiameter || defaults.fillerDiameter : ""),
       supplier: current?.supplier ?? suggestedSupplier ?? defaults.supplier,
       heatNumbers: current?.heatNumbers ?? normalizeHeatNumbers(suggestedHeats),
     };
@@ -120,6 +134,14 @@ export function applyUploadDefaultsToEntries(
       certificateType === "filler"
         ? defaults.fillerType || entry.fillerType
         : entry.fillerType,
+    fillerManufacturer:
+      certificateType === "filler"
+        ? defaults.fillerManufacturer || entry.fillerManufacturer
+        : entry.fillerManufacturer,
+    fillerDiameter:
+      certificateType === "filler"
+        ? defaults.fillerDiameter || entry.fillerDiameter
+        : entry.fillerDiameter,
     supplier: defaults.supplier || entry.supplier,
   }));
 }

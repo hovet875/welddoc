@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { getProfileAccess, getSession } from "@/auth/authClient";
 import { supabase } from "../../services/supabaseClient";
@@ -28,6 +29,10 @@ const INITIAL_STATE: AuthState = {
   message: null,
 };
 
+const TRANSIENT_ACCESS_MESSAGE = "Kunne ikke verifisere tilgang akkurat nå. Kontroller nettverket og prøv igjen.";
+const TRANSIENT_SESSION_MESSAGE = "Kunne ikke oppdatere innloggingsstatus akkurat nå. Kontroller nettverket og prøv igjen.";
+const INITIAL_SESSION_MESSAGE = "Kunne ikke hente innloggingsstatus akkurat nå. Kontroller nettverket og prøv igjen.";
+
 async function safeSignOut() {
   await signOutSafely("Utlogging feilet");
 }
@@ -36,7 +41,7 @@ type SyncOptions = {
   setLoading: boolean;
 };
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>(INITIAL_STATE);
   const runIdRef = useRef(0);
   const mountedRef = useRef(true);
@@ -82,14 +87,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
     } catch (err) {
       console.warn("Profile access check failed", err);
-      await safeSignOut();
       if (!mountedRef.current || runId !== runIdRef.current) return;
-      setState({
-        status: "unauthenticated",
-        session: null,
-        access: null,
-        message: "Kunne ikke verifisere tilgang. Logg inn på nytt.",
-      });
+      setState((prev) => ({
+        status: "authenticated",
+        session,
+        access: prev.session?.user.id === session.user.id ? prev.access : null,
+        message: TRANSIENT_ACCESS_MESSAGE,
+      }));
     }
   }, []);
 
@@ -98,7 +102,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       session = await getSession();
     } catch (err) {
-      console.warn("getSession failed, treating as logged out", err);
+      console.warn("getSession failed", err);
+      if (!mountedRef.current) return;
+      setState((prev) => {
+        if (prev.session) {
+          return {
+            ...prev,
+            status: "authenticated",
+            message: TRANSIENT_SESSION_MESSAGE,
+          };
+        }
+
+        return {
+          status: "unauthenticated",
+          session: null,
+          access: null,
+          message: INITIAL_SESSION_MESSAGE,
+        };
+      });
+      return;
     }
     await syncFromSession(session, { setLoading: true });
   }, [syncFromSession]);

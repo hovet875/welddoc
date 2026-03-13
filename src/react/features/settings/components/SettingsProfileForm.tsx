@@ -13,12 +13,16 @@ type SettingsProfileFormProps = {
   email: string;
   loading: boolean;
   saving: boolean;
+  error: string | null;
+  saveError: string | null;
+  canSave: boolean;
   resettingPassword: boolean;
   jobTitles: JobTitleRow[];
   form: SettingsFormState;
   onDisplayNameChange: (value: string) => void;
   onJobTitleChange: (value: string) => void;
   onWelderNoChange: (value: string) => void;
+  onRetry: () => void;
   onSave: () => void;
   onResetPassword: () => void;
 };
@@ -28,16 +32,20 @@ export function SettingsProfileForm({
   email,
   loading,
   saving,
+  error,
+  saveError,
+  canSave,
   resettingPassword,
   jobTitles,
   form,
   onDisplayNameChange,
   onJobTitleChange,
   onWelderNoChange,
+  onRetry,
   onSave,
   onResetPassword,
 }: SettingsProfileFormProps) {
-  const disabled = !isAdmin || loading || saving;
+  const disabled = !isAdmin || loading || saving || !canSave;
 
   const profileForm = useForm<SettingsFormState>({
     initialValues: form,
@@ -67,6 +75,32 @@ export function SettingsProfileForm({
         }}
       >
         <Stack gap="md">
+          {error ? (
+            <Alert color="red" variant="light" title="Kunne ikke laste brukerprofil">
+              <Stack gap="sm">
+                <span>{error}</span>
+                <Group>
+                  <AppButton size="xs" onClick={onRetry} disabled={loading || saving}>
+                    Prøv igjen
+                  </AppButton>
+                </Group>
+              </Stack>
+            </Alert>
+          ) : null}
+
+          {saveError && !error ? (
+            <Alert color="red" variant="light" title="Kunne ikke lagre profil">
+              <Stack gap="sm">
+                <span>{saveError}</span>
+                <Group>
+                  <AppButton size="xs" onClick={onSave} disabled={loading || saving || !canSave}>
+                    Prøv å lagre igjen
+                  </AppButton>
+                </Group>
+              </Stack>
+            </Alert>
+          ) : null}
+
           <AppTextInput
             label="Visningsnavn"
             value={profileForm.values.displayName}
@@ -108,11 +142,17 @@ export function SettingsProfileForm({
               {resettingPassword ? "Sender..." : "Bytt passord"}
             </AppButton>
             {isAdmin ? (
-              <AppButton tone="primary" type="submit" size="sm" disabled={loading || saving}>
+              <AppButton tone="primary" type="submit" size="sm" disabled={loading || saving || !canSave}>
                 {saving ? "Lagrer..." : "Lagre"}
               </AppButton>
             ) : null}
           </Group>
+
+          {isAdmin && !canSave ? (
+            <Alert color="orange" variant="light">
+              Lagring er deaktivert til brukerprofilen er lastet korrekt.
+            </Alert>
+          ) : null}
 
           {!isAdmin ? (
             <Alert color="gray" variant="light">

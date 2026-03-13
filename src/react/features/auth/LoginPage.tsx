@@ -63,7 +63,6 @@ export function LoginPage() {
       localStorage.setItem("rememberMe", String(remember));
       await signIn(email.trim(), password);
       await refresh();
-      clearMessage();
       navigate(ROUTES.home, { replace: true });
     } catch (err) {
       console.error(err);

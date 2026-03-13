@@ -1,6 +1,7 @@
 export const ROUTES = {
   home: "/",
   login: "/login",
+  workerDocumentPackageRender: "/worker/document-package-render",
   projects: "/projects",
   materialCerts: "/mtc",
   wps: "/procedures",

@@ -1,4 +1,4 @@
-import type { User } from "@supabase/supabase-js";
+import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "../services/supabaseClient";
 
 let cachedSession: {
@@ -16,6 +16,11 @@ let cachedAccess:
 
 const SESSION_TTL_MS = 4000;
 const ACCESS_TTL_MS = 15000;
+
+function cacheSession(session: Session | null) {
+  cachedSession = { value: session, ts: Date.now() };
+  return session;
+}
 
 function clearAuthStorage() {
   const clearFrom = (storage: Storage) => {
@@ -83,16 +88,42 @@ export async function getIsAdmin(): Promise<boolean> {
   }
 }
 
+async function readSessionFromSupabase() {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  return cacheSession(data.session);
+}
+
+async function refreshCurrentSession() {
+  const { data, error } = await supabase.auth.refreshSession();
+  if (error) throw error;
+  return cacheSession(data.session);
+}
+
 export async function getSession() {
   if (cachedSession && Date.now() - cachedSession.ts < SESSION_TTL_MS) {
     return cachedSession.value;
   }
 
-  const { data, error } = await supabase.auth.getSession();
-  if (error) return null;
+  return readSessionFromSupabase();
+}
 
-  cachedSession = { value: data.session, ts: Date.now() };
-  return data.session;
+export async function getAccessToken() {
+  const tokenErrorMessage = "Kunne ikke hente tilgangstoken. Prøv igjen eller logg inn på nytt.";
+
+  try {
+    const session = await getSession();
+    const token = session?.access_token?.trim();
+    if (token) return token;
+  } catch {}
+
+  try {
+    const refreshedSession = await refreshCurrentSession();
+    const refreshedToken = refreshedSession?.access_token?.trim();
+    if (refreshedToken) return refreshedToken;
+  } catch {}
+
+  throw new Error(tokenErrorMessage);
 }
 
 export async function signIn(email: string, password: string) {
@@ -112,7 +143,7 @@ export async function signIn(email: string, password: string) {
     }
   }
 
-  cachedSession = { value: data.session, ts: Date.now() };
+  cacheSession(data.session);
   cachedAccess = null;
   return data.session;
 }
@@ -122,7 +153,7 @@ export async function signOut() {
     await supabase.auth.signOut({ scope: "global" });
   } finally {
     clearAuthStorage();
-    cachedSession = { value: null, ts: Date.now() };
+    cacheSession(null);
     cachedAccess = null;
   }
 }

@@ -53,7 +53,9 @@ import { AppPageLayout } from "../../../../layout/AppPageLayout";
 import { CompanySettingsHeader } from "../components/CompanySettingsHeader";
 import { useWeldingData } from "./hooks/useWeldingData";
 import { WeldingAdminListPanel } from "./components/WeldingAdminListPanel";
+import { WeldingCertScopePanel } from "./components/WeldingCertScopePanel";
 import { WeldingListItem } from "./components/WeldingListItem";
+import { WeldingTraceabilityPanel } from "./components/WeldingTraceabilityPanel";
 import { ROUTES } from "@react/router/routes";
 
 const STANDARD_TYPES = [
@@ -271,6 +273,7 @@ export function CompanySettingsWeldingPage() {
     JOINT_TYPE_EDIT_MODAL_INITIAL_STATE
   );
   const [jointTypeEditSaving, setJointTypeEditSaving] = useState(false);
+  const [adminPanelRefreshNonce, setAdminPanelRefreshNonce] = useState(0);
   const { confirmDelete, deleteConfirmModal } = useDeleteConfirmModal();
 
   const isRefreshing = useMemo(
@@ -331,6 +334,11 @@ export function CompanySettingsWeldingPage() {
       { value: ndtMethodEditModal.standardId, label: ndtMethodEditModal.standardId },
     ];
   }, [ndtMethodEditModal.standardId, standardOptions]);
+
+  const refreshAllPanels = useCallback(() => {
+    setAdminPanelRefreshNonce((current) => current + 1);
+    void reloadAll();
+  }, [reloadAll]);
 
 
   const closeFmGroupsModal = useCallback(() => {
@@ -448,7 +456,7 @@ export function CompanySettingsWeldingPage() {
 
       confirmDelete({
         title: "Slett FM-gruppe",
-        messageHtml: `Er du sikker pa at du vil slette <b>${esc(row.label)}</b>?`,
+        messageHtml: `Er du sikker på at du vil slette <b>${esc(row.label)}</b>?`,
         onConfirm: async () => {
           await deleteStandardFmGroup(row.id);
         },
@@ -676,7 +684,7 @@ export function CompanySettingsWeldingPage() {
 
         confirmDelete({
           title: "Slett standard",
-          messageHtml: `Er du sikker pa at du vil slette <b>${esc(standardLabelText(row))}</b>?`,
+          messageHtml: `Er du sikker på at du vil slette <b>${esc(standardLabelText(row))}</b>?`,
           onConfirm: async () => {
             await deleteStandard(row.id);
           },
@@ -799,7 +807,7 @@ export function CompanySettingsWeldingPage() {
 
         confirmDelete({
           title: "Slett NDT-metode",
-          messageHtml: `Er du sikker pa at du vil slette <b>${esc(`${row.code} - ${row.label}`)}</b>?`,
+          messageHtml: `Er du sikker på at du vil slette <b>${esc(`${row.code} - ${row.label}`)}</b>?`,
           onConfirm: async () => {
             await deleteNdtMethod(row.id);
           },
@@ -897,7 +905,7 @@ export function CompanySettingsWeldingPage() {
       try {
         confirmDelete({
           title: "Slett sveiseprosess",
-          messageHtml: `Er du sikker pa at du vil slette <b>${esc(processLabelText(row))}</b>?`,
+          messageHtml: `Er du sikker på at du vil slette <b>${esc(processLabelText(row))}</b>?`,
           onConfirm: async () => {
             await deleteWeldingProcess(row.id);
           },
@@ -992,7 +1000,7 @@ export function CompanySettingsWeldingPage() {
 
         confirmDelete({
           title: "Slett sveisefuge",
-          messageHtml: `Er du sikker pa at du vil slette <b>${esc(row.label)}</b>?`,
+          messageHtml: `Er du sikker på at du vil slette <b>${esc(row.label)}</b>?`,
           onConfirm: async () => {
             await deleteWeldJointType(row.id);
           },
@@ -1029,12 +1037,12 @@ export function CompanySettingsWeldingPage() {
     <AppPageLayout pageClassName="page-company-settings" displayName={displayName} email={email}>
       <CompanySettingsHeader
           title="App-parametere - Teknisk / Sveising"
-          subtitle="Materialer, standarder, NDT-metoder, sveiseprosesser og sveisefuger."
+          subtitle="Materialer, standarder, NDT-metoder, sveiseprosesser, sveisefuger, sertifikatscope og sporbarhetskoder."
           backTo={ROUTES.settingsCompany}
           backLabel="<- App-parametere"
           actions={
             <AppRefreshIconButton
-              onClick={() => void reloadAll()}
+              onClick={refreshAllPanels}
               disabled={isRefreshing}
               loading={isRefreshing}
             />
@@ -1306,6 +1314,16 @@ export function CompanySettingsWeldingPage() {
               />
             )}
           />
+
+          <WeldingCertScopePanel
+            standards={standards}
+            materials={materials}
+            processes={processes}
+            jointTypes={jointTypes}
+            refreshNonce={adminPanelRefreshNonce}
+          />
+
+          <WeldingTraceabilityPanel refreshNonce={adminPanelRefreshNonce} />
 
         </Stack>
 

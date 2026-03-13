@@ -6,23 +6,36 @@ import { fetchProjects, type ProjectRow } from "@/repo/projectRepo";
 import {
   createProjectTraceability,
   fetchTraceabilityOptions,
+  fetchTraceabilityProfiles,
   fetchTraceabilityTypes,
   type TraceabilityOptionRow,
+  type TraceabilityProfileFieldKey,
+  type TraceabilityProfileRow,
   type TraceabilityTypeRow,
 } from "@/repo/traceabilityRepo";
 import { AppButton } from "@react/ui/AppButton";
 import { AppDrawer } from "@react/ui/AppDrawer";
 import { AppModalActions } from "@react/ui/AppModalActions";
+import { AppProfileSelectToggle } from "@react/ui/AppProfileSelectToggle";
 import { AppSelect } from "@react/ui/AppSelect";
 import { AppTextInput } from "@react/ui/AppTextInput";
 import { notifyError, notifySuccess, toast } from "@react/ui/notify";
 import { HeatCertificatePicker } from "@react/features/project-details/sections/traceability/components/HeatCertificatePicker";
 import {
   buildInitialValues,
+  defaultProfileForType,
   fieldLabelForDn2,
-  firstDefault,
+  isFillerProfile,
+  lookupProfile,
   lookupType,
   normalizeSavePayload,
+  optionRowsForField,
+  profileFieldInputMode,
+  profileFieldLabel,
+  profileFieldRequired,
+  profileHasField,
+  profilesForType,
+  sortedProfileFields,
 } from "@react/features/project-details/sections/traceability/lib/traceabilityUtils";
 import type { TraceabilityModalValues } from "@react/features/project-details/sections/traceability/types";
 
@@ -37,28 +50,41 @@ type QuickTraceabilityFormValues = TraceabilityModalValues & {
 
 type TraceabilityOptionsByGroup = {
   dn: TraceabilityOptionRow[];
+  od: TraceabilityOptionRow[];
   sch: TraceabilityOptionRow[];
   pn: TraceabilityOptionRow[];
   filler: TraceabilityOptionRow[];
+  fillerManufacturer: TraceabilityOptionRow[];
+  fillerDiameter: TraceabilityOptionRow[];
 };
 
 const EMPTY_OPTIONS: TraceabilityOptionsByGroup = {
   dn: [],
+  od: [],
   sch: [],
   pn: [],
   filler: [],
+  fillerManufacturer: [],
+  fillerDiameter: [],
 };
 
 function createInitialValues(): QuickTraceabilityFormValues {
   return {
     project_id: "",
     type_code: "",
+    profile_id: "",
     dn: "",
     dn2: "",
+    od: "",
+    od2: "",
     sch: "",
     pressure_class: "",
     thickness: "",
+    filler_manufacturer: "",
     filler_type: "",
+    filler_diameter: "",
+    description: "",
+    custom_dimension: "",
     material_id: "",
     material_certificate_id: "",
     heat_number: "",
@@ -77,8 +103,19 @@ function isDuplicateTraceabilityCodeError(err: unknown) {
   return message.toLowerCase().includes("project_traceability_project_id_type_code_code_index_key");
 }
 
-function optionRows(items: TraceabilityOptionRow[]) {
-  return items.map((item) => ({ value: item.value, label: item.value }));
+function formValue(values: QuickTraceabilityFormValues, fieldKey: TraceabilityProfileFieldKey) {
+  if (fieldKey === "dn") return values.dn;
+  if (fieldKey === "dn2") return values.dn2;
+  if (fieldKey === "od") return values.od;
+  if (fieldKey === "od2") return values.od2;
+  if (fieldKey === "sch") return values.sch;
+  if (fieldKey === "pressure_class") return values.pressure_class;
+  if (fieldKey === "thickness") return values.thickness;
+  if (fieldKey === "filler_manufacturer") return values.filler_manufacturer;
+  if (fieldKey === "filler_type") return values.filler_type;
+  if (fieldKey === "filler_diameter") return values.filler_diameter;
+  if (fieldKey === "description") return values.description;
+  return values.custom_dimension;
 }
 
 export function QuickTraceabilityDrawer({ opened, onClose }: QuickTraceabilityDrawerProps) {
@@ -88,9 +125,11 @@ export function QuickTraceabilityDrawer({ opened, onClose }: QuickTraceabilityDr
 
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [types, setTypes] = useState<TraceabilityTypeRow[]>([]);
+  const [profiles, setProfiles] = useState<TraceabilityProfileRow[]>([]);
   const [options, setOptions] = useState<TraceabilityOptionsByGroup>(EMPTY_OPTIONS);
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
   const [pickedFileLabel, setPickedFileLabel] = useState("");
+  const [profilePickerVisible, setProfilePickerVisible] = useState(false);
 
   const form = useForm<QuickTraceabilityFormValues>({
     initialValues: createInitialValues(),
@@ -116,6 +155,37 @@ export function QuickTraceabilityDrawer({ opened, onClose }: QuickTraceabilityDr
     [types]
   );
 
+  const selectedType = useMemo(() => lookupType(types, form.values.type_code), [types, form.values.type_code]);
+
+  const availableProfiles = useMemo(
+    () => profilesForType(profiles, form.values.type_code || selectedType?.code),
+    [profiles, form.values.type_code, selectedType?.code]
+  );
+
+  const selectedProfile = useMemo(() => {
+    const direct = lookupProfile(profiles, form.values.profile_id);
+    if (direct && direct.type_code === form.values.type_code) return direct;
+    return defaultProfileForType(profiles, form.values.type_code || selectedType?.code);
+  }, [profiles, form.values.profile_id, form.values.type_code, selectedType?.code]);
+
+  const profileFields = useMemo(() => sortedProfileFields(selectedProfile), [selectedProfile]);
+  const fillerProfile = useMemo(() => isFillerProfile(selectedProfile), [selectedProfile]);
+
+  const profileOptions = useMemo(
+    () =>
+      availableProfiles.map((profile) => ({
+        value: profile.id,
+        label: `${profile.code} - ${profile.label}`,
+      })),
+    [availableProfiles]
+  );
+
+  const profileSummaryText = useMemo(() => {
+    if (!selectedProfile) return "Ingen profil valgt.";
+    const prefix = selectedProfile.is_default ? "Standardprofil" : "Aktiv profil";
+    return `${prefix}: ${selectedProfile.code} - ${selectedProfile.label}`;
+  }, [selectedProfile]);
+
   const materialOptions = useMemo(
     () =>
       materials.map((material) => ({
@@ -125,11 +195,6 @@ export function QuickTraceabilityDrawer({ opened, onClose }: QuickTraceabilityDr
     [materials]
   );
 
-  const selectedType = useMemo(
-    () => lookupType(types, form.values.type_code),
-    [types, form.values.type_code]
-  );
-
   const selectedMaterial = useMemo(() => {
     const materialId = form.values.material_id.trim();
     if (!materialId) return null;
@@ -137,29 +202,19 @@ export function QuickTraceabilityDrawer({ opened, onClose }: QuickTraceabilityDr
   }, [materials, form.values.material_id]);
 
   const hasSelectedCert = Boolean(form.values.material_certificate_id.trim());
+
   const certificateSectionReady = useMemo(() => {
     if (!form.values.project_id.trim()) return false;
-    if (!selectedType) return false;
-    if (selectedType.use_dn && !form.values.dn.trim()) return false;
-    if (selectedType.use_dn2 && !form.values.dn2.trim()) return false;
-    if (selectedType.use_sch && !form.values.sch.trim()) return false;
-    if (selectedType.use_thickness && !form.values.thickness.trim()) return false;
-    if (selectedType.use_pressure && !form.values.pressure_class.trim()) return false;
-    if (selectedType.use_filler_type) {
-      return Boolean(form.values.filler_type.trim());
+    if (!selectedType || !selectedProfile) return false;
+
+    for (const field of profileFields) {
+      if (!field.required) continue;
+      if (!formValue(form.values, field.field_key).trim()) return false;
     }
-    return Boolean(form.values.material_id.trim());
-  }, [
-    form.values.project_id,
-    form.values.dn,
-    form.values.dn2,
-    form.values.sch,
-    form.values.thickness,
-    form.values.pressure_class,
-    form.values.filler_type,
-    form.values.material_id,
-    selectedType,
-  ]);
+
+    if (!fillerProfile && !form.values.material_id.trim()) return false;
+    return true;
+  }, [form.values, selectedType, selectedProfile, profileFields, fillerProfile]);
 
   useEffect(() => {
     if (!opened) return;
@@ -169,21 +224,27 @@ export function QuickTraceabilityDrawer({ opened, onClose }: QuickTraceabilityDr
     form.clearErrors();
     setProjects([]);
     setTypes([]);
+    setProfiles([]);
     setOptions(EMPTY_OPTIONS);
     setMaterials([]);
     setBaseError(null);
     setPickedFileLabel("");
+    setProfilePickerVisible(false);
 
     void (async () => {
       setBaseLoading(true);
       try {
-        const [projectRows, typeRows, dnRows, schRows, pnRows, fillerRows, materialRows] = await Promise.all([
+        const [projectRows, typeRows, profileRows, dnRows, odRows, schRows, pnRows, fillerRows, fillerManufacturerRows, fillerDiameterRows, materialRows] = await Promise.all([
           fetchProjects(),
           fetchTraceabilityTypes(),
+          fetchTraceabilityProfiles(),
           fetchTraceabilityOptions("dn"),
+          fetchTraceabilityOptions("od"),
           fetchTraceabilityOptions("sch"),
           fetchTraceabilityOptions("pn"),
           fetchTraceabilityOptions("filler_type"),
+          fetchTraceabilityOptions("filler_manufacturer"),
+          fetchTraceabilityOptions("filler_diameter"),
           fetchMaterials(),
         ]);
         if (cancelled) return;
@@ -192,22 +253,36 @@ export function QuickTraceabilityDrawer({ opened, onClose }: QuickTraceabilityDr
         const visibleProjects = activeProjects.length > 0 ? activeProjects : projectRows;
         setProjects(visibleProjects);
         setTypes(typeRows);
+        setProfiles(profileRows);
         setOptions({
           dn: dnRows,
+          od: odRows,
           sch: schRows,
           pn: pnRows,
           filler: fillerRows,
+          fillerManufacturer: fillerManufacturerRows,
+          fillerDiameter: fillerDiameterRows,
         });
         setMaterials(materialRows);
 
         const defaultType = typeRows[0] ?? null;
+        const defaultProfile = defaultProfileForType(profileRows, defaultType?.code);
         const defaults = buildInitialValues({
           row: null,
           defaultType,
-          optionsSch: schRows,
-          optionsPn: pnRows,
-          optionsFiller: fillerRows,
+          defaultProfile,
+          profiles: profileRows,
+          options: {
+            dn: dnRows,
+            od: odRows,
+            sch: schRows,
+            pn: pnRows,
+            filler: fillerRows,
+            fillerManufacturer: fillerManufacturerRows,
+            fillerDiameter: fillerDiameterRows,
+          },
         });
+
         form.setValues({
           ...createInitialValues(),
           ...defaults,
@@ -229,19 +304,74 @@ export function QuickTraceabilityDrawer({ opened, onClose }: QuickTraceabilityDr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened]);
 
-  const updateType = (nextTypeCode: string) => {
-    form.setFieldValue("type_code", nextTypeCode);
-    const nextType = lookupType(types, nextTypeCode);
-    if (!nextType) return;
+  useEffect(() => {
+    if (profileOptions.length > 1) return;
+    setProfilePickerVisible(false);
+  }, [profileOptions.length]);
 
-    if (nextType.use_sch && !form.values.sch) {
-      form.setFieldValue("sch", nextType.default_sch ?? firstDefault(options.sch));
-    }
-    if (nextType.use_pressure && !form.values.pressure_class) {
-      form.setFieldValue("pressure_class", nextType.default_pressure ?? firstDefault(options.pn));
-    }
-    if (nextType.use_filler_type && !form.values.filler_type) {
-      form.setFieldValue("filler_type", firstDefault(options.filler));
+  const setFieldValue = (fieldKey: TraceabilityProfileFieldKey, value: string) => {
+    if (fieldKey === "dn") form.setFieldValue("dn", value);
+    if (fieldKey === "dn2") form.setFieldValue("dn2", value);
+    if (fieldKey === "od") form.setFieldValue("od", value);
+    if (fieldKey === "od2") form.setFieldValue("od2", value);
+    if (fieldKey === "sch") form.setFieldValue("sch", value);
+    if (fieldKey === "pressure_class") form.setFieldValue("pressure_class", value);
+    if (fieldKey === "thickness") form.setFieldValue("thickness", value);
+    if (fieldKey === "filler_manufacturer") form.setFieldValue("filler_manufacturer", value);
+    if (fieldKey === "filler_type") form.setFieldValue("filler_type", value);
+    if (fieldKey === "filler_diameter") form.setFieldValue("filler_diameter", value);
+    if (fieldKey === "description") form.setFieldValue("description", value);
+    if (fieldKey === "custom_dimension") form.setFieldValue("custom_dimension", value);
+  };
+
+  const updateType = (nextTypeCode: string) => {
+    const nextType = lookupType(types, nextTypeCode);
+    const nextProfile = defaultProfileForType(profiles, nextTypeCode);
+
+    form.setFieldValue("type_code", nextTypeCode);
+    form.setFieldValue("profile_id", nextProfile?.id ?? "");
+
+    const defaults = buildInitialValues({
+      row: null,
+      defaultType: nextType ?? null,
+      defaultProfile: nextProfile,
+      profiles,
+      options,
+    });
+
+    form.setValues({
+      ...form.values,
+      ...defaults,
+      type_code: nextTypeCode,
+      profile_id: nextProfile?.id ?? "",
+    });
+
+    form.setFieldValue("material_certificate_id", "");
+    form.setFieldValue("heat_number", "");
+    setPickedFileLabel("");
+  };
+
+  const updateProfile = (profileId: string) => {
+    const nextProfile = lookupProfile(profiles, profileId);
+
+    form.setFieldValue("profile_id", profileId);
+
+    if (nextProfile) {
+      if (profileHasField(nextProfile, "filler_manufacturer") && !form.values.filler_manufacturer.trim()) {
+        const rows = optionRowsForField({ profile: nextProfile, fieldKey: "filler_manufacturer", options });
+        const first = rows[0]?.value ?? "";
+        if (first) form.setFieldValue("filler_manufacturer", first);
+      }
+      if (profileHasField(nextProfile, "filler_type") && !form.values.filler_type.trim()) {
+        const rows = optionRowsForField({ profile: nextProfile, fieldKey: "filler_type", options });
+        const first = rows[0]?.value ?? "";
+        if (first) form.setFieldValue("filler_type", first);
+      }
+      if (profileHasField(nextProfile, "filler_diameter") && !form.values.filler_diameter.trim()) {
+        const rows = optionRowsForField({ profile: nextProfile, fieldKey: "filler_diameter", options });
+        const first = rows[0]?.value ?? "";
+        if (first) form.setFieldValue("filler_diameter", first);
+      }
     }
 
     form.setFieldValue("material_certificate_id", "");
@@ -261,40 +391,30 @@ export function QuickTraceabilityDrawer({ opened, onClose }: QuickTraceabilityDr
       return;
     }
 
-    if (selectedType.use_dn && !form.values.dn.trim()) {
-      form.setFieldError("dn", "DN er påkrevd.");
+    if (!selectedProfile) {
+      form.setFieldError("profile_id", "Profil er påkrevd.");
       return;
     }
-    if (selectedType.use_dn2 && !form.values.dn2.trim()) {
-      form.setFieldError("dn2", `${fieldLabelForDn2(selectedType.code)} er påkrevd.`);
-      return;
+
+    for (const field of profileFields) {
+      if (!field.required) continue;
+      if (!formValue(form.values, field.field_key).trim()) {
+        form.setFieldError(field.field_key, `${field.label} er påkrevd.`);
+        return;
+      }
     }
-    if (selectedType.use_sch && !form.values.sch.trim()) {
-      form.setFieldError("sch", "SCH er påkrevd.");
-      return;
-    }
-    if (selectedType.use_thickness && !form.values.thickness.trim()) {
-      form.setFieldError("thickness", "Tykkelse er påkrevd.");
-      return;
-    }
-    if (selectedType.use_pressure && !form.values.pressure_class.trim()) {
-      form.setFieldError("pressure_class", "Trykklasse er påkrevd.");
-      return;
-    }
-    if (selectedType.use_filler_type && !form.values.filler_type.trim()) {
-      form.setFieldError("filler_type", "Sveisetilsett type er påkrevd.");
-      return;
-    }
-    if (!selectedType.use_filler_type && !selectedMaterial) {
+
+    if (!fillerProfile && !selectedMaterial) {
       form.setFieldError("material_id", "Material er påkrevd.");
       return;
     }
+
     if (!form.values.heat_number.trim()) {
       form.setFieldError("heat_number", "Heat nr er påkrevd.");
       return;
     }
 
-    const payload = normalizeSavePayload(form.values, selectedMaterial, selectedType);
+    const payload = normalizeSavePayload(form.values, selectedMaterial, selectedProfile);
 
     try {
       setSubmitting(true);
@@ -307,7 +427,6 @@ export function QuickTraceabilityDrawer({ opened, onClose }: QuickTraceabilityDr
         if (!isDuplicateTraceabilityCodeError(err)) {
           throw err;
         }
-        // Retry once on race for next code_index.
         await createProjectTraceability({
           project_id: projectId,
           ...payload,
@@ -375,88 +494,73 @@ export function QuickTraceabilityDrawer({ opened, onClose }: QuickTraceabilityDr
           />
         </SimpleGrid>
 
-        {selectedType?.use_dn ? (
-          <AppSelect
-            label="DN"
-            value={form.values.dn}
-            onChange={(value) => form.setFieldValue("dn", value)}
-            data={optionRows(options.dn)}
-            error={form.errors.dn}
-            placeholder="Velg DN..."
-            searchable
-            disabled={baseLoading || submitting}
-          />
-        ) : null}
+        <AppProfileSelectToggle
+          visible={profilePickerVisible}
+          onVisibleChange={setProfilePickerVisible}
+          value={form.values.profile_id}
+          onChange={updateProfile}
+          data={profileOptions}
+          error={form.errors.profile_id}
+          disabled={baseLoading || submitting}
+          selectDisabled={profileOptions.length === 0}
+          toggleDisabled={profileOptions.length <= 1}
+          helperText={profileSummaryText}
+        />
 
-        {selectedType?.use_dn2 ? (
-          <AppSelect
-            label={fieldLabelForDn2(selectedType.code)}
-            value={form.values.dn2}
-            onChange={(value) => form.setFieldValue("dn2", value)}
-            data={optionRows(options.dn)}
-            error={form.errors.dn2}
-            placeholder="Velg DN..."
-            searchable
-            disabled={baseLoading || submitting}
-          />
-        ) : null}
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+          {profileFields.map((field) => {
+            const fieldKey = field.field_key;
+            const required = profileFieldRequired(selectedProfile, fieldKey);
+            const inputMode = profileFieldInputMode(selectedProfile, fieldKey);
+            const label =
+              fieldKey === "dn2"
+                ? profileFieldLabel(selectedProfile, fieldKey, fieldLabelForDn2(selectedType?.code ?? ""))
+                : profileFieldLabel(selectedProfile, fieldKey, field.label);
 
-        <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
-          {selectedType?.use_sch ? (
-            <AppSelect
-              label="SCH"
-              value={form.values.sch}
-              onChange={(value) => form.setFieldValue("sch", value)}
-              data={optionRows(options.sch)}
-              error={form.errors.sch}
-              placeholder="Velg SCH..."
-              searchable
-              disabled={baseLoading || submitting}
-            />
-          ) : null}
+            const currentValue = formValue(form.values, fieldKey);
 
-          {selectedType?.use_pressure ? (
-            <AppSelect
-              label="Trykklasse"
-              value={form.values.pressure_class}
-              onChange={(value) => form.setFieldValue("pressure_class", value)}
-              data={optionRows(options.pn)}
-              error={form.errors.pressure_class}
-              placeholder="Velg PN..."
-              searchable
-              disabled={baseLoading || submitting}
-            />
-          ) : null}
+            if (inputMode === "option") {
+              return (
+                <AppSelect
+                  key={field.id}
+                  label={label}
+                  required={required}
+                  value={currentValue}
+                  onChange={(value) => {
+                    setFieldValue(fieldKey, value);
+                    if (
+                      fieldKey === "filler_manufacturer" ||
+                      fieldKey === "filler_type" ||
+                      fieldKey === "filler_diameter"
+                    ) {
+                      form.setFieldValue("material_certificate_id", "");
+                      form.setFieldValue("heat_number", "");
+                      setPickedFileLabel("");
+                    }
+                  }}
+                  data={optionRowsForField({ profile: selectedProfile, fieldKey, options })}
+                  error={form.errors[fieldKey]}
+                  searchable
+                  disabled={baseLoading || submitting}
+                />
+              );
+            }
 
-          {selectedType?.use_thickness ? (
-            <AppTextInput
-              label="Tykkelse (mm)"
-              value={form.values.thickness}
-              onChange={(value) => form.setFieldValue("thickness", value)}
-              error={form.errors.thickness}
-              placeholder="f.eks 8"
-              disabled={baseLoading || submitting}
-            />
-          ) : null}
+            return (
+              <AppTextInput
+                key={field.id}
+                label={label}
+                value={currentValue}
+                onChange={(value) => setFieldValue(fieldKey, value)}
+                error={form.errors[fieldKey]}
+                required={required}
+                disabled={baseLoading || submitting}
+              />
+            );
+          })}
         </SimpleGrid>
 
-        {selectedType?.use_filler_type ? (
-          <AppSelect
-            label="Sveisetilsett type"
-            value={form.values.filler_type}
-            onChange={(value) => {
-              form.setFieldValue("filler_type", value);
-              form.setFieldValue("material_certificate_id", "");
-              form.setFieldValue("heat_number", "");
-              setPickedFileLabel("");
-            }}
-            data={optionRows(options.filler)}
-            error={form.errors.filler_type}
-            placeholder="Velg type..."
-            searchable
-            disabled={baseLoading || submitting}
-          />
-        ) : (
+        {!fillerProfile ? (
           <AppSelect
             label="Material"
             value={form.values.material_id}
@@ -472,7 +576,7 @@ export function QuickTraceabilityDrawer({ opened, onClose }: QuickTraceabilityDr
             searchable
             disabled={baseLoading || submitting}
           />
-        )}
+        ) : null}
 
         {certificateSectionReady ? (
           <Stack gap={6}>
@@ -486,9 +590,11 @@ export function QuickTraceabilityDrawer({ opened, onClose }: QuickTraceabilityDr
 
             <HeatCertificatePicker
               disabled={baseLoading || submitting}
-              certificateType={selectedType?.use_filler_type ? "filler" : "material"}
-              materialId={selectedType?.use_filler_type ? null : form.values.material_id.trim() || null}
-              fillerType={selectedType?.use_filler_type ? form.values.filler_type.trim() || null : null}
+              certificateType={fillerProfile ? "filler" : "material"}
+              materialId={fillerProfile ? null : form.values.material_id.trim() || null}
+              fillerType={fillerProfile ? form.values.filler_type.trim() || null : null}
+              fillerManufacturer={fillerProfile ? form.values.filler_manufacturer.trim() || null : null}
+              fillerDiameter={fillerProfile ? form.values.filler_diameter.trim() || null : null}
               onPick={(hit) => {
                 form.setFieldValue("material_certificate_id", hit.certificate_id);
                 form.setFieldValue("heat_number", hit.heat_number);
@@ -542,7 +648,7 @@ export function QuickTraceabilityDrawer({ opened, onClose }: QuickTraceabilityDr
           </Stack>
         ) : (
           <Alert color="gray" variant="light">
-            Velg prosjekt, kode og relevante parametere over før du registrerer sertifikat og heat.
+            Velg prosjekt, kode, profil og påkrevde felt før du registrerer sertifikat og heat.
           </Alert>
         )}
 
@@ -557,7 +663,7 @@ export function QuickTraceabilityDrawer({ opened, onClose }: QuickTraceabilityDr
             void submit();
           }}
           confirmLoading={submitting}
-          confirmDisabled={baseLoading || types.length === 0}
+          confirmDisabled={baseLoading || types.length === 0 || !selectedProfile}
         />
       </Stack>
     </AppDrawer>

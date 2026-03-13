@@ -222,9 +222,19 @@ export function resolveWelderCertForScope(input: {
 export function toTraceabilityOption(row: ProjectTraceabilityRow): WeldLogTraceabilityOption {
   const traceCode = `${row.type_code}${row.code_index ?? ""}`;
   const dn = String(row.dn ?? "").trim();
+  const od = String(row.od ?? "").trim();
+  const description = String(row.description ?? "").trim();
+  const fillerDescriptor = [
+    String(row.filler_manufacturer ?? "").trim(),
+    String(row.filler_type ?? "").trim(),
+    String(row.filler_diameter ?? "").trim() ? `${String(row.filler_diameter ?? "").trim()} mm` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   const directHeat = String(row.heat_number ?? "").trim();
   const certHeat = String((row.cert?.heat_numbers ?? []).find((value) => String(value ?? "").trim()) ?? "").trim();
   const heat = directHeat || certHeat;
+  const dimension = dn ? `DN${dn}` : od ? `OD${od}` : description || fillerDescriptor;
 
   return {
     id: row.id,
@@ -232,7 +242,7 @@ export function toTraceabilityOption(row: ProjectTraceabilityRow): WeldLogTracea
     material_id: row.material_id ?? null,
     dn: dn || null,
     heat_number: heat || null,
-    label: [traceCode, dn ? `DN${dn}` : "", heat].filter(Boolean).join(" - "),
+    label: [traceCode, dimension, heat].filter(Boolean).join(" - "),
   };
 }
 

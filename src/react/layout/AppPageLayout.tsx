@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { AppShell, Box, Stack, Container } from "@mantine/core";
+import { Alert, AppShell, Box, Button, Container, Group, Stack } from "@mantine/core";
+import { IconAlertCircle } from "@tabler/icons-react";
 import { useAuth } from "../auth/AuthProvider";
 import { AppFooter } from "./AppFooter";
 import { AppHeader } from "./AppHeader";
@@ -19,7 +20,7 @@ export function AppPageLayout({
   email,
   children,
 }: AppPageLayoutProps) {
-  const { access, session } = useAuth();
+  const { access, session, status, message, clearMessage, refresh } = useAuth();
   const resolvedDisplayName = displayName ?? access?.displayName ?? "Bruker";
   const resolvedEmail = email ?? session?.user?.email ?? "";
   const shellClassName = pageClassName ? `app-shell shell ${pageClassName}` : "app-shell shell";
@@ -33,13 +34,31 @@ export function AppPageLayout({
           px={{ base: "md", sm: "lg" }}
           py={{ base: "md", sm: "lg" }}
         >
-        <Box mb="md">
-        <AppHeader displayName={resolvedDisplayName} email={resolvedEmail} />
-        </Box>
-        <Stack gap="sm">
-        {children}
-        </Stack>
-        <AppFooter />
+          <Box mb="md">
+            <AppHeader displayName={resolvedDisplayName} email={resolvedEmail} />
+          </Box>
+          <Stack gap="sm">
+            {status === "authenticated" && message ? (
+              <Alert
+                color="orange"
+                variant="light"
+                title="Tilkoblingsproblem"
+                icon={<IconAlertCircle size={18} />}
+              >
+                {message}
+                <Group gap="xs" mt="sm">
+                  <Button size="compact-sm" variant="light" color="orange" onClick={() => void refresh()}>
+                    Prøv igjen
+                  </Button>
+                  <Button size="compact-sm" variant="subtle" color="gray" onClick={clearMessage}>
+                    Skjul
+                  </Button>
+                </Group>
+              </Alert>
+            ) : null}
+            {children}
+          </Stack>
+          <AppFooter />
         </Container>
       </AppShell.Main>
     </AppShell>

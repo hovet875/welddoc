@@ -122,6 +122,21 @@ function normalizeNdtFilters(filters?: NdtReportListFilters) {
   };
 }
 
+function uniqueIds(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)));
+}
+
+function sanitizeNdtQuery(value: string) {
+  return value.replace(/[%,]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function intersectReportIds(primary: string[] | null, secondary: string[] | null) {
+  if (!primary) return secondary;
+  if (!secondary) return primary;
+  const allowed = new Set(secondary);
+  return primary.filter((id) => allowed.has(id));
+}
+
 async function resolveReportIdsForWelder(welderId: string) {
   if (!welderId) return null;
   const { data, error } = await supabase
@@ -129,7 +144,52 @@ async function resolveReportIdsForWelder(welderId: string) {
     .select("report_id")
     .eq("welder_id", welderId);
   if (error) throw error;
-  return Array.from(new Set((data ?? []).map((row: any) => String(row.report_id ?? "").trim()).filter(Boolean)));
+  return uniqueIds((data ?? []).map((row: any) => row.report_id));
+}
+
+async function resolveReportIdsForQuery(queryText: string) {
+  const escaped = sanitizeNdtQuery(queryText);
+  if (!escaped) return null;
+  const pattern = `%${escaped}%`;
+
+  const [reportResult, fileResult, inspectorResult, supplierResult] = await Promise.all([
+    supabase.from("ndt_reports").select("id").or(`title.ilike.${pattern},customer.ilike.${pattern}`),
+    supabase.from("files").select("id").eq("type", "ndt_report").ilike("label", pattern),
+    supabase.from("parameter_ndt_inspectors").select("id").ilike("name", pattern),
+    supabase.from("parameter_ndt_suppliers").select("id").ilike("name", pattern),
+  ]);
+
+  if (reportResult.error) throw reportResult.error;
+  if (fileResult.error) throw fileResult.error;
+  if (inspectorResult.error) throw inspectorResult.error;
+  if (supplierResult.error) throw supplierResult.error;
+
+  const fileIds = uniqueIds((fileResult.data ?? []).map((row: any) => row.id));
+  const inspectorIds = uniqueIds((inspectorResult.data ?? []).map((row: any) => row.id));
+  const supplierIds = uniqueIds((supplierResult.data ?? []).map((row: any) => row.id));
+
+  const relatedReportTasks: PromiseLike<any>[] = [];
+  if (fileIds.length > 0) {
+    relatedReportTasks.push(supabase.from("ndt_reports").select("id").in("file_id", fileIds));
+  }
+  if (inspectorIds.length > 0) {
+    relatedReportTasks.push(supabase.from("ndt_reports").select("id").in("ndt_inspector_id", inspectorIds));
+  }
+  if (supplierIds.length > 0) {
+    relatedReportTasks.push(supabase.from("ndt_reports").select("id").in("ndt_supplier_id", supplierIds));
+  }
+
+  const relatedResults = await Promise.all(relatedReportTasks);
+  const reportIds = new Set(uniqueIds((reportResult.data ?? []).map((row: any) => row.id)));
+
+  for (const result of relatedResults) {
+    if (result.error) throw result.error;
+    for (const id of uniqueIds((result.data ?? []).map((row: any) => row.id))) {
+      reportIds.add(id);
+    }
+  }
+
+  return Array.from(reportIds);
 }
 
 function applyNdtReportFilters(query: any, filters: ReturnType<typeof normalizeNdtFilters>) {
@@ -153,13 +213,6 @@ function applyNdtReportFilters(query: any, filters: ReturnType<typeof normalizeN
     next = next.gt("defect_count", 0);
   }
 
-  if (filters.query) {
-    const escaped = filters.query.replace(/[%,]/g, " ").trim();
-    if (escaped) {
-      next = next.or(`title.ilike.%${escaped}%,customer.ilike.%${escaped}%`);
-    }
-  }
-
   return next;
 }
 
@@ -172,8 +225,19 @@ export async function fetchNdtReportPage(input: {
   const { page, pageSize } = normalizePageRequest({ page: input.page, pageSize: input.pageSize }, { page: 1, pageSize: 25 });
   const { from, to } = getRangeFromPage(page, pageSize);
 
-  const welderReportIds = await resolveReportIdsForWelder(filters.welderId);
+  const [welderReportIds, queryReportIds] = await Promise.all([
+    resolveReportIdsForWelder(filters.welderId),
+    resolveReportIdsForQuery(filters.query),
+  ]);
   if (filters.welderId && welderReportIds && welderReportIds.length === 0) {
+    return { items: [], total: 0, page, pageSize };
+  }
+  if (filters.query && queryReportIds && queryReportIds.length === 0) {
+    return { items: [], total: 0, page, pageSize };
+  }
+
+  const scopedReportIds = intersectReportIds(welderReportIds, queryReportIds);
+  if (scopedReportIds && scopedReportIds.length === 0) {
     return { items: [], total: 0, page, pageSize };
   }
 
@@ -185,8 +249,8 @@ export async function fetchNdtReportPage(input: {
     .range(from, to);
 
   query = applyNdtReportFilters(query, filters);
-  if (welderReportIds && welderReportIds.length > 0) {
-    query = query.in("id", welderReportIds);
+  if (scopedReportIds && scopedReportIds.length > 0) {
+    query = query.in("id", scopedReportIds);
   }
 
   const { data, error, count } = await query;
@@ -202,13 +266,20 @@ export async function fetchNdtReportPage(input: {
 
 export async function countNdtReports(filters?: NdtReportListFilters) {
   const normalized = normalizeNdtFilters(filters);
-  const welderReportIds = await resolveReportIdsForWelder(normalized.welderId);
+  const [welderReportIds, queryReportIds] = await Promise.all([
+    resolveReportIdsForWelder(normalized.welderId),
+    resolveReportIdsForQuery(normalized.query),
+  ]);
   if (normalized.welderId && welderReportIds && welderReportIds.length === 0) return 0;
+  if (normalized.query && queryReportIds && queryReportIds.length === 0) return 0;
+
+  const scopedReportIds = intersectReportIds(welderReportIds, queryReportIds);
+  if (scopedReportIds && scopedReportIds.length === 0) return 0;
 
   let query = supabase.from("ndt_reports").select("id", { count: "exact", head: true });
   query = applyNdtReportFilters(query, normalized);
-  if (welderReportIds && welderReportIds.length > 0) {
-    query = query.in("id", welderReportIds);
+  if (scopedReportIds && scopedReportIds.length > 0) {
+    query = query.in("id", scopedReportIds);
   }
 
   const { error, count } = await query;
@@ -234,8 +305,12 @@ export async function fetchNdtReportYears() {
 
 export async function fetchNdtRtStatsRows(filters?: NdtReportListFilters): Promise<NdtRtStatsRow[]> {
   const normalized = normalizeNdtFilters(filters);
-  const welderReportIds = await resolveReportIdsForWelder(normalized.welderId);
+  const [welderReportIds, queryReportIds] = await Promise.all([
+    resolveReportIdsForWelder(normalized.welderId),
+    resolveReportIdsForQuery(normalized.query),
+  ]);
   if (normalized.welderId && welderReportIds && welderReportIds.length === 0) return [];
+  if (normalized.query && queryReportIds && queryReportIds.length === 0) return [];
 
   const { data: rtMethods, error: methodError } = await supabase
     .from("parameter_ndt_methods")
@@ -244,6 +319,9 @@ export async function fetchNdtRtStatsRows(filters?: NdtReportListFilters): Promi
   if (methodError) throw methodError;
   const rtMethodIds = (rtMethods ?? []).map((row: any) => String(row.id ?? "").trim()).filter(Boolean);
   if (!rtMethodIds.length) return [];
+
+  const scopedReportIds = intersectReportIds(welderReportIds, queryReportIds);
+  if (scopedReportIds && scopedReportIds.length === 0) return [];
 
   let query = supabase
     .from("ndt_reports")
@@ -266,8 +344,8 @@ export async function fetchNdtRtStatsRows(filters?: NdtReportListFilters): Promi
     .order("created_at", { ascending: false });
 
   query = applyNdtReportFilters(query, { ...normalized, methodId: "", result: normalized.result, query: "" });
-  if (welderReportIds && welderReportIds.length > 0) {
-    query = query.in("id", welderReportIds);
+  if (scopedReportIds && scopedReportIds.length > 0) {
+    query = query.in("id", scopedReportIds);
   }
 
   const { data, error } = await query;

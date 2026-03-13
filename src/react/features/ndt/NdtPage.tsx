@@ -16,7 +16,7 @@ import {
 } from "@/repo/ndtReportRepo";
 import { createSignedUrlForFileRef } from "@/repo/fileRepo";
 import { esc } from "@/utils/dom";
-import { toast } from "@react/ui/notify";
+import { notifyError, notifySuccess, toast } from "@react/ui/notify";
 import { useAuth } from "@react/auth/AuthProvider";
 import { NdtReportModal, type NdtReportModalSubmit } from "@react/features/ndt/components/NdtReportModal";
 import { NdtReportsPanel } from "@react/features/ndt/components/NdtReportsPanel";
@@ -85,8 +85,18 @@ export function NdtPage() {
   const localPreviewUrlRef = useRef<string | null>(null);
   const querySeqRef = useRef(0);
 
-  const effectiveFilters = useMemo(() => ({ ...filters, query: debouncedQuery }), [debouncedQuery, filters]);
-  const hasFilters = hasNdtReportFilters(filters);
+  const effectiveFilters = useMemo(
+    () => ({
+      methodId: filters.methodId,
+      projectNo: filters.projectNo,
+      year: filters.year,
+      welderId: filters.welderId,
+      result: filters.result,
+      query: debouncedQuery,
+    }),
+    [debouncedQuery, filters.methodId, filters.projectNo, filters.result, filters.welderId, filters.year]
+  );
+  const hasFilters = hasNdtReportFilters(effectiveFilters);
 
   const projectNameByNo = useMemo(() => {
     const map = new Map<string, string>();
@@ -223,7 +233,7 @@ export function NdtPage() {
 
   const openPdfPreview = useCallback(async (ref: string | null, title: string) => {
     if (!ref) {
-      toast("Ingen PDF er koblet til denne raden.");
+      notifyError("Ingen PDF er koblet til denne raden.");
       return;
     }
 
@@ -281,7 +291,7 @@ export function NdtPage() {
         },
         onDone: async () => {
           await reloadAll();
-          toast("NDT-rapport slettet.");
+          notifySuccess("NDT-rapport slettet.");
         },
       });
     },
@@ -383,6 +393,9 @@ export function NdtPage() {
           rows={rows}
           loading={loading || rowsLoading}
           error={error || rowsError}
+          onRetry={() => {
+            void reloadAll();
+          }}
           meta={formatCount(rowsTotal, reportsTotal, hasFilters)}
           hasFilters={hasFilters}
           isAdmin={isAdmin}

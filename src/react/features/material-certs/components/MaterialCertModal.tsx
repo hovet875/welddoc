@@ -11,7 +11,6 @@ import { AppFileInput } from "@react/ui/AppFileInput";
 import { AppModal } from "@react/ui/AppModal";
 import { AppModalActions } from "@react/ui/AppModalActions";
 import { AppSelect } from "@react/ui/AppSelect";
-import { AppTagsInput } from "@react/ui/AppTagsInput";
 import {
   heatNumbersToTags,
   MATERIAL_CERT_TYPE_OPTIONS,
@@ -19,6 +18,7 @@ import {
   trimOrEmpty,
   withCurrentOption,
 } from "../lib/materialCertsView";
+import { HeatNumbersInput } from "./HeatNumbersInput";
 
 export type MaterialCertModalSubmit = {
   rowId: string;
@@ -26,7 +26,9 @@ export type MaterialCertModalSubmit = {
     certificate_type: MaterialCertificateType;
     cert_type: string;
     material_id: string | null;
+    filler_manufacturer: string | null;
     filler_type: string | null;
+    filler_diameter: string | null;
     supplier: string | null;
     heat_numbers: string[];
   };
@@ -38,7 +40,9 @@ type MaterialCertModalProps = {
   row: MaterialCertificateRow | null;
   materials: MaterialRow[];
   supplierSuggestions: string[];
+  fillerManufacturerNames: string[];
   fillerTypeNames: string[];
+  fillerDiameterNames: string[];
   onClose: () => void;
   onSubmit: (submission: MaterialCertModalSubmit) => Promise<void>;
   onOpenExistingPdf: (ref: string, title: string) => void;
@@ -48,7 +52,9 @@ type MaterialCertFormValues = {
   certificateType: MaterialCertificateType;
   certType: string;
   materialId: string;
+  fillerManufacturer: string;
   fillerType: string;
+  fillerDiameter: string;
   supplier: string;
   heatNumbers: string[];
   pdfFile: File | null;
@@ -59,7 +65,9 @@ function createInitialValues(row: MaterialCertificateRow | null): MaterialCertFo
     certificateType: row?.certificate_type ?? "material",
     certType: trimOrEmpty(row?.cert_type) || "3.1",
     materialId: trimOrEmpty(row?.material_id),
+    fillerManufacturer: trimOrEmpty(row?.filler_manufacturer),
     fillerType: trimOrEmpty(row?.filler_type),
+    fillerDiameter: trimOrEmpty(row?.filler_diameter),
     supplier: trimOrEmpty(row?.supplier),
     heatNumbers: heatNumbersToTags(row?.heat_numbers),
     pdfFile: null,
@@ -76,7 +84,9 @@ export function MaterialCertModal({
   row,
   materials,
   supplierSuggestions,
+  fillerManufacturerNames,
   fillerTypeNames,
+  fillerDiameterNames,
   onClose,
   onSubmit,
   onOpenExistingPdf,
@@ -115,6 +125,22 @@ export function MaterialCertModal({
     () => withCurrentOption(fillerTypeNames.map((value) => ({ value, label: value })), values.fillerType),
     [fillerTypeNames, values.fillerType]
   );
+  const fillerManufacturerOptions = useMemo(
+    () =>
+      withCurrentOption(
+        fillerManufacturerNames.map((value) => ({ value, label: value })),
+        values.fillerManufacturer
+      ),
+    [fillerManufacturerNames, values.fillerManufacturer]
+  );
+  const fillerDiameterOptions = useMemo(
+    () =>
+      withCurrentOption(
+        fillerDiameterNames.map((value) => ({ value, label: value })),
+        values.fillerDiameter
+      ),
+    [fillerDiameterNames, values.fillerDiameter]
+  );
 
   const submit = async () => {
     if (!row) return;
@@ -126,7 +152,9 @@ export function MaterialCertModal({
       const certificateType = values.certificateType;
       const certType = trimOrEmpty(values.certType) || "3.1";
       const materialId = trimOrEmpty(values.materialId);
+      const fillerManufacturer = trimOrEmpty(values.fillerManufacturer);
       const fillerType = trimOrEmpty(values.fillerType);
+      const fillerDiameter = trimOrEmpty(values.fillerDiameter);
       const supplier = trimOrEmpty(values.supplier);
       const heatNumbers = normalizeHeatNumbers(values.heatNumbers);
 
@@ -149,7 +177,9 @@ export function MaterialCertModal({
           certificate_type: certificateType,
           cert_type: certType,
           material_id: certificateType === "material" ? materialId : null,
+          filler_manufacturer: certificateType === "filler" ? fillerManufacturer || null : null,
           filler_type: certificateType === "filler" ? fillerType : null,
+          filler_diameter: certificateType === "filler" ? fillerDiameter || null : null,
           supplier: supplier || null,
           heat_numbers: heatNumbers,
         },
@@ -192,40 +222,68 @@ export function MaterialCertModal({
             allowDeselect={false}
           />
           {values.certificateType === "material" ? (
-            <AppSelect
-              label="Material"
-              value={values.materialId}
-              onChange={(value) => form.setFieldValue("materialId", value)}
-              data={materialOptions}
-              placeholder="Velg material..."
-              searchable
-            />
+            <>
+              <AppSelect
+                label="Material"
+                value={values.materialId}
+                onChange={(value) => form.setFieldValue("materialId", value)}
+                data={materialOptions}
+                placeholder="Velg material..."
+                searchable
+              />
+              <AppAutocomplete
+                label="Leverandør"
+                value={values.supplier}
+                onChange={(value) => form.setFieldValue("supplier", value)}
+                data={supplierSuggestions}
+                placeholder="Leverandør"
+                mobileSearchable
+              />
+            </>
           ) : (
-            <AppSelect
-              label="Sveisetilsett-type"
-              value={values.fillerType}
-              onChange={(value) => form.setFieldValue("fillerType", value)}
-              data={fillerTypeOptions}
-              placeholder="Velg type..."
-              searchable
-            />
+            <>
+              <AppSelect
+                label="Produsent"
+                value={values.fillerManufacturer}
+                onChange={(value) => form.setFieldValue("fillerManufacturer", value)}
+                data={fillerManufacturerOptions}
+                placeholder="Velg produsent..."
+                searchable
+              />
+              <AppSelect
+                label="Sveisetilsett-type"
+                value={values.fillerType}
+                onChange={(value) => form.setFieldValue("fillerType", value)}
+                data={fillerTypeOptions}
+                placeholder="Velg type..."
+                searchable
+              />
+              <AppSelect
+                label="Diameter (mm)"
+                value={values.fillerDiameter}
+                onChange={(value) => form.setFieldValue("fillerDiameter", value)}
+                data={fillerDiameterOptions}
+                placeholder="Velg diameter..."
+                searchable
+              />
+              <AppAutocomplete
+                label="Leverandør"
+                value={values.supplier}
+                onChange={(value) => form.setFieldValue("supplier", value)}
+                data={supplierSuggestions}
+                placeholder="Leverandør"
+                mobileSearchable
+              />
+            </>
           )}
-          <AppAutocomplete
-            label="Leverandør"
-            value={values.supplier}
-            onChange={(value) => form.setFieldValue("supplier", value)}
-            data={supplierSuggestions}
-            placeholder="Leverandør"
-            mobileSearchable
-          />
         </SimpleGrid>
 
-        <AppTagsInput
+        <HeatNumbersInput
           label="Heat nr."
-          description="Trykk Enter, komma eller lim inn flere verdier. Hver verdi blir eget heat."
+          description="Lim inn ett eller flere heat-numre. Bruk komma eller ny linje mellom verdiene, og legg dem til når du er klar."
           value={values.heatNumbers}
-          onChange={(value) => form.setFieldValue("heatNumbers", normalizeHeatNumbers(value))}
-          placeholder="Legg til heat nr."
+          onChange={(nextValue) => form.setFieldValue("heatNumbers", normalizeHeatNumbers(nextValue))}
+          placeholder="Lim inn eller skriv heat-numre..."
         />
 
         <Stack gap={6}>

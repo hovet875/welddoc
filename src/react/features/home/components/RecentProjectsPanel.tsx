@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Grid, Paper, Stack, Text } from "@mantine/core";
 import { fetchProjectPage, type ProjectRow } from "@/repo/projectRepo";
 import { AppAsyncState } from "@react/ui/AppAsyncState";
@@ -42,41 +42,42 @@ export function RecentProjectsPanel({ isAdmin }: RecentProjectsPanelProps) {
   const [rows, setRows] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const requestRef = useRef(0);
 
-  useEffect(() => {
-    let cancelled = false;
+  const reloadRows = useCallback(async () => {
+    const requestId = ++requestRef.current;
 
-    void (async () => {
+    try {
       setLoading(true);
       setError(null);
-
-      try {
-        const result = await fetchProjectPage({
-          page: 1,
-          pageSize: 10,
-          filters: {
-            status: "active",
-            isAdmin,
-          },
-        });
-
-        if (cancelled) return;
-        setRows(result.items);
-      } catch (err) {
-        if (cancelled) return;
-        setRows([]);
-        setError(err instanceof Error && err.message ? err.message : "Kunne ikke laste nylige prosjekter.");
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+      const result = await fetchProjectPage({
+        page: 1,
+        pageSize: 10,
+        filters: {
+          status: "active",
+          isAdmin,
+        },
+      });
+      if (requestId !== requestRef.current) return;
+      setRows(result.items);
+    } catch (err) {
+      if (requestId !== requestRef.current) return;
+      setRows([]);
+      setError(err instanceof Error && err.message ? err.message : "Kunne ikke laste nylige prosjekter.");
+    } finally {
+      if (requestId === requestRef.current) {
+        setLoading(false);
       }
-    })();
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    void reloadRows();
 
     return () => {
-      cancelled = true;
+      requestRef.current += 1;
     };
-  }, [isAdmin]);
+  }, [reloadRows]);
 
   return (
     <AppPanel
@@ -92,6 +93,9 @@ export function RecentProjectsPanel({ isAdmin }: RecentProjectsPanelProps) {
       <AppAsyncState
         loading={loading}
         error={error}
+        onRetry={() => {
+          void reloadRows();
+        }}
         isEmpty={rows.length === 0}
         loadingMessage="Laster prosjekter..."
         showLoadingState={false}
